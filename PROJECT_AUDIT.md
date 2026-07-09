@@ -669,3 +669,61 @@ Safe next action:
 - No dependency version, lockfile, database schema, ComplianceIQ source, or Nodemailer change was performed.
 - Recommended next phase:
   - Create/connect the dedicated Royal Engitech GitHub repository, push the preserved baseline, verify recoverability, recover or intentionally resolve LFS assets, then establish its dependency/lockfile/CI/security baseline.
+
+## Phase 10 ComplianceIQ cleanup readiness note
+
+- Pulled latest ComplianceIQ `main` after Phase 7 preservation merge confirmation.
+- Created `phase-10-complianceiq-cleanup-readiness`.
+- Primary project focus:
+  - ComplianceIQ.
+- Royal Engitech project priority:
+  - External and out of scope for ComplianceIQ implementation work.
+- Dedicated Royal Engitech repository:
+  - `git@github.com:ParmarHarsh/RoyalEngitech-Rebuild.git`
+- Independent Royal baseline preservation:
+  - Confirmed. Remote `main` was visible at `6131dd1743bbc0704458a31b1e53eee46ab711a6`, and preserved baseline commit `3c8ebb2998972023b684cf47a4d6baadf3867994` was verified as an ancestor of that remote `main`.
+- Cross-project dependency check:
+  - Passed. No runtime, build, test, deployment, import, package, or asset dependency was found from ComplianceIQ to `02-new-rebuild/`.
+  - Root workspaces remain only `apps/*` and `packages/*`.
+  - Root scripts do not execute `02-new-rebuild/`.
+  - CI installs root dependencies and runs root lint, typecheck, tests, build, claim scan, random scan, browser smoke, and optional infrastructure validation without referencing `02-new-rebuild/`.
+  - Scoped searches for `02-new-rebuild`, `royal-engitech`, and `Royal Engitech` in root package files, README, CI, apps, packages, scripts, tests, and deploy configuration returned no dependency matches.
+- `02-new-rebuild/` cleanup recommendation:
+  - REMOVE.
+  - Evidence: it remains tracked and unchanged with 75 tracked files; its contents are a separate Royal Engitech Next.js rebuild and no ComplianceIQ-specific source references were found inside it.
+  - Confidence: High.
+- `LFS_ASSET_AUDIT.md` recommendation:
+  - REMOVE.
+  - Evidence: the document is exclusively about `02-new-rebuild/` Royal Engitech binary assets and LFS tracking. ComplianceIQ does not rely on it after the Royal folder is removed.
+- `.gitattributes` recommendation:
+  - DELETE_FILE.
+  - Evidence: every existing rule is scoped to `02-new-rebuild/**`; no rule applies to ComplianceIQ application, package, script, test, or deploy files.
+- Unresolved Royal LFS assets:
+  - 39 external Royal Engitech assets remain unresolved.
+  - They do not block ComplianceIQ cleanup because they belong to the external Royal Engitech project, are not imported or required by ComplianceIQ, and the Royal Git-tracked baseline has already been independently preserved in its dedicated repository.
+  - Royal Engitech should not be claimed asset-complete until those assets are resolved in the Royal repository or intentionally dispositioned there.
+- ComplianceIQ health verification:
+  - `node --version` - passed locally with `v24.4.0`; CI is configured for Node 20.
+  - `npm --version` - passed with `10.8.3`.
+  - `npm run lint` - passed; linted 69 files.
+  - `npm run typecheck` - passed; checked 77 JavaScript files.
+  - `npm test` - passed with 46 passing tests and 2 infrastructure-dependent skips.
+  - `npm run build` - passed.
+  - `npm audit` - passed; found 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+  - `npm run scan:claims` - passed; linted 69 files.
+  - `npm run scan:random` - passed; 1 deterministic-safety test passed.
+- Exact proposed cleanup set:
+
+| Path | Proposed action | Reason | ComplianceIQ dependency found? | Risk | Approval needed |
+|---|---|---|---|---|---|
+| `02-new-rebuild/` | REMOVE | Separate Royal Engitech project already preserved independently | No | Low after preservation verification | Yes |
+| `LFS_ASSET_AUDIT.md` | REMOVE | Documents only the unrelated Royal Engitech asset/LFS migration | No | Low; obsolete after Royal folder removal | Yes |
+| `.gitattributes` | REMOVE | All rules are scoped only to `02-new-rebuild/**` and become obsolete after removal | No | Low; no ComplianceIQ rules are present | Yes |
+
+- Destructive cleanup executed:
+  - No.
+- Source and destructive-change safety:
+  - No source code, dependency file, database schema, cleanup deletion, move, rename, `.gitattributes` change, `LFS_ASSET_AUDIT.md` change, or `02-new-rebuild/` content change was performed.
+- Recommended next phase:
+  - Execute only the approved ComplianceIQ cleanup set in one focused PR: remove `02-new-rebuild/`, remove `LFS_ASSET_AUDIT.md`, remove `.gitattributes`, rerun the full ComplianceIQ verification suite, and confirm CI stays green.
