@@ -1,0 +1,24 @@
+.DS_Store
+node_modules/
+.playwright/
+playwright-report/
+test-results/
+.env
+.env.local
+.env.*
+!.env.example
+!.env.sample
+!**/.env.example
+!**/.env.sample
+data/
+coverage/
+dist/
+apps/web/dist/
+*.log
+tmp/
+
+# Keep the Replit export as reference-only when present.
+.replit
+.local/
+attached_assets/
+artifacts/
