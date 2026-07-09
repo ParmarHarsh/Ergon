@@ -560,3 +560,69 @@ Safe next action:
 - No cleanup, deletion, move, rename, database schema change, broad dependency update, vulnerability fix, or `02-new-rebuild/` change was performed.
 - Recommended next phase:
   - Manually collect the latest GitHub Actions job status/log snippets and Dependabot alert details from GitHub, then run a focused CI/security triage phase based on that evidence.
+
+## Phase 6 repository scope and security decision note
+
+- Pulled latest `main` after Phase 5 merge confirmation.
+- Created `phase-6-repo-scope-security-decision`.
+- Manual GitHub Actions evidence:
+  - The user manually confirmed all relevant CI jobs were green.
+- Dependabot evidence:
+  - Eight open alerts.
+  - All eight are reported against `02-new-rebuild/package.json`.
+  - All eight involve direct Nodemailer dependency findings.
+  - Severity distribution: 2 high, 5 moderate, and 1 low.
+- ComplianceIQ root Nodemailer dependency status:
+  - Absent from root `package.json`.
+  - Absent from root `package-lock.json`.
+  - `npm ls nodemailer --all` reported the root ComplianceIQ dependency tree as empty for Nodemailer.
+  - Root `npm audit` and `npm audit --omit=dev` both found 0 vulnerabilities.
+- Cross-project runtime dependency status:
+  - No runtime, build, test, deployment, import, package, or asset dependency was found between root ComplianceIQ and `02-new-rebuild/`.
+  - Evidence: root workspaces are only `apps/*` and `packages/*`; root scripts and CI target root workspaces only; root package/lock files do not include `02-new-rebuild`; searches found `02-new-rebuild` references in audit/scope documentation and LFS asset tracking notes, not in root application runtime.
+  - `02-new-rebuild/package.json` is named `royal-engitech-rebuild`, and its README describes a standalone Royal Engitech Next.js site with separate deployment and SMTP/contact settings.
+- Final expert recommendation:
+  - Separate `02-new-rebuild/` into its own repository in a later dedicated phase.
+- Confidence:
+  - High.
+- Safe next action:
+  - Open and merge this documentation-only PR first, then run a later explicit extraction phase that preserves the Royal Engitech project before any removal from ComplianceIQ.
+- Final expert repository-scope decision:
+  - Recommended decision: Separate into its own repository.
+  - Confidence: High.
+  - Decision: `02-new-rebuild/` should not remain permanently inside the ComplianceIQ repository. It should be preserved, extracted into a dedicated Royal Engitech repository, verified there, and only then removed from ComplianceIQ in a separate cleanup PR.
+  - Evidence:
+    1. ComplianceIQ root workspaces include only `apps/*` and `packages/*`.
+    2. Root CI, scripts, tests, package files, and deployments do not execute or depend on `02-new-rebuild/`.
+    3. `02-new-rebuild/` has its own `package.json`, Next.js app, Royal Engitech README, assets, routes, Prisma-ready schema, and SMTP/contact environment model.
+    4. Nodemailer is direct in `02-new-rebuild/package.json` and absent from the root ComplianceIQ dependency graph.
+    5. The manually reviewed Dependabot alerts are all scoped to `02-new-rebuild/package.json`, not root ComplianceIQ.
+  - Security impact: The eight Nodemailer alerts should be treated as Royal Engitech rebuild findings, not ComplianceIQ root findings. They should be fixed in the Royal Engitech project after separation, or in `02-new-rebuild/` only during an explicitly approved Royal Engitech security phase.
+  - ComplianceIQ impact: ComplianceIQ root currently validates cleanly with passing lint, typecheck, tests, build, and zero root audit findings. Keeping `02-new-rebuild/` in the same repo can still confuse alerts, ownership, CI scope, and deployment expectations.
+  - Royal Engitech impact: The rebuild appears to contain real Royal Engitech source, assets, redirects, docs, and optional lead-persistence planning. It should be preserved and given its own lockfile, CI, dependency security work, and deployment flow in its own repository.
+  - Risk of keeping both products together: Future maintainers may confuse two unrelated products, root CI can pass while Royal Engitech remains untested, Dependabot/security triage can look like a ComplianceIQ issue, and deployment boundaries stay unclear.
+  - Risk of separating them: A careless separation could lose files, break Git LFS asset handling, drop useful docs/assets, or remove the folder from ComplianceIQ before the Royal Engitech repo is proven recoverable.
+  - Final recommended action: Do not move or delete anything yet. First merge this documentation-only decision, then perform a later explicit extraction phase for Royal Engitech with verification and recovery checks before any ComplianceIQ cleanup.
+- Safe future separation plan:
+  1. Reconfirm there is still no runtime, build, test, deployment, import, package, or asset dependency between ComplianceIQ and `02-new-rebuild/`.
+  2. Create a dedicated Royal Engitech repository.
+  3. Copy the entire `02-new-rebuild/` folder into that repository without omitting source, docs, Prisma schema, downloads, images, redirects, or environment examples.
+  4. Review `.gitattributes` and `LFS_ASSET_AUDIT.md`, then preserve Git LFS pointer files and binary assets safely in the new repository.
+  5. Create a Royal Engitech lockfile only in the Royal Engitech repository if that repo's package manager strategy requires one.
+  6. Install, lint, typecheck, build, and test the Royal Engitech project in its own repository.
+  7. Fix or upgrade Nodemailer only in the Royal Engitech repository, not in ComplianceIQ root.
+  8. Push the new Royal Engitech repository and confirm the complete project is recoverable from GitHub.
+  9. Only after the separate repository is verified, open a ComplianceIQ cleanup PR removing `02-new-rebuild/`.
+  10. In that cleanup PR, update or remove `.gitattributes` and `LFS_ASSET_AUDIT.md` only if they are obsolete after extraction.
+  11. Never delete Royal Engitech source before the separate repository has been pushed, verified, and approved.
+- Root health checks run:
+  - `npm run lint` - passed; linted 69 files.
+  - `npm run typecheck` - passed; checked 77 JavaScript files.
+  - `npm test` - passed with 46 passing tests and 2 infrastructure-dependent skips.
+  - `npm run build` - passed.
+  - `npm audit` - passed; found 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+- Files intentionally not committed:
+  - `node_modules/`
+  - `apps/web/dist/`
+- No source code, dependency version, cleanup, deletion, move, rename, database schema, or `02-new-rebuild/` content change was performed.
