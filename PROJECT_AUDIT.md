@@ -499,3 +499,37 @@ Safe next action:
 - Ignored/generated folders created locally: `node_modules/` and `apps/web/dist/`.
 - No source code cleanup, deletion, move, rename, database schema change, or `02-new-rebuild/` change was performed.
 - Recommended next phase: run CI/Node 20 verification and Playwright browser smoke setup, then address any CI-only failures or dependency/security findings in a focused repair phase.
+
+## Phase 4 CI, Node 20, and Playwright note
+
+- Pulled latest `main` after Phase 3 merge confirmation.
+- Created `phase-4-ci-node20-playwright`.
+- CI workflow summary:
+  - `.github/workflows/ci.yml` uses Node 20, runs `npm ci`, lint, typecheck, tests, build, claim/random scans, a Playwright Chromium smoke job, and optional Postgres/storage/scanner validators.
+  - The workflow does not validate `02-new-rebuild/`, which remains out of scope for ComplianceIQ.
+- Node version used locally: `v24.4.0`.
+- Node 20 local verification: skipped because `nvm`, `volta`, `asdf`, `fnm`, and `node20` were not available locally; CI remains the Node 20 source of truth.
+- Verification commands run:
+  - `npm ci --cache /private/tmp/complianceiq-npm-cache` - passed.
+  - `npm run lint` - passed.
+  - `npm run typecheck` - passed.
+  - `npm test` - passed with 46 passing tests and 2 infrastructure-dependent skips.
+  - `npm run build` - passed.
+  - `WEB_API_ORIGIN=http://localhost:4000 npm run build:web` - passed.
+  - `PLAYWRIGHT_BROWSERS_PATH=/private/tmp/complianceiq-ms-playwright npx playwright install chromium` - passed.
+  - `PLAYWRIGHT_BROWSERS_PATH=/private/tmp/complianceiq-ms-playwright npm run qa:pilot` - failed before app assertions because Chromium could not launch in the local macOS sandbox (`MachPortRendezvousServer` permission denied).
+  - `npm audit` - passed; found 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+- Playwright browser setup:
+  - Chromium installed to `/private/tmp/complianceiq-ms-playwright`.
+- Browser smoke result:
+  - Failed due local Chromium launch permission, not an observed ComplianceIQ test assertion failure.
+- Dependency audit observation:
+  - Observation only; no vulnerability fixes, dependency updates, or `npm audit fix` actions were applied.
+- Dependabot triage:
+  - GitHub app access to `ParmarHarsh/ComplianceIQ` returned 404, so alert details were not accessible from this environment. GitHub UI still reports 8 alerts on the default branch; review those in a later focused security phase.
+- Files intentionally not committed:
+  - `node_modules/`, `apps/web/dist/`, `/tmp/complianceiq-playwright-results`, and `/private/tmp/complianceiq-ms-playwright`.
+- No cleanup, deletion, move, rename, database schema change, broad dependency update, or `02-new-rebuild/` change was performed.
+- Recommended next phase:
+  - Open the Phase 4 PR, let GitHub Actions run Node 20 and Linux Playwright smoke, then address any CI-only failure or Dependabot alert details in a focused follow-up phase.
