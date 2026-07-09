@@ -469,3 +469,11 @@ Safe next action:
 - Include `02-new-rebuild/` in the initial baseline commit to preserve the current state.
 - Mark it as out of scope for ComplianceIQ implementation until a later cleanup phase.
 - In a later phase, create a dedicated decision PR that either moves `02-new-rebuild/` to its own repository or removes it from the ComplianceIQ repository after explicit user approval.
+
+## Phase 2 GitHub baseline note
+
+- Confirmed GitHub remote: `git@github.com:ParmarHarsh/ComplianceIQ.git`
+- Initial baseline was pushed to `main` because the GitHub repository was empty and had no base branch for a pull request.
+- Created `phase-2-github-baseline` for a documentation-only pull request to confirm the PR workflow.
+- No source code, dependency, cleanup, deletion, move, rename, build, or database changes were made.
+- `02-new-rebuild/` remains preserved and out of scope for ComplianceIQ implementation until a later dedicated cleanup/scope phase.
