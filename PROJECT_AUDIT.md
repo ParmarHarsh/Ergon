@@ -626,3 +626,46 @@ Safe next action:
   - `node_modules/`
   - `apps/web/dist/`
 - No source code, dependency version, cleanup, deletion, move, rename, database schema, or `02-new-rebuild/` content change was performed.
+
+## Phase 7 Royal Engitech preservation baseline note
+
+- Pulled latest `main` after Phase 6 merge confirmation.
+- Created `phase-7-royal-preservation-baseline`.
+- Reconfirmed no runtime, build, test, deployment, import, package, or asset dependency between ComplianceIQ and `02-new-rebuild/`.
+- Original Royal Engitech source:
+  - `/Users/harshparmar/Desktop/Projects/ComplainceIQ/02-new-rebuild`
+- Independent preserved copy:
+  - `/Users/harshparmar/Desktop/Projects/RoyalEngitech-Rebuild`
+- Copy verification:
+  - Passed before independent Git initialization; recursive diff, relative file list comparison, file count comparison, directory count comparison, symlink comparison, and checksum dry run showed no differences.
+- Regular file count:
+  - 75 in the original source at copy time.
+  - 76 tracked files in the independent Royal Engitech baseline because a minimal `.gitignore` was added only to the copied project.
+- Directory count:
+  - 20 in the original source at copy time.
+- Symlink status:
+  - 0 symlinks found.
+- Secret-file safety result:
+  - No real `.env`, private key, database, credentials, or secrets files were found by filename scan.
+  - `.env.example` is present and was treated as an allowed template file.
+- Large-file result:
+  - No files over 10 MB were found in the current checkout.
+- Git LFS pointer result:
+  - 39 Git LFS pointer files were found under `02-new-rebuild/public/`.
+  - The current checkout contains small pointer metadata files for those assets, not confirmed real binary asset contents.
+  - No local `.git/lfs` object files were visible in this checkout.
+  - Full asset recovery remains a blocker before claiming the Royal Engitech project is asset-complete on GitHub.
+- Independent Royal Engitech Git repository:
+  - Initialized at `/Users/harshparmar/Desktop/Projects/RoyalEngitech-Rebuild`.
+  - Branch: `main`.
+  - Working tree clean after baseline commit.
+- Independent baseline commit:
+  - `3c8ebb2 chore: establish Royal Engitech project baseline`
+- Independent GitHub remote:
+  - None configured.
+- Original `02-new-rebuild/` status:
+  - Preserved unchanged inside ComplianceIQ.
+- No original Royal Engitech file was modified, moved, renamed, deleted, ignored, or untracked.
+- No dependency version, lockfile, database schema, ComplianceIQ source, or Nodemailer change was performed.
+- Recommended next phase:
+  - Create/connect the dedicated Royal Engitech GitHub repository, push the preserved baseline, verify recoverability, recover or intentionally resolve LFS assets, then establish its dependency/lockfile/CI/security baseline.
