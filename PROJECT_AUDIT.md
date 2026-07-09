@@ -477,3 +477,25 @@ Safe next action:
 - Created `phase-2-github-baseline` for a documentation-only pull request to confirm the PR workflow.
 - No source code, dependency, cleanup, deletion, move, rename, build, or database changes were made.
 - `02-new-rebuild/` remains preserved and out of scope for ComplianceIQ implementation until a later dedicated cleanup/scope phase.
+
+## Phase 3 dependency and verification note
+
+- Pulled latest `main` after Phase 2 merge confirmation.
+- Created `phase-3-dependency-verification`.
+- Installed root dependencies with `npm ci`; the first attempt failed because the user npm cache had permission issues, then the same clean install passed using a temporary cache at `/private/tmp/complianceiq-npm-cache`.
+- Node version used: `v24.4.0`.
+- npm version used: `11.4.2`.
+- Verification commands run:
+  - `npm ci` - passed on retry with temporary cache.
+  - `npm run lint` - passed.
+  - `npm run typecheck` - passed.
+  - `npm test` - passed with 46 passing tests and 2 infrastructure-dependent skips.
+  - `npm run build` - passed.
+  - `WEB_API_ORIGIN=http://localhost:4000 npm run build:web` - passed.
+  - `npm run qa:pilot` - skipped because Playwright Chromium was not installed.
+  - `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+- Dependency audit observation:
+  - Observation only; no vulnerability fixes, dependency updates, or `npm audit fix` actions were applied.
+- Ignored/generated folders created locally: `node_modules/` and `apps/web/dist/`.
+- No source code cleanup, deletion, move, rename, database schema change, or `02-new-rebuild/` change was performed.
+- Recommended next phase: run CI/Node 20 verification and Playwright browser smoke setup, then address any CI-only failures or dependency/security findings in a focused repair phase.
