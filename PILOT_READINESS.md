@@ -99,7 +99,7 @@ Review [PILOT_DATA_POLICY.md](./PILOT_DATA_POLICY.md) with every pilot organizat
 ## Known Limitations
 
 - Starter rules remain demo/unverified unless separately expert-reviewed.
-- Production OCR and account recovery are not implemented. Legal holds, explicit retention enforcement, failed-deletion retry, and safe metadata restore are implemented for reviewer/admin users, but autonomous external lifecycle scheduling is not. Login throttling is implemented, but production monitoring and alerting around repeated throttling events still need deployment-specific setup.
+- Production OCR and approved account-recovery delivery are not implemented. Account recovery token lifecycle, reset UI, generic request behavior, audit logging, and session revocation are implemented. Legal holds, explicit retention enforcement, failed-deletion retry, and safe metadata restore are implemented for reviewer/admin users, but autonomous external lifecycle scheduling is not. Login throttling is implemented, but production monitoring and alerting around repeated throttling events still need deployment-specific setup.
 - Queue jobs are durable in PostgreSQL, but scheduling is still application-managed rather than an external queue service.
 - Backup, scanner, bucket policy, KMS, monitoring, and restore operations are deployment responsibilities.
 - Live infrastructure validation has not passed until the target-specific commands run successfully.

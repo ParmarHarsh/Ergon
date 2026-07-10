@@ -149,6 +149,10 @@ export function readConfig(env = process.env) {
 
   const loginRateLimitMaxAttempts = boundedInteger(env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || "10", "LOGIN_RATE_LIMIT_MAX_ATTEMPTS", 3, 1_000);
   const loginRateLimitWindowMs = boundedInteger(env.LOGIN_RATE_LIMIT_WINDOW_MS || "900000", "LOGIN_RATE_LIMIT_WINDOW_MS", 10_000, 86_400_000);
+  const recoveryExposeTestToken = env.RECOVERY_EXPOSE_TEST_TOKEN === "true";
+  if (isSecureDeployment && recoveryExposeTestToken) {
+    throw new Error("RECOVERY_EXPOSE_TEST_TOKEN must not be true outside local development");
+  }
 
   const logLevel = env.LOG_LEVEL || "info";
   if (!["debug", "info", "warn", "error"].includes(logLevel)) throw new Error("LOG_LEVEL must be debug, info, warn, or error");
@@ -199,6 +203,7 @@ export function readConfig(env = process.env) {
     trustProxy,
     loginRateLimitMaxAttempts,
     loginRateLimitWindowMs,
+    recoveryExposeTestToken,
     sessionCookieSameSite: sessionCookieSameSite[0].toUpperCase() + sessionCookieSameSite.slice(1),
     enableDemoData: env.ENABLE_DEMO_DATA === "true",
     adminEmail: env.ADMIN_EMAIL || "admin@complianceiq.local",

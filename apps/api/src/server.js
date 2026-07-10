@@ -8,8 +8,9 @@ import { EVIDENCE_TAXONOMY, USER_ROLES, forbidden, parseEvidenceInput, parseFaci
 import { getApplicableRules, generateReview, RULES_PACKS, COMPLIANCE_RULES } from "../../../packages/rules/src/index.js";
 import { generateAuditPacketPdf } from "../../../packages/pdf/src/index.js";
 import { createPrivateStorage } from "./storage.js";
-import { hashPassword, signSessionId, verifyPassword, verifySignedSession } from "./security.js";
+import { generateResetToken, hashPassword, hashResetToken, signSessionId, verifyPassword, verifySignedSession } from "./security.js";
 import { createLoginRateLimiter } from "./rate-limit.js";
+import { createRecoveryDelivery } from "./recovery-delivery.js";
 import { createEvidenceAiService } from "./evidence-ai-service.js";
 import { assertEvidenceDownloadAllowed, canProcessScannedEvidence, createMalwareScanner } from "./malware-scanner.js";
 import { createEvidenceProcessingQueue } from "./processing-queue.js";
@@ -26,6 +27,10 @@ const evidenceAiService = createEvidenceAiService({ config, repo, storage, provi
 const malwareScanner = createMalwareScanner(config);
 const reviewQueueService = createReviewQueueService({ repo });
 const loginRateLimiter = createLoginRateLimiter({ maxAttempts: config.loginRateLimitMaxAttempts, windowMs: config.loginRateLimitWindowMs });
+const recoveryRequestIpLimiter = createLoginRateLimiter({ maxAttempts: 8, windowMs: 15 * 60 * 1000 });
+const recoveryRequestEmailLimiter = createLoginRateLimiter({ maxAttempts: 3, windowMs: 15 * 60 * 1000 });
+const recoveryResetLimiter = createLoginRateLimiter({ maxAttempts: 10, windowMs: 15 * 60 * 1000 });
+const recoveryDelivery = createRecoveryDelivery(config);
 const processingQueue = createEvidenceProcessingQueue(config, {
   repo,
   logger,
@@ -130,6 +135,9 @@ async function handleRequest(req, res) {
 
   if (method === "POST" && path === "/api/auth/login") return login(req, res);
   if (method === "POST" && path === "/api/auth/logout") return logout(req, res);
+  if (method === "POST" && path === "/api/auth/recovery/request") return requestPasswordRecovery(req, res);
+  if (method === "POST" && path === "/api/auth/recovery/reset") return resetPassword(req, res);
+  if (method === "GET" && path === "/api/auth/recovery/test-token") return recoveryTestToken(res, url.searchParams.get("email"));
 
   const user = await requireSession(req);
 
@@ -240,6 +248,133 @@ async function logout(req, res) {
   if (sessionId) await repo.deleteSession(sessionId);
   setCookie(res, "ciq.sid", "", { maxAge: 0, httpOnly: true, sameSite: config.sessionCookieSameSite, secure: config.isProduction });
   sendJson(res, { status: 200, body: { ok: true } });
+}
+
+async function requestPasswordRecovery(req, res) {
+  const body = await readJson(req);
+  const email = String(body.email || "").trim().toLowerCase();
+  const ipKey = `recovery-ip:${clientIp(req)}`;
+  const emailKey = email ? `recovery-email:${email}` : "";
+  const ipRate = recoveryRequestIpLimiter.check(ipKey);
+  const emailRate = emailKey ? recoveryRequestEmailLimiter.check(emailKey) : { allowed: true };
+  recoveryRequestIpLimiter.recordFailure(ipKey);
+  if (emailKey) recoveryRequestEmailLimiter.recordFailure(emailKey);
+
+  if (!ipRate.allowed || !emailRate.allowed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!ipRate.allowed || !emailRate.allowed) {
+      logger.warn("password_recovery_rate_limited", { requestId: req.context.requestId });
+    }
+    return sendPasswordRecoveryAccepted(res);
+  }
+
+  const user = await repo.findUserByEmail(email);
+  if (user?.isActive) {
+    const token = generateResetToken();
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    await repo.createPasswordResetToken({
+      organizationId: user.organizationId,
+      userId: user.id,
+      tokenHash: hashResetToken(token),
+      requestedAt: new Date().toISOString(),
+      expiresAt
+    });
+    const delivery = await recoveryDelivery.sendPasswordReset({
+      user,
+      token,
+      resetUrl: buildPasswordResetUrl(token),
+      expiresAt
+    });
+    await repo.logAudit({
+      organizationId: user.organizationId,
+      actorUserId: user.id,
+      action: "password_reset.requested",
+      entityType: "user",
+      entityId: user.id,
+      metadata: { expiresAt, deliveryStatus: delivery.status },
+      ipAddress: clientIp(req)
+    });
+    logger.info("password_recovery_requested", { requestId: req.context.requestId, organizationId: user.organizationId, userId: user.id, deliveryStatus: delivery.status });
+  }
+
+  return sendPasswordRecoveryAccepted(res);
+}
+
+async function resetPassword(req, res) {
+  const rateKey = `recovery-reset:${clientIp(req)}`;
+  const rate = recoveryResetLimiter.check(rateKey);
+  if (!rate.allowed) {
+    logger.warn("password_reset_rate_limited", { requestId: req.context.requestId });
+    const error = new Error("Too many reset attempts. Try again later.");
+    error.status = 429;
+    error.code = "RATE_LIMITED";
+    throw error;
+  }
+  recoveryResetLimiter.recordFailure(rateKey);
+
+  const body = await readJson(req);
+  const token = String(body.token || "").trim();
+  const password = String(body.password || body.newPassword || "");
+  if (!token) throw validationError("Invalid or expired reset token");
+  assertPasswordPolicy(password);
+
+  const tokenHash = hashResetToken(token);
+  if (!(await repo.findValidPasswordResetToken(tokenHash))) {
+    throw validationError("Invalid or expired reset token");
+  }
+  const result = await repo.completePasswordReset({
+    tokenHash,
+    passwordHash: await hashPassword(password),
+    usedAt: new Date().toISOString()
+  });
+  if (!result) throw validationError("Invalid or expired reset token");
+
+  recoveryResetLimiter.reset(rateKey);
+  await repo.logAudit({
+    organizationId: result.user.organizationId,
+    actorUserId: result.user.id,
+    action: "password_reset.completed",
+    entityType: "user",
+    entityId: result.user.id,
+    metadata: { sessionsRevoked: true },
+    ipAddress: clientIp(req)
+  });
+  setCookie(res, "ciq.sid", "", { maxAge: 0, httpOnly: true, sameSite: config.sessionCookieSameSite, secure: config.isProduction });
+  sendJson(res, { status: 200, body: { ok: true, message: "Password has been reset. Please sign in with your new password." } });
+}
+
+async function recoveryTestToken(res, email) {
+  if (!config.recoveryExposeTestToken) {
+    const error = new Error("Route not found");
+    error.status = 404;
+    throw error;
+  }
+  const delivery = recoveryDelivery.getTestDelivery(email);
+  if (!delivery) {
+    const error = new Error("Test reset token not found");
+    error.status = 404;
+    throw error;
+  }
+  sendJson(res, { status: 200, body: delivery });
+}
+
+function sendPasswordRecoveryAccepted(res) {
+  sendJson(res, {
+    status: 202,
+    body: {
+      ok: true,
+      message: "If that account exists, password reset instructions will be sent shortly."
+    }
+  });
+}
+
+function buildPasswordResetUrl(token) {
+  const url = new URL(config.appUrl);
+  url.hash = `/reset-password?token=${encodeURIComponent(token)}`;
+  return url.toString();
+}
+
+function assertPasswordPolicy(password) {
+  if (password.length < 12) throw validationError("password must be at least 12 characters");
 }
 
 async function requireSession(req) {

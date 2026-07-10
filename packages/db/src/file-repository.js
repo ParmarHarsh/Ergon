@@ -23,6 +23,7 @@ const TABLES = [
   "actionItems",
   "auditPackets",
   "expertReviews",
+  "passwordResetTokens",
   "auditLogs"
 ];
 
@@ -176,6 +177,61 @@ export class FileRepository {
   async deleteSession(id) {
     this.data.sessions = this.data.sessions.filter((session) => session.id !== id);
     await this.persist();
+  }
+
+  async revokeUserSessions(organizationId, userId) {
+    this.data.sessions = this.data.sessions.filter((session) => session.organizationId !== organizationId || session.userId !== userId);
+    await this.persist();
+  }
+
+  async createPasswordResetToken(input) {
+    const user = await this.findUserById(input.userId);
+    if (!user || user.organizationId !== input.organizationId) throw forbidden("User does not belong to this organization");
+    const requestedAt = input.requestedAt || nowIso();
+    for (const token of this.data.passwordResetTokens) {
+      if (token.organizationId === input.organizationId && token.userId === input.userId && !token.usedAt && !token.invalidatedAt) {
+        token.invalidatedAt = requestedAt;
+      }
+    }
+    const row = {
+      id: input.id || this.createId(),
+      organizationId: input.organizationId,
+      userId: input.userId,
+      tokenHash: input.tokenHash,
+      requestedAt,
+      expiresAt: input.expiresAt,
+      usedAt: null,
+      invalidatedAt: null,
+      createdAt: requestedAt
+    };
+    this.data.passwordResetTokens.push(row);
+    await this.persist();
+    return row;
+  }
+
+  async findValidPasswordResetToken(tokenHash, at = nowIso()) {
+    const row = this.data.passwordResetTokens.find((token) => token.tokenHash === tokenHash);
+    if (!row || row.usedAt || row.invalidatedAt || new Date(row.expiresAt).getTime() <= new Date(at).getTime()) return null;
+    return row;
+  }
+
+  async completePasswordReset(input) {
+    const usedAt = input.usedAt || nowIso();
+    const token = await this.findValidPasswordResetToken(input.tokenHash, usedAt);
+    if (!token) return null;
+    const user = await this.findUserById(token.userId);
+    if (!user || user.organizationId !== token.organizationId) return null;
+    user.passwordHash = input.passwordHash;
+    user.updatedAt = usedAt;
+    token.usedAt = usedAt;
+    for (const other of this.data.passwordResetTokens) {
+      if (other.id !== token.id && other.organizationId === token.organizationId && other.userId === token.userId && !other.usedAt && !other.invalidatedAt) {
+        other.invalidatedAt = usedAt;
+      }
+    }
+    this.data.sessions = this.data.sessions.filter((session) => session.organizationId !== token.organizationId || session.userId !== token.userId);
+    await this.persist();
+    return { user, token };
   }
 
   async createFacility(input) {

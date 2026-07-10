@@ -33,6 +33,18 @@ test("postgres repository persists facilities, evidence, reviews, matches, and p
   try {
     const org = await repo.createOrganization({ name: `Tenant ${suffix}` });
     const user = await repo.createUser({ organizationId: org.id, email: `admin-${suffix}@example.com`, passwordHash: "hash", name: "Admin", role: "admin", isActive: true });
+    const resetToken = await repo.createPasswordResetToken({
+      organizationId: org.id,
+      userId: user.id,
+      tokenHash: `reset-hash-${suffix}`,
+      expiresAt: new Date(Date.now() + 60_000).toISOString()
+    });
+    assert.equal((await repo.findValidPasswordResetToken(`reset-hash-${suffix}`)).id, resetToken.id);
+    const session = await repo.createSession({ organizationId: org.id, userId: user.id, expiresAt: new Date(Date.now() + 60_000).toISOString() });
+    const resetResult = await repo.completePasswordReset({ tokenHash: `reset-hash-${suffix}`, passwordHash: "new-hash" });
+    assert.equal(resetResult.user.passwordHash, "new-hash");
+    assert.equal(await repo.findValidPasswordResetToken(`reset-hash-${suffix}`), null);
+    assert.equal(await repo.getSession(session.id), null);
     const facility = await repo.createFacility(parseFacilityInput({
       name: `Plant ${suffix}`,
       country: "US",

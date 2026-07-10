@@ -87,6 +87,7 @@ Variables marked validator-only should be configured only for validator jobs or 
 | `DATABASE_URL` | API, worker, migrations | `postgresql://REDACTED@staging-db.example.com:5432/complianceiq_staging` | Yes | Database owner | `npm run db:migrate`, `/health/ready` |
 | `REPOSITORY_BACKEND` | API, worker | `postgres` | No | App release owner | Startup and `/health/ready` |
 | `SESSION_SECRET` | API sessions | `replace-from-secret-manager` | Yes | Security owner | Login/logout smoke |
+| `RECOVERY_EXPOSE_TEST_TOKEN` | API account recovery | `false` | No | Security owner | Startup and recovery smoke |
 | `STORAGE_BACKEND` | API, worker | `s3` | No | Storage owner | `/health/ready`, storage validator |
 | `S3_BUCKET` | API, worker | `complianceiq-staging-private` | No | Storage owner | `/health/ready`, storage validator |
 | `S3_REGION` | API, worker | `ca-central-1` | No | Storage owner | `/health/ready`, storage validator |
@@ -503,9 +504,9 @@ Never include:
 - raw customer documents;
 - raw extracted text or model prompts.
 
-## Go/no-go checklist before Phase 17
+## Staging go/no-go checklist
 
-Phase 17 should run real validators and the restore drill only when every item below is true:
+Run real validators and the restore drill only when every item below is true:
 
 - [ ] Phase 16 runbook is merged.
 - [ ] Staging owner is assigned.
@@ -527,7 +528,7 @@ Phase 17 should run real validators and the restore drill only when every item b
 - [ ] Monitoring and alert destinations are configured.
 - [ ] Pilot owner and escalation path are named.
 
-If any item is unchecked, Phase 17 should remain blocked or limited to the missing setup action.
+If any item is unchecked, staging validation should remain blocked or limited to the missing setup action.
 
 ## Troubleshooting and rollback notes
 

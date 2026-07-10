@@ -983,3 +983,52 @@ Safe next action:
   - `node --test tests/repository.test.js` — passed.
   - `node --test tests/api.test.js` — passed with localhost server permission.
   - `npm test` — passed; 47 passed, 2 skipped, 0 failed.
+
+## Phase 17 secure account recovery hardening note
+
+- Pulled latest `main` after Phase 16 merge confirmation.
+- Resumed existing branch:
+  - `phase-17-account-recovery-hardening`
+- Implemented:
+  - Non-enumerating recovery request API with generic `202` response for existing, missing, and inactive accounts.
+  - Password reset completion API with password-policy enforcement, token expiry checks, single-use consumption, sibling-token invalidation, and session revocation.
+  - Cryptographically secure 32-byte reset tokens with SHA-256 token-hash persistence only.
+  - IP and identifier recovery-request limiting plus reset-attempt limiting.
+  - File and PostgreSQL repository support, including transactional Postgres reset completion with `FOR UPDATE`.
+  - Minimal login/recovery/reset UI with password confirmation and return-to-login flow.
+- Additive migration:
+  - `packages/db/migrations/0007_account_recovery.sql`
+- Production recovery delivery:
+  - `DELIVERY_ABSTRACTION_ONLY`
+  - Local/test token inspection requires `RECOVERY_EXPOSE_TEST_TOKEN=true` and is rejected for secure deployment profiles.
+- MFA implemented:
+  - No.
+- Destructive migration:
+  - No.
+- Dependency changes:
+  - No.
+- External infrastructure provisioned:
+  - No.
+- Real staging validators run:
+  - No.
+- Pilot decision:
+  - `NO_GO` remains in effect.
+- Verification:
+  - `node --version` - `v24.4.0`.
+  - `npm --version` - `11.4.2`.
+  - `npm run lint` - passed; linted 71 files.
+  - `npm run typecheck` - passed; checked 79 JavaScript files.
+  - `npm test` - passed; 51 tests total, 49 passed, 2 skipped, 0 failed.
+  - `npm run build` - passed.
+  - `npm audit` - passed; found 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+  - `npm run scan:claims` - passed; linted 71 files.
+  - `npm run scan:random` - passed; 1 deterministic-safety test passed.
+  - Targeted Phase 17 syntax checks - passed.
+  - `node --test tests/account-recovery.test.js` - passed with localhost server permission.
+  - `node --test tests/migrations.test.js` - passed.
+  - `node --test tests/postgres-repository.test.js` - skipped by design because `TEST_DATABASE_URL` is absent.
+  - `node --test tests/api.test.js` - passed with localhost server permission.
+  - `node --test tests/repository.test.js` - passed.
+- Recommended next phase:
+  - Phase 18 - Approved Account Recovery Delivery Integration.

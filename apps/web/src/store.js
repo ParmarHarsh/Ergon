@@ -29,7 +29,12 @@ export const state = {
   health: null,
   drawerRuleId: null,
   error: "",
-  loginError: ""
+  loginError: "",
+  recoveryMessage: "",
+  recoveryError: "",
+  resetToken: "",
+  resetMessage: "",
+  resetError: ""
 };
 
 export async function api(path, options = {}) {
@@ -150,7 +155,8 @@ export function resetSession() {
     evidence: [], aiAnalyses: [], processingJobs: [], reviewQueue: [],
     applicableRules: [], rulesPack: null, latestReview: null, gapRows: [],
     actionItems: [], packets: [], users: [], expertReviews: [], auditLogs: [],
-    health: null, drawerRuleId: null, error: "", loginError: "", route: "builder"
+    health: null, drawerRuleId: null, error: "", loginError: "", recoveryMessage: "",
+    recoveryError: "", resetToken: "", resetMessage: "", resetError: "", route: "builder"
   });
 }
 

@@ -74,6 +74,7 @@ Optional:
 - `CLAMAV_HOST`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT_MS`
 - `LOG_LEVEL`, `WORKER_HEALTH_HOST`, `WORKER_HEALTH_PORT`
 - `TRUST_PROXY`, `SESSION_COOKIE_SAME_SITE`
+- `RECOVERY_EXPOSE_TEST_TOKEN` for local/test recovery inspection only; it is rejected for secure deployment profiles
 - SMTP variables
 
 OpenAI and SMTP are optional. The core audit packet workflow works without them.
@@ -344,6 +345,9 @@ Auth:
 
 - `POST /api/auth/login` (rate-limited per client IP + email)
 - `POST /api/auth/logout`
+- `POST /api/auth/recovery/request` (generic `202` response; rate-limited; never reveals whether an email exists)
+- `POST /api/auth/recovery/reset` (single-use hashed token; revokes active sessions on success)
+- `GET /api/auth/recovery/test-token` (local/test only with `RECOVERY_EXPOSE_TEST_TOKEN=true`)
 - `GET /api/auth/me`
 
 Users (admin only):
@@ -434,6 +438,9 @@ Health:
 - Sessions are persisted in the repository and signed with `SESSION_SECRET`.
 - Session records are tenant-checked and survive API restart.
 - Login attempts are rate-limited per client IP + email pair (`LOGIN_RATE_LIMIT_MAX_ATTEMPTS` in `LOGIN_RATE_LIMIT_WINDOW_MS`; defaults 10 in 15 minutes) and return `429` when exceeded.
+- Password reset requests return the same generic `202` response for existing and missing accounts, persist only a SHA-256 reset-token hash, expire reset tokens after 30 minutes, invalidate prior outstanding tokens, and audit request/completion events without raw tokens.
+- Successful password reset consumes the token once, updates the scrypt password hash, invalidates sibling tokens, revokes all active sessions for that user, and clears the current session cookie.
+- Production reset-token delivery is `DELIVERY_ABSTRACTION_ONLY` until an approved email/SMS sender is configured. Local/test raw-token inspection requires `RECOVERY_EXPOSE_TEST_TOKEN=true` and is rejected for staging/closed-pilot profiles.
 - User management is admin-only, tenant-scoped, audit-logged, and blocks self-deactivation/self-demotion.
 - Core routes require authentication.
 - Customer-owned repository methods are scoped by `organizationId`.
@@ -591,7 +598,7 @@ The release-readiness report and Vercel guidance are in [DEPLOYMENT_READINESS.md
 - Archives and Office ZIP containers are intentionally unsupported. DOCX parsing may be added only with bounded entry/count/size controls and path-safe extraction.
 - Images and scanned PDFs still require a production OCR provider or human review.
 - Legal holds, explicit retention enforcement, failed-deletion retry, and safe metadata restore workflows are implemented for reviewer/admin users. Autonomous external scheduling and storage-provider WORM/object-lock policies are not implemented in application code.
-- Login rate limiting is implemented; account recovery is not implemented yet.
+- Account recovery token lifecycle, reset UI, generic request response, audit logging, and session revocation are implemented. Production self-service delivery remains blocked on an approved sender integration.
 - The static frontend is focused on the core workflow; future work can replace it with a richer React/Next app without moving compliance logic to the client.
 - Province/state-specific Canadian and Mexican rule depth needs expert legal/EHS review before commercial reliance.
 
@@ -609,4 +616,4 @@ The application includes pilot-oriented infrastructure validation paths, but thi
 1. Run the four staging validators and complete the go/no-go checklist with named pilot owners.
 2. Conduct a controlled workflow session with 3–5 EHS/manufacturing users using agreed, minimized pilot data.
 3. Move scheduling to Redis/SQS/BullMQ while preserving the lease/idempotency repository contract.
-4. Add production OCR, account recovery, external lifecycle scheduling, monitoring, and AI budget controls.
+4. Add production OCR, approved account-recovery delivery, external lifecycle scheduling, monitoring, and AI budget controls.
