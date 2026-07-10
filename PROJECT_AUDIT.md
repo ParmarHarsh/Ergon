@@ -812,3 +812,47 @@ Safe next action:
   - `npm run scan:random` - passed; 1 deterministic-safety test passed.
 - Recommended next phase:
   - Conduct a product-gap audit against the normalized docs and actual implementation, then prioritize focused ComplianceIQ feature/compliance gaps.
+
+## Phase 13 ComplianceIQ product-gap audit note
+
+- Pulled latest `main` after Phase 12 merge confirmation.
+- Created `phase-13-product-gap-audit`.
+- Created:
+  - `PRODUCT_GAP_AUDIT.md`
+- Audit scope included:
+  - API
+  - web UI
+  - persistence
+  - database migrations
+  - security controls
+  - tests
+  - CI
+  - deployment validators
+  - readiness docs
+- Confirmed meaningful gaps:
+  - 17
+- Highest-priority confirmed gap:
+  - Backup/restore exercise not completed.
+- Hard blockers before controlled pilot:
+  - Target-environment validation, backup/restore exercise, operational monitoring/escalation, and ingress/proxy verification must pass before real pilot evidence.
+- Expert next-phase recommendation:
+  - Phase 14 - Compliance Data Lifecycle Hardening.
+- Confidence:
+  - High
+- Source/runtime behavior changed:
+  - No.
+- Dependencies changed:
+  - No.
+- Database schema changed:
+  - No.
+- Verification:
+  - `npm run lint` — passed; linted 69 files.
+  - `npm run typecheck` — passed; checked 77 JavaScript files.
+  - `npm test` — passed; 46 passed, 2 skipped, 0 failed.
+  - `npm run build` — passed.
+  - `npm audit` — passed; found 0 vulnerabilities.
+  - `npm audit --omit=dev` — passed; found 0 production dependency vulnerabilities.
+  - `npm run scan:claims` — passed; linted 69 files.
+  - `npm run scan:random` — passed; 1 deterministic-safety test passed.
+- Recommended next phase:
+  - Phase 14 - Compliance Data Lifecycle Hardening.
