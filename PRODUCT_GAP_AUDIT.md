@@ -25,7 +25,7 @@ Evidence reviewed included `README.md`, `DEPLOYMENT_READINESS.md`, `PILOT_READIN
 | Identity/access | Login, logout, signed persistent sessions, password hashing | `IMPLEMENTED_AND_TESTED` | `apps/api/src/server.js`, `apps/api/src/security.js`, `tests/api.test.js`, `tests/repository.test.js`. |
 | Identity/access | Login throttling | `IMPLEMENTED_AND_TESTED` | `apps/api/src/rate-limit.js`, `tests/admin-users.test.js`. |
 | Identity/access | User creation/update/deactivation and role enforcement | `IMPLEMENTED_AND_TESTED` | Admin API/UI and `tests/admin-users.test.js`. |
-| Identity/access | Account recovery/password reset | `PARTIAL_FOUNDATION` | Secure reset-token lifecycle, reset routes, repository support, UI, tests, and docs exist; approved production delivery transport is still pending. |
+| Identity/access | Account recovery/password reset | `IMPLEMENTED_AND_TESTED_WITH_FAKE_TRANSPORT` | Secure reset-token lifecycle, reset routes, SMTP delivery adapter, failed-delivery invalidation, repository support, UI, tests, and docs exist; live external SMTP validation is still pending. |
 | Identity/access | MFA | `NOT_IMPLEMENTED` | No MFA enrollment, challenge, recovery code, TOTP, or WebAuthn implementation found. |
 | Tenant isolation | Organization scoping, API authorization, repository isolation, cross-org behavior | `IMPLEMENTED_AND_TESTED` | Scoped repositories and 401/403 tests in `tests/api.test.js`, `tests/repository.test.js`, `tests/postgres-repository.test.js`. |
 | Tenant isolation | Audit logging | `IMPLEMENTED_AND_TESTED` | `repo.logAudit` calls and assertions in API, provisioning, seed, and Postgres tests. |
@@ -76,7 +76,7 @@ Capability inventory counts:
 | Gap | Verification | Product gap? | Infrastructure gap? | Procedure/content? | Required for controlled pilot? | Required before public production? | Schema change? | Dependency change? | External infrastructure? | Approval needed? |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Production OCR engine | Confirmed; only unavailable/mock OCR exists in `packages/ai/src/ocr.js`. | Yes | Possibly | No | No, if OCR-required files go to manual review or are excluded. | Yes | No/Possibly | Yes likely | Possibly | Yes |
-| Account recovery/password reset | Secure token lifecycle, reset routes, repository support, UI, and tests exist; approved production delivery transport is still pending. | Yes | SMTP/email | No | Important but manageable with named admin support. | Yes | Added in 0007 | No current dependency change | SMTP/email | Yes |
+| Account recovery/password reset | Secure token lifecycle, reset routes, SMTP delivery adapter, repository support, UI, and tests exist; live external SMTP validation is pending. | Mostly resolved in source | SMTP/email validation | No | Important but manageable with named admin support. | Yes | Added in 0007 | Nodemailer added in Phase 18 | SMTP/email | Yes |
 | Scheduled retention enforcement | Confirmed; `retention_until` exists but no scheduler. | Yes | No | Policy input needed | Yes if date-based retention is promised. | Yes | Possibly | No | No | Yes |
 | Legal holds | Confirmed; no schema/API/UI/enforcement. | Yes | No | Policy input needed | Important; pilot policy should exclude held data until implemented. | Yes | Yes, additive expected | No | No | Yes |
 | Automated deletion retry worker | Confirmed; failure state exists but no retry worker. | Yes | No | No | Important because failed deletion is manual today. | Yes | Possibly | No | No | Yes |
@@ -128,7 +128,7 @@ Items rejected as stale or false source gaps:
 
 Implemented controls include authenticated routes, signed cookie sessions, session persistence, login throttling, CORS/origin checks for unsafe browser methods, tenant-scoped repositories, role gates, upload signature checks, archive/active-content rejection, private downloads, suspicious-file blocks, backend-only AI processing, schema validation, audit logs, and operational log redaction.
 
-Confirmed security/identity gaps are approved account-recovery delivery, MFA, repeated login-throttling alerting, and secret rotation procedure. This audit does not claim a vulnerability; it identifies missing controls or operational gaps supported by repository evidence.
+Confirmed security/identity gaps are MFA, live external SMTP validation for account recovery, repeated login-throttling alerting, and secret rotation procedure. This audit does not claim a vulnerability; it identifies missing controls or operational gaps supported by repository evidence.
 
 ## Database and migration implications
 
@@ -140,7 +140,7 @@ Top-gap schema implications:
 - Automated deletion retry: possibly additive fields or a deletion job table.
 - Scheduled retention: existing `retention_until` may be enough for a first pass; policy-level controls may need additive schema.
 - Restore workflow: possibly no schema for a minimal unarchive, but safer audit fields are likely.
-- Account recovery: additive reset-token schema added in `0007_account_recovery`; approved production delivery remains pending.
+- Account recovery: additive reset-token schema added in `0007_account_recovery`; SMTP adapter added in Phase 18; live external SMTP validation remains pending.
 - MFA: additive MFA secret/device/recovery-code schema expected.
 - AI budget controls: possible usage/accounting tables.
 - Production OCR: likely no schema for a basic provider integration.
@@ -174,7 +174,7 @@ The software mechanics for selection, scoring, matrix generation, action plans, 
 | 5 | Automated deletion retry workflow absent | `COMPLIANCE_DATA_LIFECYCLE` | Phase 13 finding; Phase 14 added explicit retry workflow. | Resolved for reviewer/admin workflow; autonomous worker remains future work | 4 | 5 | 3 | 3 | 1 | 15 | Added in 0006 | No | Yes |
 | 6 | Secret rotation procedure absent | `OPERATIONAL_OBSERVABILITY` | Config validates secrets; no rotation runbook/exercise. | Procedure pending | 4 | 4 | 1 | 2 | 2 | 13 | No | No | Yes |
 | 7 | Monitoring/alerting including login-throttle alerts not configured | `OPERATIONAL_OBSERVABILITY` | Logs/metrics exist; no collector/alert rules. | External/procedural pending | 4 | 4 | 2 | 3 | 3 | 12 | No expected | Possibly | Yes |
-| 8 | Approved account-recovery delivery absent | `SECURITY_IDENTITY` | Reset-token lifecycle, API, UI, and repository support exist; no approved production email/SMS sender is configured. | Source foundation implemented; delivery integration pending | 3 | 3 | 4 | 3 | 1 | 12 | Added in 0007 | No current dependency change | Yes |
+| 8 | Live external SMTP validation pending | `SECURITY_IDENTITY` | Reset-token lifecycle, API, UI, repository support, and SMTP adapter exist; approved staging SMTP has not been live-validated. | Source implementation complete with fake transport tests; external validation pending | 3 | 3 | 4 | 3 | 1 | 12 | Added in 0007 | Nodemailer added in Phase 18 | Yes |
 | 9 | Scheduled retention enforcement absent | `COMPLIANCE_DATA_LIFECYCLE` | Phase 14 added explicit due-retention enforcement; external autonomous scheduling remains absent. | Partially resolved in source | 3 | 4 | 2 | 3 | 1 | 12 | Added in 0006 | No expected | Yes |
 | 10 | MFA absent | `SECURITY_IDENTITY` | No MFA implementation found. | Not implemented | 3 | 4 | 2 | 4 | 1 | 11 | Yes, additive | Possibly | Yes |
 | 11 | Restore UI/workflow absent | `COMPLIANCE_DATA_LIFECYCLE` | Phase 14 added safe metadata restore API/UI and blocks restore after private-object deletion. | Resolved in source for eligible records | 3 | 4 | 3 | 4 | 2 | 11 | Added in 0006 | No expected | Yes |
@@ -194,12 +194,12 @@ Hard blockers before handling minimized real pilot customer evidence:
 3. Operational monitoring and escalation are not configured for readiness failure, scanner failure, dead-letter growth, repeated login throttling, and storage deletion failure.
 4. Ingress/proxy behavior has not been verified through the target HTTPS deployment.
 
-Not hard blockers for a tightly controlled pilot if acknowledged and mitigated: production OCR, approved account-recovery delivery, external queue service, DOCX support, and broader rule-pack depth.
+Not hard blockers for a tightly controlled pilot if acknowledged and mitigated: production OCR, live SMTP validation, external queue service, DOCX support, and broader rule-pack depth.
 
 ## Non-blocking future enhancements
 
 - Production OCR engine.
-- Approved account-recovery delivery integration.
+- Live external SMTP validation for account-recovery delivery.
 - DOCX/Office parsing with bounded, path-safe archive handling.
 - External queue/scheduler.
 - Richer frontend framework.
@@ -293,17 +293,39 @@ Reason for approval requirement:
 - Pilot infrastructure decision:
   - `NO_GO` remains until external staging gates are proven.
 
+## Phase 18 approved account recovery delivery follow-up
+
+- Recovery token lifecycle:
+  - Implemented and tested in Phase 17.
+- SMTP delivery adapter:
+  - `IMPLEMENTED_AND_TESTED_WITH_FAKE_TRANSPORT`.
+- Production configuration:
+  - `RECOVERY_DELIVERY_PROVIDER=smtp` uses existing `SMTP_*` variables and requires safe SMTP configuration.
+- Safe external SMTP validation:
+  - `NOT_RUN`; blocked until approved staging SMTP credentials exist.
+- Public enumeration resistance:
+  - Generic `202` response preserved for existing, nonexistent, disabled, SMTP-disabled, and SMTP-failed requests.
+- Failed-delivery token invalidation:
+  - Implemented; undelivered tokens are invalidated.
+- Raw-token exposure:
+  - No raw token persistence, production response exposure, or operational logging.
+- MFA:
+  - Not implemented.
+- Pilot decision:
+  - `NO_GO` remains until external staging gates are proven.
+
 | Phase | Goal | Ordering reason | Affected areas | Schema impact | Dependency impact | External infrastructure | Approval requirement | Verification strategy |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Phase 14 - Compliance Data Lifecycle Hardening | Implement legal holds, retention enforcement, deletion retry, and safe restore rules. | Highest source-level data risk. | API, web, DB repositories, migrations, shared validation, tests. | Yes, additive expected. | No expected. | Not for coding; yes for staging validation. | Yes. | Unit/API/repository/Postgres/e2e tests plus storage failure simulations. |
 | Phase 15 - Pilot Infrastructure Validation and Recovery Exercise | Run validators and backup/restore exercise against target staging. | Hard blocker before real pilot evidence. | Deployment env, validators, runbooks/docs. | No app schema. | No. | Yes: Postgres, S3, scanner, ingress, backups. | Yes. | `validate:postgres`, `validate:storage`, `validate:scanner`, `qa:pilot`, restore proof. |
-| Phase 17 - Secure Account Recovery Hardening | Add secure account recovery/password reset without MFA. | Reduces lockout risk while preserving non-enumerating behavior and hash-only token storage. | API, web login, DB repositories, config, docs, tests. | Yes, additive `0007_account_recovery`. | No. | Approved delivery still pending. | Yes. | Auth/API/repository tests, reset-token expiry/reuse tests, migration tests. |
-| Phase 18 - Approved Account Recovery Delivery | Add an approved sender integration for production recovery delivery. | Completes self-service recovery after secure token lifecycle is in place. | API delivery adapter, config, docs, tests. | No expected. | Possibly. | SMTP/email or approved equivalent. | Yes. | Delivery contract tests, redaction tests, secure-profile config tests. |
-| Phase 19 - Operational Monitoring and Secret Rotation | Add or document alert hooks/runbooks for critical signals and rotation. | Needed before larger pilot operations. | Docs, deployment config examples, optional metrics/logging adapters. | No expected. | Possibly. | Monitoring/secret manager. | Yes. | Alert dry-runs, log redaction tests, readiness/metrics checks. |
-| Phase 20 - Production OCR Integration | Add approved OCR provider for image/scanned PDF evidence. | Expands evidence coverage after custody controls. | AI package, API processing, config, tests. | Possibly no. | Yes likely. | OCR provider/service. | Yes. | OCR mocks, provider contract tests, manual-review fallbacks, cost/privacy review. |
-| Phase 21 - Regulatory Content Review Pack | Expert-review and deepen starter rule packs. | Required before regulatory-content reliance. | `packages/rules`, docs, fixtures/tests. | No expected. | No. | External legal/EHS reviewer. | Yes. | Expert signoff, deterministic scoring tests, content diff review. |
-| Phase 22 - AI Usage Budget Controls | Add usage/cost guardrails before broader AI use. | Needed if AI is enabled more broadly. | AI service, config, DB, admin/system UI. | Possibly yes. | Possibly. | AI billing/provider data. | Yes. | Quota tests, over-budget blocking, audit logs. |
-| Phase 23 - Scale Queue and Document Format Expansion | Add external queue backend and safe DOCX/Office ingestion if still needed. | Scale and convenience after pilot safety risks are lower. | Queue adapter, config, worker, file validation/extraction. | Possibly. | Yes. | Queue service; parser security review. | Yes. | Concurrency/idempotency tests, archive-safety tests, load/back-pressure tests. |
+| Phase 17 - Secure Account Recovery Hardening | Add secure account recovery/password reset without MFA. | Reduces lockout risk while preserving non-enumerating behavior and hash-only token storage. | API, web login, DB repositories, config, docs, tests. | Yes, additive `0007_account_recovery`. | No. | Delivery adapter completed in Phase 18; live SMTP validation pending. | Yes. | Auth/API/repository tests, reset-token expiry/reuse tests, migration tests. |
+| Phase 18 - Approved Account Recovery Delivery | Add an approved sender integration for production recovery delivery. | Completes self-service recovery after secure token lifecycle is in place. | API delivery adapter, config, docs, tests. | No. | Yes: Nodemailer. | SMTP/email validation pending. | Yes. | Delivery contract tests, redaction tests, secure-profile config tests. |
+| Phase 19 - Multi-Factor Authentication | Add MFA enrollment/challenge/recovery-code support. | Remaining source-controlled identity gap after account recovery delivery. | API, web auth/admin, DB repositories, tests, docs. | Yes, additive expected. | Possibly. | Optional authenticator app; no SMS. | Yes. | MFA enrollment/challenge/recovery tests and lockout/recovery-code tests. |
+| Phase 20 - Operational Monitoring and Secret Rotation | Add or document alert hooks/runbooks for critical signals and rotation. | Needed before larger pilot operations. | Docs, deployment config examples, optional metrics/logging adapters. | No expected. | Possibly. | Monitoring/secret manager. | Yes. | Alert dry-runs, log redaction tests, readiness/metrics checks. |
+| Phase 21 - Production OCR Integration | Add approved OCR provider for image/scanned PDF evidence. | Expands evidence coverage after custody controls. | AI package, API processing, config, tests. | Possibly no. | Yes likely. | OCR provider/service. | Yes. | OCR mocks, provider contract tests, manual-review fallbacks, cost/privacy review. |
+| Phase 22 - Regulatory Content Review Pack | Expert-review and deepen starter rule packs. | Required before regulatory-content reliance. | `packages/rules`, docs, fixtures/tests. | No expected. | No. | External legal/EHS reviewer. | Yes. | Expert signoff, deterministic scoring tests, content diff review. |
+| Phase 23 - AI Usage Budget Controls | Add usage/cost guardrails before broader AI use. | Needed if AI is enabled more broadly. | AI service, config, DB, admin/system UI. | Possibly yes. | Possibly. | AI billing/provider data. | Yes. | Quota tests, over-budget blocking, audit logs. |
+| Phase 24 - Scale Queue and Document Format Expansion | Add external queue backend and safe DOCX/Office ingestion if still needed. | Scale and convenience after pilot safety risks are lower. | Queue adapter, config, worker, file validation/extraction. | Possibly. | Yes. | Queue service; parser security review. | Yes. | Concurrency/idempotency tests, archive-safety tests, load/back-pressure tests. |
 
 ## Assumptions and evidence limitations
 

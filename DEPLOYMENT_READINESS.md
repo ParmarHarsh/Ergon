@@ -94,7 +94,7 @@ Implemented:
 
 Still required before pilot:
 
-- approved account-recovery delivery;
+- live external SMTP validation for account-recovery delivery;
 - production monitoring and alerting around repeated login throttling events;
 - secret rotation procedure;
 - backup/restore exercise;
@@ -241,7 +241,7 @@ Go only when all are true:
 - Worker requires a persistent host or a replacement background-job platform.
 - Scanner requires separate ClamAV-compatible infrastructure.
 - Live Postgres, S3, and scanner validation require external env vars and target infrastructure.
-- Account recovery token lifecycle, reset UI, generic request behavior, audit logging, and session revocation are implemented; approved production delivery transport and production OCR are not implemented.
+- Account recovery token lifecycle, SMTP delivery adapter, reset UI, generic request behavior, audit logging, failed-delivery token invalidation, and session revocation are implemented; live external SMTP validation and production OCR are not complete.
 - Lifecycle controls exist as reviewer/admin workflows, but autonomous external retention scheduling, storage-provider WORM/object-lock policy, and backup/restore execution remain deployment responsibilities.
 - Starter rules remain demo/unverified unless expert-reviewed.
 

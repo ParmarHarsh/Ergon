@@ -30,7 +30,7 @@ const loginRateLimiter = createLoginRateLimiter({ maxAttempts: config.loginRateL
 const recoveryRequestIpLimiter = createLoginRateLimiter({ maxAttempts: 8, windowMs: 15 * 60 * 1000 });
 const recoveryRequestEmailLimiter = createLoginRateLimiter({ maxAttempts: 3, windowMs: 15 * 60 * 1000 });
 const recoveryResetLimiter = createLoginRateLimiter({ maxAttempts: 10, windowMs: 15 * 60 * 1000 });
-const recoveryDelivery = createRecoveryDelivery(config);
+const recoveryDelivery = createRecoveryDelivery(config, config.nodeEnv === "test" ? globalThis.__COMPLIANCEIQ_RECOVERY_DELIVERY_DEPS__ || {} : {});
 const processingQueue = createEvidenceProcessingQueue(config, {
   repo,
   logger,
@@ -270,11 +270,12 @@ async function requestPasswordRecovery(req, res) {
   const user = await repo.findUserByEmail(email);
   if (user?.isActive) {
     const token = generateResetToken();
+    const tokenHash = hashResetToken(token);
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
     await repo.createPasswordResetToken({
       organizationId: user.organizationId,
       userId: user.id,
-      tokenHash: hashResetToken(token),
+      tokenHash,
       requestedAt: new Date().toISOString(),
       expiresAt
     });
@@ -284,6 +285,14 @@ async function requestPasswordRecovery(req, res) {
       resetUrl: buildPasswordResetUrl(token),
       expiresAt
     });
+    if (!delivery.ok) {
+      await repo.invalidatePasswordResetToken({
+        organizationId: user.organizationId,
+        userId: user.id,
+        tokenHash,
+        invalidatedAt: new Date().toISOString()
+      });
+    }
     await repo.logAudit({
       organizationId: user.organizationId,
       actorUserId: user.id,
@@ -293,7 +302,25 @@ async function requestPasswordRecovery(req, res) {
       metadata: { expiresAt, deliveryStatus: delivery.status },
       ipAddress: clientIp(req)
     });
+    await repo.logAudit({
+      organizationId: user.organizationId,
+      actorUserId: user.id,
+      action: delivery.ok ? "password_recovery_delivery_sent" : "password_recovery_delivery_failed",
+      entityType: "user",
+      entityId: user.id,
+      metadata: {
+        provider: delivery.provider,
+        status: delivery.status,
+        errorCode: delivery.errorCode || undefined
+      },
+      ipAddress: clientIp(req)
+    });
     logger.info("password_recovery_requested", { requestId: req.context.requestId, organizationId: user.organizationId, userId: user.id, deliveryStatus: delivery.status });
+    if (delivery.ok) {
+      logger.info("password_recovery_delivery_sent", { requestId: req.context.requestId, organizationId: user.organizationId, userId: user.id, provider: delivery.provider, messageId: delivery.messageId });
+    } else {
+      logger.warn("password_recovery_delivery_failed", { requestId: req.context.requestId, organizationId: user.organizationId, userId: user.id, provider: delivery.provider, errorCode: delivery.errorCode });
+    }
   }
 
   return sendPasswordRecoveryAccepted(res);

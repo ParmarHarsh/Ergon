@@ -1032,3 +1032,82 @@ Safe next action:
   - `node --test tests/repository.test.js` - passed.
 - Recommended next phase:
   - Phase 18 - Approved Account Recovery Delivery Integration.
+
+## Phase 18 approved account recovery delivery note
+
+- Pulled latest `main` after Phase 17 merge confirmation.
+- Created:
+  - `phase-18-approved-recovery-delivery`.
+- Recovery delivery provider:
+  - `smtp` implemented; `disabled` remains available for environments that intentionally do not offer self-service delivery.
+- SMTP adapter:
+  - Added Nodemailer-backed delivery adapter with bounded connection, greeting, and socket timeouts.
+  - Uses `APP_URL` to build the existing `#/reset-password?token=...` frontend reset link.
+  - Sends only to the stored account email address.
+- SMTP dependency:
+  - Added `nodemailer@9.0.3`.
+- Delivery success behavior:
+  - Token remains active until expiry, use, or supersession.
+  - Safe `password_recovery_delivery_sent` audit event is recorded.
+- Delivery failure behavior:
+  - Public response remains the same generic `202`.
+  - Safe `password_recovery_delivery_failed` audit event is recorded.
+  - Operational log records only provider/status/error category.
+- Failed-delivery token invalidation:
+  - Implemented; the specific undelivered token is invalidated by scoped token hash.
+- Account enumeration:
+  - Generic public response preserved.
+- Raw-token persistence:
+  - No.
+- Raw-token production response:
+  - No.
+- Raw-token logging:
+  - No.
+- SMTP credential logging:
+  - No.
+- Test-token exposure:
+  - Disabled by default and rejected in secure profiles.
+- MFA implemented:
+  - No.
+- Database migration:
+  - None.
+- Existing migrations changed:
+  - No.
+- Infrastructure provisioned:
+  - No.
+- Real SMTP validation:
+  - Not run; no safe staging SMTP credentials were configured.
+- Pilot decision:
+  - `NO_GO` remains.
+- Verification:
+  - `node --version` - `v24.4.0`.
+  - `npm --version` - `11.4.2`.
+  - `node --check apps/api/src/recovery-delivery.js` - passed.
+  - `node --check apps/api/src/server.js` - passed.
+  - `node --check packages/config/src/index.js` - passed.
+  - `node --check packages/db/src/file-repository.js` - passed.
+  - `node --check packages/db/src/postgres-repository.js` - passed.
+  - `node --check tests/account-recovery.test.js` - passed.
+  - `node --check tests/account-recovery-delivery.test.js` - passed.
+  - `node --check tests/config.test.js` - passed.
+  - `node --check tests/recovery-delivery.test.js` - passed.
+  - `node --check tests/repository.test.js` - passed.
+  - `node --check tests/postgres-repository.test.js` - passed.
+  - `node --test tests/recovery-delivery.test.js` - passed; 5 tests.
+  - `node --test tests/config.test.js` - passed; 10 tests.
+  - `node --test tests/account-recovery-delivery.test.js` - passed with localhost server permission; 2 tests.
+  - `node --test tests/account-recovery.test.js` - passed with localhost server permission; 2 tests.
+  - `node --test tests/api.test.js` - passed with localhost server permission; 1 test.
+  - `node --test tests/repository.test.js` - passed; 5 tests.
+  - `node --test tests/migrations.test.js` - passed; 1 test.
+  - `node --test tests/postgres-repository.test.js` - skipped by design because `TEST_DATABASE_URL` is absent.
+  - `npm run lint` - passed; linted 73 files.
+  - `npm run typecheck` - passed; checked 81 JavaScript files.
+  - `npm test` - passed; 61 tests total, 59 passed, 2 skipped, 0 failed.
+  - `npm run build` - passed.
+  - `npm audit` - passed; found 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+  - `npm run scan:claims` - passed; linted 73 files.
+  - `npm run scan:random` - passed; 1 deterministic-safety test passed.
+- Recommended next phase:
+  - Phase 19 - Multi-Factor Authentication.
