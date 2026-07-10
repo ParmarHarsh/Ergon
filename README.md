@@ -552,7 +552,7 @@ You may deploy the API to a Vercel-compatible serverless target only after adapt
 
 Before handling pilot evidence, run `npm run validate:postgres`, `npm run validate:storage`, `npm run validate:scanner`, and `npm run qa:pilot` in staging. The validators skip clearly when their infrastructure is absent. `VALIDATION_TARGET=production` is refused unless `ALLOW_PRODUCTION_VALIDATION=true`; validators still use isolated data or test objects.
 
-The release-readiness report and Vercel guidance are in [DEPLOYMENT_READINESS.md](./DEPLOYMENT_READINESS.md). Operational go/no-go, backup/restore, scanner, incident-response, and security checks are in [PILOT_READINESS.md](./PILOT_READINESS.md). Pilot-facing upload and AI limitations are in [PILOT_DATA_POLICY.md](./PILOT_DATA_POLICY.md).
+The release-readiness report and Vercel guidance are in [DEPLOYMENT_READINESS.md](./DEPLOYMENT_READINESS.md). Operational go/no-go, backup/restore, scanner, incident-response, and security checks are in [PILOT_READINESS.md](./PILOT_READINESS.md). The staging setup, validator, restore-drill, monitoring, and rotation runbook is in [STAGING_INFRASTRUCTURE_RUNBOOK.md](./STAGING_INFRASTRUCTURE_RUNBOOK.md). Pilot-facing upload and AI limitations are in [PILOT_DATA_POLICY.md](./PILOT_DATA_POLICY.md).
 
 ## Deployment Checklist
 

@@ -339,3 +339,17 @@ Recommended next phase:
 ## Recommended next phase
 
 `Phase 16 - Safe Staging Infrastructure Provisioning, External Validator Execution, and Restore Drill`
+
+## Phase 16 staging infrastructure runbook follow-up
+
+- Created `STAGING_INFRASTRUCTURE_RUNBOOK.md`.
+- No infrastructure was provisioned.
+- No secrets were added or exposed.
+- The Phase 15 `NO_GO` decision remains in effect until:
+  - safe staging Postgres is configured and validated,
+  - safe private storage is configured and validated,
+  - safe ClamAV scanner is configured and validated,
+  - ingress/proxy/TLS/CORS are validated,
+  - backup/restore drill is completed,
+  - monitoring/alerting/escalation are assigned and tested,
+  - secret rotation procedure is exercised.
