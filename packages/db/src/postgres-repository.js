@@ -165,6 +165,87 @@ export class PostgresRepository {
     await this.query("DELETE FROM user_sessions WHERE id = $1", [id]);
   }
 
+  async revokeUserSessions(organizationId, userId) {
+    await this.query("DELETE FROM user_sessions WHERE organization_id = $1 AND user_id = $2", [organizationId, userId]);
+  }
+
+  async createPasswordResetToken(input) {
+    await this.assertUserOrganization(input.userId, input.organizationId);
+    const id = input.id || this.createId();
+    const requestedAt = input.requestedAt || new Date().toISOString();
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `UPDATE password_reset_tokens
+         SET invalidated_at = $3
+         WHERE organization_id = $1 AND user_id = $2 AND used_at IS NULL AND invalidated_at IS NULL`,
+        [input.organizationId, input.userId, requestedAt]
+      );
+      const result = await client.query(
+        `INSERT INTO password_reset_tokens (id, organization_id, user_id, token_hash, requested_at, expires_at)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+        [id, input.organizationId, input.userId, input.tokenHash, requestedAt, input.expiresAt]
+      );
+      await client.query("COMMIT");
+      return camelPasswordResetToken(result.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async findValidPasswordResetToken(tokenHash, at = new Date().toISOString()) {
+    const [row] = await this.query(
+      `SELECT * FROM password_reset_tokens
+       WHERE token_hash = $1 AND used_at IS NULL AND invalidated_at IS NULL AND expires_at > $2`,
+      [tokenHash, at]
+    );
+    return row ? camelPasswordResetToken(row) : null;
+  }
+
+  async completePasswordReset(input) {
+    const usedAt = input.usedAt || new Date().toISOString();
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const tokenResult = await client.query("SELECT * FROM password_reset_tokens WHERE token_hash = $1 FOR UPDATE", [input.tokenHash]);
+      const tokenRow = tokenResult.rows[0];
+      if (!tokenRow || tokenRow.used_at || tokenRow.invalidated_at || new Date(tokenRow.expires_at).getTime() <= new Date(usedAt).getTime()) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+      const userResult = await client.query(
+        "UPDATE users SET password_hash = $3, updated_at = $4 WHERE id = $1 AND organization_id = $2 RETURNING *",
+        [tokenRow.user_id, tokenRow.organization_id, input.passwordHash, usedAt]
+      );
+      if (!userResult.rows[0]) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+      const usedResult = await client.query(
+        "UPDATE password_reset_tokens SET used_at = $2 WHERE id = $1 RETURNING *",
+        [tokenRow.id, usedAt]
+      );
+      await client.query(
+        `UPDATE password_reset_tokens
+         SET invalidated_at = $4
+         WHERE organization_id = $1 AND user_id = $2 AND id <> $3 AND used_at IS NULL AND invalidated_at IS NULL`,
+        [tokenRow.organization_id, tokenRow.user_id, tokenRow.id, usedAt]
+      );
+      await client.query("DELETE FROM user_sessions WHERE organization_id = $1 AND user_id = $2", [tokenRow.organization_id, tokenRow.user_id]);
+      await client.query("COMMIT");
+      return { user: camelUser(userResult.rows[0]), token: camelPasswordResetToken(usedResult.rows[0]) };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async createFacility(input) {
     const id = input.id || this.createId();
     const [row] = await this.query(
@@ -958,6 +1039,20 @@ function camelUser(row) {
 
 function camelSession(row) {
   return { id: row.id, organizationId: row.organization_id, userId: row.user_id, expiresAt: row.expires_at, createdAt: row.created_at };
+}
+
+function camelPasswordResetToken(row) {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    userId: row.user_id,
+    tokenHash: row.token_hash,
+    requestedAt: row.requested_at,
+    expiresAt: row.expires_at,
+    usedAt: row.used_at,
+    invalidatedAt: row.invalidated_at,
+    createdAt: row.created_at
+  };
 }
 
 function camelFacility(row) {

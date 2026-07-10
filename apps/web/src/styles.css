@@ -547,6 +547,9 @@ input[type="file"] { padding: 7px; font-size: 0.8rem; color: var(--muted); }
 .login-panel { width: min(400px, 100%); display: grid; gap: 22px; }
 .login-panel h2 { font-size: 1.28rem; letter-spacing: -0.02em; }
 .login-panel .hint { color: var(--muted); font-size: 0.86rem; margin-top: 6px; line-height: 1.5; }
+.auth-links { display: flex; justify-content: center; font-size: 0.82rem; color: var(--brand); font-weight: 600; }
+.auth-links a { text-decoration: none; }
+.auth-links a:hover { text-decoration: underline; }
 
 /* ---------- Builder workflow ---------- */
 

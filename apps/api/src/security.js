@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCallback);
@@ -22,6 +22,14 @@ export async function verifyPassword(password, storedHash) {
 export function signSessionId(sessionId, secret) {
   const sig = createHmac("sha256", secret).update(sessionId).digest("base64url");
   return `${sessionId}.${sig}`;
+}
+
+export function generateResetToken() {
+  return randomBytes(32).toString("base64url");
+}
+
+export function hashResetToken(token) {
+  return createHash("sha256").update(String(token)).digest("base64url");
 }
 
 export function verifySignedSession(value, secret) {

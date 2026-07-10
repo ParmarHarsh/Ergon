@@ -386,6 +386,7 @@ const formActions = {
   login: async (form) => {
     const data = Object.fromEntries(new FormData(form));
     state.loginError = "";
+    state.resetMessage = "";
     try {
       const result = await api("/api/auth/login", { method: "POST", body: data });
       state.user = result.user;
@@ -396,6 +397,35 @@ const formActions = {
       render();
     } catch (error) {
       state.loginError = error.message;
+      render();
+    }
+  },
+  "password-recovery": async (form) => {
+    const data = Object.fromEntries(new FormData(form));
+    state.recoveryError = "";
+    state.recoveryMessage = "";
+    try {
+      const result = await api("/api/auth/recovery/request", { method: "POST", body: data });
+      state.recoveryMessage = result.message;
+      render();
+    } catch (error) {
+      state.recoveryError = error.message;
+      render();
+    }
+  },
+  "password-reset": async (form) => {
+    const data = Object.fromEntries(new FormData(form));
+    state.resetError = "";
+    state.resetMessage = "";
+    try {
+      if (data.password !== data.confirmPassword) throw new Error("Passwords do not match");
+      const result = await api("/api/auth/recovery/reset", { method: "POST", body: data });
+      state.resetMessage = result.message;
+      state.resetToken = "";
+      window.location.hash = "#/login";
+      render();
+    } catch (error) {
+      state.resetError = error.message;
       render();
     }
   },
@@ -550,6 +580,10 @@ document.addEventListener("keydown", (event) => {
 
 window.addEventListener("hashchange", () => {
   const route = window.location.hash.replace(/^#\//, "");
+  if (!state.user) {
+    render();
+    return;
+  }
   if (state.user && ROUTES[route] && route !== state.route) {
     state.route = route;
     state.drawerRuleId = null;
@@ -570,6 +604,10 @@ async function initialize() {
   } catch (error) {
     state.user = null;
     if (error.status !== 401) state.loginError = error.message;
+  }
+  if (!state.user && window.location.hash.startsWith("#/reset-password")) {
+    const query = window.location.hash.includes("?") ? window.location.hash.slice(window.location.hash.indexOf("?") + 1) : "";
+    state.resetToken = new URLSearchParams(query).get("token") || "";
   }
   state.booted = true;
   render();
