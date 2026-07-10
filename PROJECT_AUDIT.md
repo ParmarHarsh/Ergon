@@ -856,3 +856,32 @@ Safe next action:
   - `npm run scan:random` — passed; 1 deterministic-safety test passed.
 - Recommended next phase:
   - Phase 14 - Compliance Data Lifecycle Hardening.
+
+## Phase 14 compliance data lifecycle hardening note
+
+- Branch:
+  - `phase-14-data-lifecycle-hardening`
+- Scope completed:
+  - Added additive lifecycle schema for evidence and audit packets: legal holds, hold release metadata, restore metadata, and storage deletion retry metadata.
+  - Added repository and API support for legal hold set/release, explicit retention enforcement, failed private-object deletion retry, and safe metadata restore.
+  - Updated the web workspace so reviewer/admin users can see archived records, manage holds, retry failed deletion, restore eligible metadata, and trigger retention enforcement.
+  - Reconciled shared processing status validation with persisted `dead_letter` queue state.
+  - Updated readiness/docs to distinguish implemented source lifecycle controls from remaining deployment responsibilities such as WORM/object-lock, autonomous scheduling, monitoring, and backup/restore exercises.
+- Safety constraints observed:
+  - No dependency or package metadata changes.
+  - No destructive migrations.
+  - No historical migration edits.
+  - No CI/deployment workflow changes.
+- Verification:
+  - `node --check apps/api/src/server.js` — passed.
+  - `node --check packages/db/src/file-repository.js` — passed.
+  - `node --check packages/db/src/postgres-repository.js` — passed.
+  - `node --check apps/web/src/app.js` — passed.
+  - `node --check apps/web/src/store.js` — passed.
+  - `node --check apps/web/src/views/evidence.js` — passed.
+  - `node --check apps/web/src/views/packets.js` — passed.
+  - `node --check apps/web/src/views/system.js` — passed.
+  - `node --test tests/migrations.test.js` — passed.
+  - `node --test tests/repository.test.js` — passed.
+  - `node --test tests/api.test.js` — passed with localhost server permission.
+  - `npm test` — passed; 47 passed, 2 skipped, 0 failed.

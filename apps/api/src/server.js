@@ -152,12 +152,16 @@ async function handleRequest(req, res) {
   if (match(path, "/api/rules-packs/:id") && method === "GET") return getRulesPack(res, params(path).id);
   if (path === "/api/rules" && method === "GET") return sendJson(res, { status: 200, body: await repo.listComplianceRules(Object.fromEntries(url.searchParams)) });
 
-  if (path === "/api/evidence" && method === "GET") return listEvidence(res, user, url.searchParams.get("facilityId"));
+  if (path === "/api/evidence" && method === "GET") return listEvidence(res, user, url.searchParams.get("facilityId"), url.searchParams.get("includeArchived") === "true");
   if (path === "/api/evidence" && method === "POST") return createEvidence(req, res, user, false);
   if (path === "/api/evidence/upload" && method === "POST") return createEvidence(req, res, user, true);
   if (match(path, "/api/evidence/:id") && method === "GET") return getEvidence(res, user, params(path).id);
   if (match(path, "/api/evidence/:id") && method === "PATCH") return updateEvidence(req, res, user, params(path).id);
   if (match(path, "/api/evidence/:id") && method === "DELETE") return archiveEvidence(req, res, user, params(path).id);
+  if (match(path, "/api/evidence/:id/legal-hold") && method === "POST") return setEvidenceLegalHold(req, res, user, params(path).id);
+  if (match(path, "/api/evidence/:id/legal-hold") && method === "DELETE") return releaseEvidenceLegalHold(req, res, user, params(path).id);
+  if (match(path, "/api/evidence/:id/restore") && method === "POST") return restoreEvidence(req, res, user, params(path).id);
+  if (match(path, "/api/evidence/:id/retry-storage-deletion") && method === "POST") return retryEvidenceStorageDeletion(req, res, user, params(path).id);
   if (match(path, "/api/evidence/:id/download") && method === "GET") return downloadEvidence(res, user, params(path).id);
   if (match(path, "/api/evidence/:id/process-ai") && method === "POST") return processEvidenceAi(res, user, params(path).id);
   if (match(path, "/api/evidence/:id/retry-processing") && method === "POST") return retryEvidenceProcessing(res, user, params(path).id);
@@ -178,10 +182,16 @@ async function handleRequest(req, res) {
   }
   if (match(path, "/api/audit-readiness/reviews/:id/action-plan") && method === "GET") return sendJson(res, { status: 200, body: await repo.getActionItems(user.organizationId, params(path).id) });
 
-  if (path === "/api/audit-packets" && method === "GET") return listPackets(res, user, url.searchParams.get("facilityId"));
+  if (path === "/api/audit-packets" && method === "GET") return listPackets(res, user, url.searchParams.get("facilityId"), url.searchParams.get("includeArchived") === "true");
   if (path === "/api/audit-packets/export" && method === "POST") return exportPacket(req, res, user);
   if (match(path, "/api/audit-packets/:id/download") && method === "GET") return downloadPacket(res, user, params(path).id);
   if (match(path, "/api/audit-packets/:id") && method === "DELETE") return archivePacket(req, res, user, params(path).id);
+  if (match(path, "/api/audit-packets/:id/legal-hold") && method === "POST") return setPacketLegalHold(req, res, user, params(path).id);
+  if (match(path, "/api/audit-packets/:id/legal-hold") && method === "DELETE") return releasePacketLegalHold(req, res, user, params(path).id);
+  if (match(path, "/api/audit-packets/:id/restore") && method === "POST") return restorePacket(req, res, user, params(path).id);
+  if (match(path, "/api/audit-packets/:id/retry-storage-deletion") && method === "POST") return retryPacketStorageDeletion(req, res, user, params(path).id);
+
+  if (path === "/api/lifecycle/retention/enforce" && method === "POST") return enforceRetention(req, res, user);
 
   if (path === "/api/expert-reviews" && method === "GET") return sendJson(res, { status: 200, body: await repo.listExpertReviews(user.organizationId) });
   if (path === "/api/expert-reviews" && method === "POST") return requestExpertReview(req, res, user);
@@ -362,10 +372,11 @@ async function applicableRules(res, user, id) {
   sendJson(res, { status: 200, body: { rulesPack, rules } });
 }
 
-async function listEvidence(res, user, facilityId) {
+async function listEvidence(res, user, facilityId, includeArchived = false) {
   if (!facilityId) throw validationError("facilityId query parameter is required");
   await requireFacility(user.organizationId, facilityId);
-  sendJson(res, { status: 200, body: await repo.listEvidence(user.organizationId, facilityId) });
+  if (includeArchived) requireRole(user, ["admin", "reviewer"]);
+  sendJson(res, { status: 200, body: await repo.listEvidence(user.organizationId, facilityId, { includeArchived }) });
 }
 
 async function createEvidence(req, res, user, allowsFile) {
@@ -483,6 +494,7 @@ async function updateEvidence(req, res, user, id) {
 async function archiveEvidence(req, res, user, id) {
   requireRole(user, ["admin", "reviewer"]);
   const existing = await requireEvidence(user.organizationId, id);
+  if (existing.legalHoldActive) throw lifecycleConflict("Evidence is under legal hold and cannot be archived or deleted", "LEGAL_HOLD_ACTIVE");
   const deletionReason = deletionReasonFrom(req);
   let storageDeletionStatus = existing.fileReference ? "deleted" : "not_applicable";
   if (existing.fileReference) {
@@ -507,6 +519,82 @@ async function archiveEvidence(req, res, user, id) {
   });
   await audit(user, evidence.facilityId, "evidence.archived", "evidence", evidence.id, { requestId: req.context.requestId, storageDeletionStatus, deletionReason });
   sendJson(res, { status: 200, body: evidence });
+}
+
+async function setEvidenceLegalHold(req, res, user, id) {
+  requireRole(user, ["admin", "reviewer"]);
+  const existing = await requireEvidence(user.organizationId, id);
+  const reason = lifecycleReason(await readJson(req), "Legal hold reason is required");
+  const held = await repo.setEvidenceLegalHold(user.organizationId, id, {
+    legalHoldReason: reason,
+    legalHoldByUserId: user.id,
+    legalHoldAt: new Date().toISOString()
+  });
+  await audit(user, existing.facilityId, "evidence_legal_hold_set", "evidence", id, { reason });
+  sendJson(res, { status: 200, body: held });
+}
+
+async function releaseEvidenceLegalHold(req, res, user, id) {
+  requireRole(user, ["admin", "reviewer"]);
+  const existing = await requireEvidence(user.organizationId, id);
+  const reason = lifecycleReason(await readJson(req), "Legal hold release reason is required");
+  const released = await repo.releaseEvidenceLegalHold(user.organizationId, id, {
+    legalHoldReleasedByUserId: user.id,
+    legalHoldReleasedAt: new Date().toISOString(),
+    legalHoldReleaseReason: reason
+  });
+  await audit(user, existing.facilityId, "evidence_legal_hold_released", "evidence", id, { reason });
+  sendJson(res, { status: 200, body: released });
+}
+
+async function restoreEvidence(req, res, user, id) {
+  requireRole(user, ["admin", "reviewer"]);
+  const existing = await requireEvidence(user.organizationId, id);
+  const reason = lifecycleReason(await readJson(req), "Restore reason is required");
+  const restored = await repo.restoreEvidence(user.organizationId, id, {
+    restoredByUserId: user.id,
+    restoredAt: new Date().toISOString(),
+    restoreReason: reason
+  });
+  await audit(user, existing.facilityId, "evidence.restored", "evidence", id, { reason });
+  sendJson(res, { status: 200, body: restored });
+}
+
+async function retryEvidenceStorageDeletion(req, res, user, id) {
+  requireRole(user, ["admin", "reviewer"]);
+  const existing = await requireEvidence(user.organizationId, id);
+  if (existing.legalHoldActive) throw lifecycleConflict("Evidence is under legal hold and cannot be deleted", "LEGAL_HOLD_ACTIVE");
+  if (existing.storageDeletionStatus !== "failed" || !existing.fileReference) {
+    throw lifecycleConflict("Evidence does not have a failed private-object deletion to retry", "STORAGE_DELETION_NOT_RETRYABLE");
+  }
+  const reason = lifecycleReason(await readJson(req), "Deletion retry reason is required");
+  const retriedAt = new Date().toISOString();
+  try {
+    await storage.deleteBuffer(existing.fileReference);
+    const evidence = await repo.markEvidenceStorageDeletionRetried(user.organizationId, id, {
+      actorUserId: user.id,
+      retriedAt,
+      updates: {
+        archived: true,
+        removeFileReference: true,
+        deletedAt: retriedAt,
+        deletedByUserId: user.id,
+        deletionReason: reason,
+        storageDeletionStatus: "deleted",
+        storageDeletionError: null
+      }
+    });
+    await audit(user, existing.facilityId, "evidence_storage_deletion_retry_succeeded", "evidence", id, { reason, requestId: req.context.requestId });
+    sendJson(res, { status: 200, body: evidence });
+  } catch (error) {
+    const evidence = await repo.markEvidenceStorageDeletionRetried(user.organizationId, id, {
+      actorUserId: user.id,
+      retriedAt,
+      updates: { storageDeletionStatus: "failed", storageDeletionError: safeOperationalError(error) }
+    });
+    await audit(user, existing.facilityId, "evidence_storage_deletion_retry_failed", "evidence", id, { reason, requestId: req.context.requestId, errorCode: error.code || "STORAGE_DELETE_FAILED" });
+    sendJson(res, { status: 502, body: evidence });
+  }
 }
 
 async function downloadEvidence(res, user, id) {
@@ -663,9 +751,10 @@ async function exportPacket(req, res, user) {
   sendJson(res, { status: 201, body: { packet, downloadUrl: `/api/audit-packets/${packet.id}/download` } });
 }
 
-async function listPackets(res, user, facilityId) {
+async function listPackets(res, user, facilityId, includeArchived = false) {
   if (facilityId) await requireFacility(user.organizationId, facilityId);
-  sendJson(res, { status: 200, body: await repo.listAuditPackets(user.organizationId, facilityId) });
+  if (includeArchived) requireRole(user, ["admin", "reviewer"]);
+  sendJson(res, { status: 200, body: await repo.listAuditPackets(user.organizationId, facilityId, { includeArchived }) });
 }
 
 async function downloadPacket(res, user, id) {
@@ -693,8 +782,9 @@ async function archivePacket(req, res, user, id) {
     error.status = 404;
     throw error;
   }
+  if (packet.legalHoldActive) throw lifecycleConflict("Audit packet is under legal hold and cannot be archived or deleted", "LEGAL_HOLD_ACTIVE");
   const deletionReason = deletionReasonFrom(req);
-  let storageDeletionStatus = packet.fileReference ? "deleted" : "deleted";
+  let storageDeletionStatus = packet.fileReference ? "deleted" : "not_applicable";
   if (packet.fileReference) {
     try {
       await storage.deleteBuffer(packet.fileReference);
@@ -723,6 +813,141 @@ async function archivePacket(req, res, user, id) {
   });
   await audit(user, packet.facilityId, "packet.archived", "audit_packet", id, { requestId: req.context.requestId, storageDeletionStatus, deletionReason });
   sendJson(res, { status: 200, body: archived });
+}
+
+async function setPacketLegalHold(req, res, user, id) {
+  requireRole(user, ["admin", "reviewer"]);
+  const packet = await requirePacket(user.organizationId, id);
+  const reason = lifecycleReason(await readJson(req), "Legal hold reason is required");
+  const held = await repo.setAuditPacketLegalHold(user.organizationId, id, {
+    legalHoldReason: reason,
+    legalHoldByUserId: user.id,
+    legalHoldAt: new Date().toISOString()
+  });
+  await audit(user, packet.facilityId, "packet_legal_hold_set", "audit_packet", id, { reason });
+  sendJson(res, { status: 200, body: held });
+}
+
+async function releasePacketLegalHold(req, res, user, id) {
+  requireRole(user, ["admin", "reviewer"]);
+  const packet = await requirePacket(user.organizationId, id);
+  const reason = lifecycleReason(await readJson(req), "Legal hold release reason is required");
+  const released = await repo.releaseAuditPacketLegalHold(user.organizationId, id, {
+    legalHoldReleasedByUserId: user.id,
+    legalHoldReleasedAt: new Date().toISOString(),
+    legalHoldReleaseReason: reason
+  });
+  await audit(user, packet.facilityId, "packet_legal_hold_released", "audit_packet", id, { reason });
+  sendJson(res, { status: 200, body: released });
+}
+
+async function restorePacket(req, res, user, id) {
+  requireRole(user, ["admin", "reviewer"]);
+  const packet = await requirePacket(user.organizationId, id);
+  const reason = lifecycleReason(await readJson(req), "Restore reason is required");
+  const restored = await repo.restoreAuditPacket(user.organizationId, id, {
+    restoredByUserId: user.id,
+    restoredAt: new Date().toISOString(),
+    restoreReason: reason
+  });
+  await audit(user, packet.facilityId, "packet.restored", "audit_packet", id, { reason });
+  sendJson(res, { status: 200, body: restored });
+}
+
+async function retryPacketStorageDeletion(req, res, user, id) {
+  requireRole(user, ["admin", "reviewer"]);
+  const packet = await requirePacket(user.organizationId, id);
+  if (packet.legalHoldActive) throw lifecycleConflict("Audit packet is under legal hold and cannot be deleted", "LEGAL_HOLD_ACTIVE");
+  if (packet.storageDeletionStatus !== "failed" || !packet.fileReference) {
+    throw lifecycleConflict("Audit packet does not have a failed private-object deletion to retry", "STORAGE_DELETION_NOT_RETRYABLE");
+  }
+  const reason = lifecycleReason(await readJson(req), "Deletion retry reason is required");
+  const retriedAt = new Date().toISOString();
+  try {
+    await storage.deleteBuffer(packet.fileReference);
+    const retried = await repo.markAuditPacketStorageDeletionRetried(user.organizationId, id, {
+      actorUserId: user.id,
+      retriedAt,
+      updates: {
+        archived: true,
+        removeFileReference: true,
+        deletedAt: retriedAt,
+        deletedByUserId: user.id,
+        deletionReason: reason,
+        storageDeletionStatus: "deleted",
+        storageDeletionError: null
+      }
+    });
+    await audit(user, packet.facilityId, "packet_storage_deletion_retry_succeeded", "audit_packet", id, { reason, requestId: req.context.requestId });
+    sendJson(res, { status: 200, body: retried });
+  } catch (error) {
+    const retried = await repo.markAuditPacketStorageDeletionRetried(user.organizationId, id, {
+      actorUserId: user.id,
+      retriedAt,
+      updates: { storageDeletionStatus: "failed", storageDeletionError: safeOperationalError(error) }
+    });
+    await audit(user, packet.facilityId, "packet_storage_deletion_retry_failed", "audit_packet", id, { reason, requestId: req.context.requestId, errorCode: error.code || "STORAGE_DELETE_FAILED" });
+    sendJson(res, { status: 502, body: retried });
+  }
+}
+
+async function enforceRetention(req, res, user) {
+  requireRole(user, ["admin", "reviewer"]);
+  const body = await readJson(req);
+  const reason = lifecycleReason(body, "Retention enforcement reason is required");
+  const dueAt = body.dueAt ? new Date(body.dueAt).toISOString() : new Date().toISOString();
+  const candidates = await repo.listRetentionCandidates(user.organizationId, dueAt);
+  const summary = {
+    considered: candidates.evidence.length + candidates.auditPackets.length + candidates.skippedLegalHold.evidence + candidates.skippedLegalHold.auditPackets,
+    skippedDueLegalHold: candidates.skippedLegalHold.evidence + candidates.skippedLegalHold.auditPackets,
+    archived: 0,
+    deletionSucceeded: 0,
+    deletionFailed: 0,
+    errors: []
+  };
+  for (const evidence of candidates.evidence) {
+    try {
+      if (evidence.fileReference) await storage.deleteBuffer(evidence.fileReference);
+      const archived = await repo.archiveEvidence(user.organizationId, evidence.id, {
+        fileReference: null,
+        deletedAt: dueAt,
+        deletedByUserId: user.id,
+        deletionReason: reason,
+        storageDeletionStatus: evidence.fileReference ? "deleted" : "not_applicable",
+        storageDeletionError: null
+      });
+      summary.archived += 1;
+      if (evidence.fileReference) summary.deletionSucceeded += 1;
+      await audit(user, archived.facilityId, "evidence_retention_enforced", "evidence", evidence.id, { reason, retentionUntil: evidence.retentionUntil });
+    } catch (error) {
+      summary.deletionFailed += 1;
+      summary.errors.push({ type: "evidence", id: evidence.id, code: error.code || "RETENTION_ENFORCEMENT_FAILED" });
+      await repo.updateEvidence(user.organizationId, evidence.id, { storageDeletionStatus: "failed", storageDeletionError: safeOperationalError(error) });
+      await audit(user, evidence.facilityId, "evidence_retention_deletion_failed", "evidence", evidence.id, { reason, errorCode: error.code || "STORAGE_DELETE_FAILED" });
+    }
+  }
+  for (const packet of candidates.auditPackets) {
+    try {
+      if (packet.fileReference) await storage.deleteBuffer(packet.fileReference);
+      const archived = await repo.archiveAuditPacket(user.organizationId, packet.id, {
+        deletedAt: dueAt,
+        deletedByUserId: user.id,
+        deletionReason: reason,
+        storageDeletionStatus: packet.fileReference ? "deleted" : "not_applicable",
+        storageDeletionError: null
+      });
+      summary.archived += 1;
+      if (packet.fileReference) summary.deletionSucceeded += 1;
+      await audit(user, archived.facilityId, "packet_retention_enforced", "audit_packet", packet.id, { reason, retentionUntil: packet.retentionUntil });
+    } catch (error) {
+      summary.deletionFailed += 1;
+      summary.errors.push({ type: "audit_packet", id: packet.id, code: error.code || "RETENTION_ENFORCEMENT_FAILED" });
+      await repo.archiveAuditPacket(user.organizationId, packet.id, { archived: false, storageDeletionStatus: "failed", storageDeletionError: safeOperationalError(error) });
+      await audit(user, packet.facilityId, "packet_retention_deletion_failed", "audit_packet", packet.id, { reason, errorCode: error.code || "STORAGE_DELETE_FAILED" });
+    }
+  }
+  await repo.logAudit({ organizationId: user.organizationId, actorUserId: user.id, action: "retention_enforcement_completed", entityType: "organization", entityId: user.organizationId, metadata: { ...summary, reason, dueAt } });
+  sendJson(res, { status: 200, body: summary });
 }
 
 async function readiness(res, { service, requireWorker }) {
@@ -803,6 +1028,16 @@ async function requireReview(organizationId, id) {
     throw error;
   }
   return review;
+}
+
+async function requirePacket(organizationId, id) {
+  const packet = await repo.getAuditPacket(organizationId, id);
+  if (!packet) {
+    const error = new Error("Audit packet not found");
+    error.status = 404;
+    throw error;
+  }
+  return packet;
 }
 
 function requireRole(user, roles) {
@@ -915,6 +1150,19 @@ function deletionReasonFrom(req) {
   return String(url.searchParams.get("reason") || "User-requested archive").trim().slice(0, 500);
 }
 
+function lifecycleReason(body, message) {
+  const reason = String(body.reason || "").trim();
+  if (!reason) throw validationError(message);
+  return reason.slice(0, 500);
+}
+
+function lifecycleConflict(message, code) {
+  const error = new Error(message);
+  error.status = 409;
+  error.code = code;
+  return error;
+}
+
 function safeOperationalError(error) {
   return String(error?.code || error?.name || "STORAGE_DELETE_FAILED").slice(0, 100);
 }
@@ -927,7 +1175,7 @@ function match(path, pattern) {
 
 function params(path) {
   const parts = path.split("/").filter(Boolean);
-  const id = ["download", "gap-matrix", "score", "action-plan", "applicable-rules", "process-ai", "retry-processing", "ai-analysis", "ai-analyses", "ai-review"].includes(parts[parts.length - 1])
+  const id = ["download", "gap-matrix", "score", "action-plan", "applicable-rules", "process-ai", "retry-processing", "retry-storage-deletion", "ai-analysis", "ai-analyses", "ai-review", "legal-hold", "restore"].includes(parts[parts.length - 1])
     ? parts[parts.length - 2]
     : parts[parts.length - 1];
   return { id };

@@ -4,7 +4,9 @@
 
 Phase 13 audited ComplianceIQ after the Phase 12 merge to compare normalized documentation claims with actual API, web UI, persistence, migrations, security controls, tests, CI, deployment validators, and pilot-readiness requirements.
 
-This phase is audit-only. It does not implement features, change runtime behavior, change dependencies, modify migrations, modify tests, or provision external infrastructure.
+Phase 14 implementation update: the lifecycle rows in the original Phase 13 baseline have now been acted on in source. ComplianceIQ includes additive legal-hold, explicit retention enforcement, failed private-object deletion retry, and safe metadata restore workflows for evidence and audit packets. Storage-provider WORM/object-lock policy, autonomous external lifecycle scheduling, target backup/restore execution, and production OCR remain outside this implementation.
+
+The Phase 13 audit was audit-only. Phase 14 changed runtime behavior, added an additive migration, and added tests/docs without changing dependencies or provisioning external infrastructure.
 
 Evidence reviewed included `README.md`, `DEPLOYMENT_READINESS.md`, `PILOT_READINESS.md`, `PILOT_DATA_POLICY.md`, `PROJECT_AUDIT.md`, `package.json`, `.github/workflows/ci.yml`, `apps/api/src/*`, `apps/web/src/*`, `packages/config/src/index.js`, `packages/ai/src/*`, `packages/db/src/*`, `packages/db/migrations/*.sql`, `packages/rules/src/index.js`, `packages/pdf/src/index.js`, `scripts/validate-*.mjs`, `deploy/env/*.env.example`, and `tests/**`.
 
@@ -45,9 +47,9 @@ Evidence reviewed included `README.md`, `DEPLOYMENT_READINESS.md`, `PILOT_READIN
 | Audit workflow | Evidence review, gap matrix, score, action plan, packet PDF, audit logs | `IMPLEMENTED_AND_TESTED` | `apps/web/src/views/*`, `packages/rules`, `packages/pdf`, API/e2e tests. |
 | Audit workflow | Expert review workflow | `IMPLEMENTED_PARTIALLY_TESTED` | API/UI exists; coverage is lighter than evidence and packet paths. |
 | Retention/deletion | Archive metadata and object deletion | `IMPLEMENTED_AND_TESTED` | Evidence/packet archive routes and API tests. |
-| Retention/deletion | Deletion failure state | `IMPLEMENTED_PARTIALLY_TESTED` | `storageDeletionStatus=failed` code exists; direct failure-path tests are limited. |
-| Retention/deletion | Retention date | `PARTIAL_FOUNDATION` | `retention_until` exists in migration `0005`; no enforcement worker consumes it. |
-| Retention/deletion | Scheduled retention, legal holds, automated deletion retry, restore UI/workflow | `NOT_IMPLEMENTED` | Docs state missing; no matching API/UI/worker found. |
+| Retention/deletion | Deletion failure state and retry | `IMPLEMENTED_AND_TESTED` | Failed deletion state, retry routes, repository guards, and API/repository tests were added in Phase 14. |
+| Retention/deletion | Retention date and explicit enforcement | `IMPLEMENTED_AND_TESTED` | `retention_until` plus admin/reviewer retention enforcement that skips legal holds. Autonomous external scheduling remains future work. |
+| Retention/deletion | Legal holds and safe metadata restore workflow | `IMPLEMENTED_AND_TESTED` | Additive schema/API/UI/repository support exists for evidence and audit packets; restore is blocked after private-object deletion. |
 | Retention/deletion | WORM/immutability | `EXTERNAL_INFRASTRUCTURE_REQUIRED` | Requires storage-provider policy; no app-level WORM guarantee. |
 | Operational readiness | Health/readiness endpoints, worker metrics, structured logging | `IMPLEMENTED_AND_TESTED` | `apps/api/src/server.js`, `apps/api/src/operational-logger.js`, process-role/logger tests. |
 | Operational readiness | Production monitoring/alerting | `EXTERNAL_INFRASTRUCTURE_REQUIRED` | Logs/metrics exist; no collector or alert rules are configured in repo. |
@@ -59,11 +61,11 @@ Evidence reviewed included `README.md`, `DEPLOYMENT_READINESS.md`, `PILOT_READIN
 
 Capability inventory counts:
 
-- implemented and tested: 42
-- implemented but partially tested: 6
+- implemented and tested: 45
+- implemented but partially tested: 5
 - implemented untested: 0
-- partial foundations: 5
-- not implemented: 9
+- partial foundations: 4
+- not implemented: 8
 - external infrastructure required: 8
 - operational procedure required: 4
 - expert content review required: 1
@@ -103,10 +105,9 @@ Items rejected as stale or false source gaps:
 ## Newly discovered gaps
 
 - MFA is absent.
-- Deletion failure-path tests are thinner than the risk of failed private-object deletion warrants.
 - Expert-review workflow tests are lighter than evidence, AI, and packet workflow tests.
 - Worker `/metrics` exists, but no deployed scrape/alert integration is represented in the repo.
-- `packages/shared/src/index.js` does not list `dead_letter` in `PROCESSING_JOB_STATUSES`, while migrations and queue code use `dead_letter`. Current tests did not prove a behavioral bug, but the shared contract should be reconciled during later queue/lifecycle work.
+- Phase 14 reconciled `dead_letter` in shared processing status validation.
 
 ## UI-to-API completeness
 
@@ -167,16 +168,16 @@ The software mechanics for selection, scoring, matrix generation, action plans, 
 | Rank | Gap | Category | Evidence | Current status | Pilot impact | Security/data risk | Workflow impact | Complexity | External dependency | Priority score | Schema change? | Dependency change? | Explicit approval needed? |
 | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
 | 1 | Backup/restore exercise not completed | `OPERATIONAL_OBSERVABILITY` | `PILOT_READINESS.md` requires restore proof; no target restore evidence in repo. | Procedural/infrastructure pending | 5 | 5 | 2 | 3 | 3 | 16 | No app schema | No | Yes |
-| 2 | Legal holds absent | `COMPLIANCE_DATA_LIFECYCLE` | No legal-hold schema/API/UI/enforcement. | Not implemented | 4 | 5 | 3 | 4 | 1 | 16 | Yes, additive | No expected | Yes |
+| 2 | Legal holds absent | `COMPLIANCE_DATA_LIFECYCLE` | Phase 13 finding; Phase 14 added legal-hold schema/API/UI/enforcement. | Resolved in source; external operating policy still required | 4 | 5 | 3 | 4 | 1 | 16 | Added in 0006 | No | Yes |
 | 3 | Target Postgres/S3/ClamAV/API/worker validation not run | `DEPLOYMENT_INFRASTRUCTURE` | Validators exist but require target services. | External validation pending | 5 | 4 | 3 | 3 | 3 | 15 | No | No | Yes |
 | 4 | Ingress/proxy verification pending | `DEPLOYMENT_INFRASTRUCTURE` | Config supports proxy/CORS/HSTS; target ingress not proven. | External validation pending | 5 | 4 | 2 | 2 | 3 | 15 | No | No | Yes |
-| 5 | Automated deletion retry worker absent | `COMPLIANCE_DATA_LIFECYCLE` | Failed deletion state exists; no retry worker/job. | Not implemented | 4 | 5 | 3 | 3 | 1 | 15 | Possibly | No expected | Yes |
+| 5 | Automated deletion retry workflow absent | `COMPLIANCE_DATA_LIFECYCLE` | Phase 13 finding; Phase 14 added explicit retry workflow. | Resolved for reviewer/admin workflow; autonomous worker remains future work | 4 | 5 | 3 | 3 | 1 | 15 | Added in 0006 | No | Yes |
 | 6 | Secret rotation procedure absent | `OPERATIONAL_OBSERVABILITY` | Config validates secrets; no rotation runbook/exercise. | Procedure pending | 4 | 4 | 1 | 2 | 2 | 13 | No | No | Yes |
 | 7 | Monitoring/alerting including login-throttle alerts not configured | `OPERATIONAL_OBSERVABILITY` | Logs/metrics exist; no collector/alert rules. | External/procedural pending | 4 | 4 | 2 | 3 | 3 | 12 | No expected | Possibly | Yes |
 | 8 | Account recovery/password reset absent | `SECURITY_IDENTITY` | No reset token, route, UI, or SMTP reset flow. | Not implemented | 3 | 3 | 4 | 3 | 1 | 12 | Yes, additive | Possibly | Yes |
-| 9 | Scheduled retention enforcement absent | `COMPLIANCE_DATA_LIFECYCLE` | `retention_until` exists; no scheduler. | Partial foundation | 3 | 4 | 2 | 3 | 1 | 12 | Possibly | No expected | Yes |
+| 9 | Scheduled retention enforcement absent | `COMPLIANCE_DATA_LIFECYCLE` | Phase 14 added explicit due-retention enforcement; external autonomous scheduling remains absent. | Partially resolved in source | 3 | 4 | 2 | 3 | 1 | 12 | Added in 0006 | No expected | Yes |
 | 10 | MFA absent | `SECURITY_IDENTITY` | No MFA implementation found. | Not implemented | 3 | 4 | 2 | 4 | 1 | 11 | Yes, additive | Possibly | Yes |
-| 11 | Restore UI/workflow absent | `COMPLIANCE_DATA_LIFECYCLE` | Archive metadata exists; no restore API/UI. | Not implemented | 3 | 4 | 3 | 4 | 2 | 11 | Possibly | No expected | Yes |
+| 11 | Restore UI/workflow absent | `COMPLIANCE_DATA_LIFECYCLE` | Phase 14 added safe metadata restore API/UI and blocks restore after private-object deletion. | Resolved in source for eligible records | 3 | 4 | 3 | 4 | 2 | 11 | Added in 0006 | No expected | Yes |
 | 12 | Deletion failure and expert-review tests are thinner than core tests | `QUALITY_TESTING` | Coverage is lighter for those paths. | Coverage gap | 2 | 3 | 1 | 2 | 0 | 9 | No | No | No |
 | 13 | Production OCR engine absent | `PRODUCT_FEATURE` | OCR interface/mock only. | Partial foundation | 3 | 2 | 4 | 4 | 2 | 8 | No/Possibly | Yes likely | Yes |
 | 14 | Rule packs unverified/demo depth | `REGULATORY_CONTENT` | 3 packs/28 rules, all demo, 0 expert-reviewed. | Expert review required | 3 | 2 | 4 | 3 | 3 | 8 | No expected | No | Yes |

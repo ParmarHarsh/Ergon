@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { RULES_PACKS, COMPLIANCE_RULES } from "../../rules/src/index.js";
-import { forbidden } from "../../shared/src/index.js";
+import { forbidden, validationError } from "../../shared/src/index.js";
 import { createPostgresPool } from "./postgres-pool.js";
 
 export class PostgresRepository {
@@ -213,12 +213,18 @@ export class PostgresRepository {
     return camelEvidence(row);
   }
 
-  async listEvidence(organizationId, facilityId) {
-    return (await this.query("SELECT * FROM evidence WHERE organization_id = $1 AND facility_id = $2 AND archived = false ORDER BY created_at DESC", [organizationId, facilityId])).map(camelEvidence);
+  async listEvidence(organizationId, facilityId, options = {}) {
+    return (await this.query(
+      `SELECT * FROM evidence WHERE organization_id = $1 AND facility_id = $2 ${options.includeArchived ? "" : "AND archived = false"} ORDER BY created_at DESC`,
+      [organizationId, facilityId]
+    )).map(camelEvidence);
   }
 
-  async listOrganizationEvidence(organizationId) {
-    return (await this.query("SELECT * FROM evidence WHERE organization_id = $1 AND archived = false ORDER BY created_at DESC", [organizationId])).map(camelEvidence);
+  async listOrganizationEvidence(organizationId, options = {}) {
+    return (await this.query(
+      `SELECT * FROM evidence WHERE organization_id = $1 ${options.includeArchived ? "" : "AND archived = false"} ORDER BY created_at DESC`,
+      [organizationId]
+    )).map(camelEvidence);
   }
 
   async getEvidence(organizationId, id) {
@@ -237,8 +243,97 @@ export class PostgresRepository {
   }
 
   async archiveEvidence(organizationId, id, deletion = {}) {
+    const existing = await this.getEvidence(organizationId, id);
+    if (existing?.legalHoldActive) throw lifecycleConflict("Evidence is under legal hold and cannot be archived or deleted", "LEGAL_HOLD_ACTIVE");
     if (deletion.deletedByUserId) await this.assertUserOrganization(deletion.deletedByUserId, organizationId, "Deletion actor");
     return this.updateEvidence(organizationId, id, { archived: true, ...deletion });
+  }
+
+  async setEvidenceLegalHold(organizationId, id, input) {
+    await this.assertUserOrganization(input.legalHoldByUserId, organizationId, "Legal hold actor");
+    const [row] = await this.query(
+      `UPDATE evidence SET legal_hold_active=true, legal_hold_reason=$3, legal_hold_by_user_id=$4,
+         legal_hold_at=$5, legal_hold_released_by_user_id=NULL, legal_hold_released_at=NULL,
+         legal_hold_release_reason=NULL, updated_at=now()
+       WHERE organization_id=$1 AND id=$2 RETURNING *`,
+      [organizationId, id, input.legalHoldReason, input.legalHoldByUserId, input.legalHoldAt]
+    );
+    if (!row) return null;
+    return camelEvidence(row);
+  }
+
+  async releaseEvidenceLegalHold(organizationId, id, input) {
+    await this.assertUserOrganization(input.legalHoldReleasedByUserId, organizationId, "Legal hold release actor");
+    const [row] = await this.query(
+      `UPDATE evidence SET legal_hold_active=false, legal_hold_released_by_user_id=$3,
+         legal_hold_released_at=$4, legal_hold_release_reason=$5, updated_at=now()
+       WHERE organization_id=$1 AND id=$2 RETURNING *`,
+      [organizationId, id, input.legalHoldReleasedByUserId, input.legalHoldReleasedAt, input.legalHoldReleaseReason]
+    );
+    if (!row) return null;
+    return camelEvidence(row);
+  }
+
+  async restoreEvidence(organizationId, id, input) {
+    const existing = await this.getEvidence(organizationId, id);
+    if (!existing) return null;
+    if (!existing.archived) throw lifecycleConflict("Evidence is not archived", "NOT_ARCHIVED");
+    if (existing.legalHoldActive) throw lifecycleConflict("Evidence is under legal hold", "LEGAL_HOLD_ACTIVE");
+    if (existing.storageDeletionStatus === "deleted") throw lifecycleConflict("Evidence private file was deleted and cannot be restored by metadata unarchive", "PRIVATE_OBJECT_DELETED");
+    await this.assertUserOrganization(input.restoredByUserId, organizationId, "Restore actor");
+    const [row] = await this.query(
+      `UPDATE evidence SET archived=false, deleted_at=NULL, deleted_by_user_id=NULL, deletion_reason=NULL,
+         restored_at=$3, restored_by_user_id=$4, restore_reason=$5, updated_at=now()
+       WHERE organization_id=$1 AND id=$2 RETURNING *`,
+      [organizationId, id, input.restoredAt, input.restoredByUserId, input.restoreReason]
+    );
+    return camelEvidence(row);
+  }
+
+  async markEvidenceStorageDeletionRetried(organizationId, id, input) {
+    await this.assertUserOrganization(input.actorUserId, organizationId, "Deletion retry actor");
+    const existing = await this.getEvidence(organizationId, id);
+    if (!existing) return null;
+    if (existing.legalHoldActive) throw lifecycleConflict("Evidence is under legal hold and cannot retry private-object deletion", "LEGAL_HOLD_ACTIVE");
+    const next = { storageDeletionStatus: "failed", storageDeletionError: null, archived: false, removeFileReference: false, ...input.updates };
+    const [row] = await this.query(
+      `UPDATE evidence SET archived=COALESCE($3, archived), file_reference=CASE WHEN $4 THEN NULL ELSE file_reference END,
+         deleted_at=COALESCE($5, deleted_at), deleted_by_user_id=COALESCE($6, deleted_by_user_id),
+         deletion_reason=COALESCE($7, deletion_reason), storage_deletion_status=$8,
+         storage_deletion_error=$9, storage_deletion_retry_count=storage_deletion_retry_count + 1,
+         storage_deletion_last_retried_at=$10, storage_deletion_last_retried_by_user_id=$11,
+         updated_at=now()
+       WHERE organization_id=$1 AND id=$2 RETURNING *`,
+      [organizationId, id, next.archived, next.removeFileReference, next.deletedAt, next.deletedByUserId, next.deletionReason, next.storageDeletionStatus, next.storageDeletionError, input.retriedAt, input.actorUserId]
+    );
+    if (!row) return null;
+    return camelEvidence(row);
+  }
+
+  async listRetentionCandidates(organizationId, dueAt = new Date().toISOString()) {
+    const evidence = (await this.query(
+      `SELECT * FROM evidence
+       WHERE organization_id=$1 AND archived=false AND legal_hold_active=false
+         AND retention_until IS NOT NULL AND retention_until <= $2
+       ORDER BY retention_until ASC`,
+      [organizationId, dueAt]
+    )).map(camelEvidence);
+    const auditPackets = (await this.query(
+      `SELECT * FROM audit_packets
+       WHERE organization_id=$1 AND archived=false AND legal_hold_active=false
+         AND retention_until IS NOT NULL AND retention_until <= $2
+       ORDER BY retention_until ASC`,
+      [organizationId, dueAt]
+    )).map(camelPacket);
+    const [heldEvidence] = await this.query(
+      "SELECT count(*)::int AS count FROM evidence WHERE organization_id=$1 AND archived=false AND legal_hold_active=true AND retention_until IS NOT NULL AND retention_until <= $2",
+      [organizationId, dueAt]
+    );
+    const [heldPackets] = await this.query(
+      "SELECT count(*)::int AS count FROM audit_packets WHERE organization_id=$1 AND archived=false AND legal_hold_active=true AND retention_until IS NOT NULL AND retention_until <= $2",
+      [organizationId, dueAt]
+    );
+    return { evidence, auditPackets, skippedLegalHold: { evidence: heldEvidence.count, auditPackets: heldPackets.count } };
   }
 
   async upsertAiAnalysis(input) {
@@ -652,9 +747,9 @@ export class PostgresRepository {
     return camelPacket(row);
   }
 
-  async listAuditPackets(organizationId, facilityId = null) {
+  async listAuditPackets(organizationId, facilityId = null, options = {}) {
     const params = [organizationId];
-    let where = "organization_id = $1 AND archived = false";
+    let where = `organization_id = $1 ${options.includeArchived ? "" : "AND archived = false"}`;
     if (facilityId) {
       params.push(facilityId);
       where += " AND facility_id = $2";
@@ -667,7 +762,8 @@ export class PostgresRepository {
   }
 
   async archiveAuditPacket(organizationId, id, deletion = {}) {
-    await this.getAuditPacket(organizationId, id);
+    const existing = await this.getAuditPacket(organizationId, id);
+    if (existing?.legalHoldActive) throw lifecycleConflict("Audit packet is under legal hold and cannot be archived or deleted", "LEGAL_HOLD_ACTIVE");
     if (deletion.deletedByUserId) await this.assertUserOrganization(deletion.deletedByUserId, organizationId, "Deletion actor");
     const [row] = await this.query(
       `UPDATE audit_packets SET archived=$3, deleted_at=$4, deleted_by_user_id=$5, deletion_reason=$6,
@@ -676,6 +772,66 @@ export class PostgresRepository {
        WHERE organization_id=$1 AND id=$2 RETURNING *`,
       [organizationId, id, deletion.archived ?? true, deletion.deletedAt, deletion.deletedByUserId, deletion.deletionReason, deletion.retentionUntil, deletion.storageDeletionStatus || "retained", deletion.storageDeletionError]
     );
+    return camelPacket(row);
+  }
+
+  async setAuditPacketLegalHold(organizationId, id, input) {
+    await this.assertUserOrganization(input.legalHoldByUserId, organizationId, "Legal hold actor");
+    const [row] = await this.query(
+      `UPDATE audit_packets SET legal_hold_active=true, legal_hold_reason=$3, legal_hold_by_user_id=$4,
+         legal_hold_at=$5, legal_hold_released_by_user_id=NULL, legal_hold_released_at=NULL,
+         legal_hold_release_reason=NULL
+       WHERE organization_id=$1 AND id=$2 RETURNING *`,
+      [organizationId, id, input.legalHoldReason, input.legalHoldByUserId, input.legalHoldAt]
+    );
+    if (!row) return null;
+    return camelPacket(row);
+  }
+
+  async releaseAuditPacketLegalHold(organizationId, id, input) {
+    await this.assertUserOrganization(input.legalHoldReleasedByUserId, organizationId, "Legal hold release actor");
+    const [row] = await this.query(
+      `UPDATE audit_packets SET legal_hold_active=false, legal_hold_released_by_user_id=$3,
+         legal_hold_released_at=$4, legal_hold_release_reason=$5
+       WHERE organization_id=$1 AND id=$2 RETURNING *`,
+      [organizationId, id, input.legalHoldReleasedByUserId, input.legalHoldReleasedAt, input.legalHoldReleaseReason]
+    );
+    if (!row) return null;
+    return camelPacket(row);
+  }
+
+  async restoreAuditPacket(organizationId, id, input) {
+    const existing = await this.getAuditPacket(organizationId, id);
+    if (!existing) return null;
+    if (!existing.archived) throw lifecycleConflict("Audit packet is not archived", "NOT_ARCHIVED");
+    if (existing.legalHoldActive) throw lifecycleConflict("Audit packet is under legal hold", "LEGAL_HOLD_ACTIVE");
+    if (existing.storageDeletionStatus === "deleted") throw lifecycleConflict("Audit packet private PDF was deleted and cannot be restored by metadata unarchive", "PRIVATE_OBJECT_DELETED");
+    await this.assertUserOrganization(input.restoredByUserId, organizationId, "Restore actor");
+    const [row] = await this.query(
+      `UPDATE audit_packets SET archived=false, deleted_at=NULL, deleted_by_user_id=NULL,
+         deletion_reason=NULL, restored_at=$3, restored_by_user_id=$4, restore_reason=$5
+       WHERE organization_id=$1 AND id=$2 RETURNING *`,
+      [organizationId, id, input.restoredAt, input.restoredByUserId, input.restoreReason]
+    );
+    return camelPacket(row);
+  }
+
+  async markAuditPacketStorageDeletionRetried(organizationId, id, input) {
+    await this.assertUserOrganization(input.actorUserId, organizationId, "Deletion retry actor");
+    const existing = await this.getAuditPacket(organizationId, id);
+    if (!existing) return null;
+    if (existing.legalHoldActive) throw lifecycleConflict("Audit packet is under legal hold and cannot retry private-object deletion", "LEGAL_HOLD_ACTIVE");
+    const next = { storageDeletionStatus: "failed", storageDeletionError: null, archived: false, removeFileReference: false, ...input.updates };
+    const [row] = await this.query(
+      `UPDATE audit_packets SET archived=COALESCE($3, archived), file_reference=CASE WHEN $4 THEN NULL ELSE file_reference END,
+         deleted_at=COALESCE($5, deleted_at), deleted_by_user_id=COALESCE($6, deleted_by_user_id),
+         deletion_reason=COALESCE($7, deletion_reason), storage_deletion_status=$8,
+         storage_deletion_error=$9, storage_deletion_retry_count=storage_deletion_retry_count + 1,
+         storage_deletion_last_retried_at=$10, storage_deletion_last_retried_by_user_id=$11
+       WHERE organization_id=$1 AND id=$2 RETURNING *`,
+      [organizationId, id, next.archived, next.removeFileReference, next.deletedAt, next.deletedByUserId, next.deletionReason, next.storageDeletionStatus, next.storageDeletionError, input.retriedAt, input.actorUserId]
+    );
+    if (!row) return null;
     return camelPacket(row);
   }
 
@@ -809,7 +965,24 @@ function camelFacility(row) {
 }
 
 function camelEvidence(row) {
-  return { id: row.id, organizationId: row.organization_id, facilityId: row.facility_id, title: row.title, description: row.description, evidenceType: row.evidence_type, fileReference: row.file_reference, fileName: row.file_name, contentType: row.content_type, detectedContentType: row.detected_content_type, fileValidationStatus: row.file_validation_status, fileValidationError: row.file_validation_error, fileSizeBytes: row.file_size_bytes === null ? null : Number(row.file_size_bytes), fileSha256: row.file_sha256, scanStatus: row.scan_status, scanProvider: row.scan_provider, scanError: row.scan_error, scannedAt: row.scanned_at, uploadedByUserId: row.uploaded_by_user_id, country: row.country, region: row.region, relatedObligationId: row.related_obligation_id, documentDate: row.document_date, expirationDate: row.expiration_date, status: row.status, confidence: row.confidence, reviewerNotes: row.reviewer_notes, archived: row.archived, deletedAt: row.deleted_at, deletedByUserId: row.deleted_by_user_id, deletionReason: row.deletion_reason, retentionUntil: row.retention_until, storageDeletionStatus: row.storage_deletion_status, storageDeletionError: row.storage_deletion_error, createdAt: row.created_at, updatedAt: row.updated_at };
+  return {
+    id: row.id, organizationId: row.organization_id, facilityId: row.facility_id, title: row.title, description: row.description, evidenceType: row.evidence_type, fileReference: row.file_reference, fileName: row.file_name, contentType: row.content_type, detectedContentType: row.detected_content_type, fileValidationStatus: row.file_validation_status, fileValidationError: row.file_validation_error, fileSizeBytes: row.file_size_bytes === null ? null : Number(row.file_size_bytes), fileSha256: row.file_sha256, scanStatus: row.scan_status, scanProvider: row.scan_provider, scanError: row.scan_error, scannedAt: row.scanned_at, uploadedByUserId: row.uploaded_by_user_id, country: row.country, region: row.region, relatedObligationId: row.related_obligation_id, documentDate: row.document_date, expirationDate: row.expiration_date, status: row.status, confidence: row.confidence, reviewerNotes: row.reviewer_notes, archived: row.archived, deletedAt: row.deleted_at, deletedByUserId: row.deleted_by_user_id, deletionReason: row.deletion_reason, retentionUntil: row.retention_until, storageDeletionStatus: row.storage_deletion_status, storageDeletionError: row.storage_deletion_error,
+    legalHoldActive: row.legal_hold_active ?? false,
+    legalHoldReason: row.legal_hold_reason,
+    legalHoldByUserId: row.legal_hold_by_user_id,
+    legalHoldAt: row.legal_hold_at,
+    legalHoldReleasedByUserId: row.legal_hold_released_by_user_id,
+    legalHoldReleasedAt: row.legal_hold_released_at,
+    legalHoldReleaseReason: row.legal_hold_release_reason,
+    restoredAt: row.restored_at,
+    restoredByUserId: row.restored_by_user_id,
+    restoreReason: row.restore_reason,
+    storageDeletionRetryCount: row.storage_deletion_retry_count === undefined ? 0 : Number(row.storage_deletion_retry_count),
+    storageDeletionLastRetriedAt: row.storage_deletion_last_retried_at,
+    storageDeletionLastRetriedByUserId: row.storage_deletion_last_retried_by_user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
 }
 
 function camelAiAnalysis(row) {
@@ -874,7 +1047,29 @@ function camelReview(row) {
 }
 
 function camelPacket(row) {
-  return { id: row.id, organizationId: row.organization_id, facilityId: row.facility_id, reviewId: row.review_id, title: row.title, fileReference: row.file_reference, generatedByUserId: row.generated_by_user_id, generatedAt: row.generated_at, country: row.country, region: row.region, rulesPackId: row.rules_pack_id, status: row.status, archived: row.archived, deletedAt: row.deleted_at, deletedByUserId: row.deleted_by_user_id, deletionReason: row.deletion_reason, retentionUntil: row.retention_until, storageDeletionStatus: row.storage_deletion_status, storageDeletionError: row.storage_deletion_error };
+  return {
+    id: row.id, organizationId: row.organization_id, facilityId: row.facility_id, reviewId: row.review_id, title: row.title, fileReference: row.file_reference, generatedByUserId: row.generated_by_user_id, generatedAt: row.generated_at, country: row.country, region: row.region, rulesPackId: row.rules_pack_id, status: row.status, archived: row.archived, deletedAt: row.deleted_at, deletedByUserId: row.deleted_by_user_id, deletionReason: row.deletion_reason, retentionUntil: row.retention_until, storageDeletionStatus: row.storage_deletion_status, storageDeletionError: row.storage_deletion_error,
+    legalHoldActive: row.legal_hold_active ?? false,
+    legalHoldReason: row.legal_hold_reason,
+    legalHoldByUserId: row.legal_hold_by_user_id,
+    legalHoldAt: row.legal_hold_at,
+    legalHoldReleasedByUserId: row.legal_hold_released_by_user_id,
+    legalHoldReleasedAt: row.legal_hold_released_at,
+    legalHoldReleaseReason: row.legal_hold_release_reason,
+    restoredAt: row.restored_at,
+    restoredByUserId: row.restored_by_user_id,
+    restoreReason: row.restore_reason,
+    storageDeletionRetryCount: row.storage_deletion_retry_count === undefined ? 0 : Number(row.storage_deletion_retry_count),
+    storageDeletionLastRetriedAt: row.storage_deletion_last_retried_at,
+    storageDeletionLastRetriedByUserId: row.storage_deletion_last_retried_by_user_id
+  };
+}
+
+function lifecycleConflict(message, code) {
+  const error = validationError(message);
+  error.status = 409;
+  error.code = code;
+  return error;
 }
 
 function leaseLostError(id) {

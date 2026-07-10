@@ -107,7 +107,14 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
   await page.locator(".sidebar").getByRole("button", { name: "Evidence", exact: true }).click();
   page.once("dialog", (dialog) => dialog.accept());
   await evidenceCard.locator("[data-action='archive-evidence']").click();
-  await expect(page.locator("main")).not.toContainText("Pilot LOTO procedure");
+  const evidenceRecords = page.locator("section.card", { has: page.getByRole("heading", { name: "Evidence records" }) });
+  const activeEvidenceItems = evidenceRecords.locator("xpath=.//article[contains(concat(' ', normalize-space(@class), ' '), ' evidence-item ') and not(preceding-sibling::h3[normalize-space()='Archived evidence'])]");
+  const archivedEvidenceItems = evidenceRecords.locator("xpath=.//h3[normalize-space()='Archived evidence']/following-sibling::article[contains(concat(' ', normalize-space(@class), ' '), ' evidence-item ')]");
+  const archivedEvidenceCard = archivedEvidenceItems.filter({ hasText: "Pilot LOTO procedure" });
+  await expect(activeEvidenceItems.filter({ hasText: "Pilot LOTO procedure" })).toHaveCount(0);
+  await expect(evidenceRecords.getByRole("heading", { name: "Archived evidence" })).toBeVisible();
+  await expect(archivedEvidenceCard).toBeVisible();
+  await expect(archivedEvidenceCard).toContainText("archived");
 
   // Admin screen manages users
   await page.locator(".sidebar").getByRole("button", { name: "Admin" }).click();

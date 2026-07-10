@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { RULES_PACKS, COMPLIANCE_RULES } from "../../rules/src/index.js";
-import { forbidden } from "../../shared/src/index.js";
+import { forbidden, validationError } from "../../shared/src/index.js";
 import { nowIso } from "./time.js";
 
 const TABLES = [
@@ -53,10 +53,14 @@ export class FileRepository {
       if (!evidence.scanStatus) evidence.scanStatus = "scan_unavailable";
       evidence.fileValidationStatus ||= evidence.fileReference ? "legacy_unverified" : "not_applicable";
       evidence.storageDeletionStatus ||= evidence.fileReference ? "retained" : "not_applicable";
+      evidence.legalHoldActive ??= false;
+      evidence.storageDeletionRetryCount ??= 0;
     }
     for (const packet of this.data.auditPackets) {
       packet.archived ??= false;
       packet.storageDeletionStatus ||= packet.fileReference ? "retained" : "deleted";
+      packet.legalHoldActive ??= false;
+      packet.storageDeletionRetryCount ??= 0;
     }
     for (const job of this.data.processingJobs) {
       job.workerId ??= null;
@@ -212,12 +216,12 @@ export class FileRepository {
     return row;
   }
 
-  async listEvidence(organizationId, facilityId) {
-    return this.data.evidence.filter((row) => row.organizationId === organizationId && row.facilityId === facilityId && !row.archived);
+  async listEvidence(organizationId, facilityId, options = {}) {
+    return this.data.evidence.filter((row) => row.organizationId === organizationId && row.facilityId === facilityId && (options.includeArchived || !row.archived));
   }
 
-  async listOrganizationEvidence(organizationId) {
-    return this.data.evidence.filter((row) => row.organizationId === organizationId && !row.archived);
+  async listOrganizationEvidence(organizationId, options = {}) {
+    return this.data.evidence.filter((row) => row.organizationId === organizationId && (options.includeArchived || !row.archived));
   }
 
   async getEvidence(organizationId, id) {
@@ -232,8 +236,80 @@ export class FileRepository {
   }
 
   async archiveEvidence(organizationId, id, deletion = {}) {
+    const existing = await this.getEvidence(organizationId, id);
+    if (existing?.legalHoldActive) throw lifecycleConflict("Evidence is under legal hold and cannot be archived or deleted", "LEGAL_HOLD_ACTIVE");
     if (deletion.deletedByUserId) await this.assertUserOrganization(deletion.deletedByUserId, organizationId, "Deletion actor");
     return this.updateEvidence(organizationId, id, { archived: true, ...deletion });
+  }
+
+  async setEvidenceLegalHold(organizationId, id, input) {
+    await this.assertUserOrganization(input.legalHoldByUserId, organizationId, "Legal hold actor");
+    return this.updateEvidence(organizationId, id, {
+      legalHoldActive: true,
+      legalHoldReason: input.legalHoldReason,
+      legalHoldByUserId: input.legalHoldByUserId,
+      legalHoldAt: input.legalHoldAt || nowIso(),
+      legalHoldReleasedByUserId: null,
+      legalHoldReleasedAt: null,
+      legalHoldReleaseReason: null
+    });
+  }
+
+  async releaseEvidenceLegalHold(organizationId, id, input) {
+    await this.assertUserOrganization(input.legalHoldReleasedByUserId, organizationId, "Legal hold release actor");
+    return this.updateEvidence(organizationId, id, {
+      legalHoldActive: false,
+      legalHoldReleasedByUserId: input.legalHoldReleasedByUserId,
+      legalHoldReleasedAt: input.legalHoldReleasedAt || nowIso(),
+      legalHoldReleaseReason: input.legalHoldReleaseReason
+    });
+  }
+
+  async restoreEvidence(organizationId, id, input) {
+    const row = await this.getEvidence(organizationId, id);
+    if (!row.archived) throw lifecycleConflict("Evidence is not archived", "NOT_ARCHIVED");
+    if (row.legalHoldActive) throw lifecycleConflict("Evidence is under legal hold", "LEGAL_HOLD_ACTIVE");
+    if (row.storageDeletionStatus === "deleted") throw lifecycleConflict("Evidence private file was deleted and cannot be restored by metadata unarchive", "PRIVATE_OBJECT_DELETED");
+    await this.assertUserOrganization(input.restoredByUserId, organizationId, "Restore actor");
+    return this.updateEvidence(organizationId, id, {
+      archived: false,
+      deletedAt: null,
+      deletedByUserId: null,
+      deletionReason: null,
+      restoredAt: input.restoredAt || nowIso(),
+      restoredByUserId: input.restoredByUserId,
+      restoreReason: input.restoreReason
+    });
+  }
+
+  async markEvidenceStorageDeletionRetried(organizationId, id, input) {
+    await this.assertUserOrganization(input.actorUserId, organizationId, "Deletion retry actor");
+    const row = await this.getEvidence(organizationId, id);
+    if (row.legalHoldActive) throw lifecycleConflict("Evidence is under legal hold and cannot retry private-object deletion", "LEGAL_HOLD_ACTIVE");
+    const retryCount = Number(row.storageDeletionRetryCount || 0) + 1;
+    const updates = { ...input.updates };
+    if (updates.removeFileReference) {
+      updates.fileReference = null;
+      delete updates.removeFileReference;
+    }
+    return this.updateEvidence(organizationId, id, {
+      ...updates,
+      storageDeletionRetryCount: retryCount,
+      storageDeletionLastRetriedAt: input.retriedAt || nowIso(),
+      storageDeletionLastRetriedByUserId: input.actorUserId
+    });
+  }
+
+  async listRetentionCandidates(organizationId, dueAt = nowIso()) {
+    const due = new Date(dueAt).getTime();
+    return {
+      evidence: this.data.evidence.filter((row) => row.organizationId === organizationId && !row.archived && !row.legalHoldActive && row.retentionUntil && new Date(row.retentionUntil).getTime() <= due),
+      auditPackets: this.data.auditPackets.filter((row) => row.organizationId === organizationId && !row.archived && !row.legalHoldActive && row.retentionUntil && new Date(row.retentionUntil).getTime() <= due),
+      skippedLegalHold: {
+        evidence: this.data.evidence.filter((row) => row.organizationId === organizationId && !row.archived && row.legalHoldActive && row.retentionUntil && new Date(row.retentionUntil).getTime() <= due).length,
+        auditPackets: this.data.auditPackets.filter((row) => row.organizationId === organizationId && !row.archived && row.legalHoldActive && row.retentionUntil && new Date(row.retentionUntil).getTime() <= due).length
+      }
+    };
   }
 
   async upsertAiAnalysis(input) {
@@ -569,8 +645,8 @@ export class FileRepository {
     return row;
   }
 
-  async listAuditPackets(organizationId, facilityId = null) {
-    return this.data.auditPackets.filter((row) => row.organizationId === organizationId && !row.archived && (!facilityId || row.facilityId === facilityId));
+  async listAuditPackets(organizationId, facilityId = null, options = {}) {
+    return this.data.auditPackets.filter((row) => row.organizationId === organizationId && (options.includeArchived || !row.archived) && (!facilityId || row.facilityId === facilityId));
   }
 
   async getAuditPacket(organizationId, id) {
@@ -579,8 +655,81 @@ export class FileRepository {
 
   async archiveAuditPacket(organizationId, id, deletion = {}) {
     const row = await this.getAuditPacket(organizationId, id);
+    if (row.legalHoldActive) throw lifecycleConflict("Audit packet is under legal hold and cannot be archived or deleted", "LEGAL_HOLD_ACTIVE");
     if (deletion.deletedByUserId) await this.assertUserOrganization(deletion.deletedByUserId, organizationId, "Deletion actor");
     Object.assign(row, { archived: deletion.archived ?? true, ...deletion });
+    if (row.storageDeletionStatus === "deleted") row.fileReference = null;
+    await this.persist();
+    return row;
+  }
+
+  async setAuditPacketLegalHold(organizationId, id, input) {
+    await this.assertUserOrganization(input.legalHoldByUserId, organizationId, "Legal hold actor");
+    const row = await this.getAuditPacket(organizationId, id);
+    Object.assign(row, {
+      legalHoldActive: true,
+      legalHoldReason: input.legalHoldReason,
+      legalHoldByUserId: input.legalHoldByUserId,
+      legalHoldAt: input.legalHoldAt || nowIso(),
+      legalHoldReleasedByUserId: null,
+      legalHoldReleasedAt: null,
+      legalHoldReleaseReason: null,
+      updatedAt: nowIso()
+    });
+    await this.persist();
+    return row;
+  }
+
+  async releaseAuditPacketLegalHold(organizationId, id, input) {
+    await this.assertUserOrganization(input.legalHoldReleasedByUserId, organizationId, "Legal hold release actor");
+    const row = await this.getAuditPacket(organizationId, id);
+    Object.assign(row, {
+      legalHoldActive: false,
+      legalHoldReleasedByUserId: input.legalHoldReleasedByUserId,
+      legalHoldReleasedAt: input.legalHoldReleasedAt || nowIso(),
+      legalHoldReleaseReason: input.legalHoldReleaseReason,
+      updatedAt: nowIso()
+    });
+    await this.persist();
+    return row;
+  }
+
+  async restoreAuditPacket(organizationId, id, input) {
+    const row = await this.getAuditPacket(organizationId, id);
+    if (!row.archived) throw lifecycleConflict("Audit packet is not archived", "NOT_ARCHIVED");
+    if (row.legalHoldActive) throw lifecycleConflict("Audit packet is under legal hold", "LEGAL_HOLD_ACTIVE");
+    if (row.storageDeletionStatus === "deleted") throw lifecycleConflict("Audit packet private PDF was deleted and cannot be restored by metadata unarchive", "PRIVATE_OBJECT_DELETED");
+    await this.assertUserOrganization(input.restoredByUserId, organizationId, "Restore actor");
+    Object.assign(row, {
+      archived: false,
+      deletedAt: null,
+      deletedByUserId: null,
+      deletionReason: null,
+      restoredAt: input.restoredAt || nowIso(),
+      restoredByUserId: input.restoredByUserId,
+      restoreReason: input.restoreReason,
+      updatedAt: nowIso()
+    });
+    await this.persist();
+    return row;
+  }
+
+  async markAuditPacketStorageDeletionRetried(organizationId, id, input) {
+    await this.assertUserOrganization(input.actorUserId, organizationId, "Deletion retry actor");
+    const row = await this.getAuditPacket(organizationId, id);
+    if (row.legalHoldActive) throw lifecycleConflict("Audit packet is under legal hold and cannot retry private-object deletion", "LEGAL_HOLD_ACTIVE");
+    const updates = { ...input.updates };
+    if (updates.removeFileReference) {
+      updates.fileReference = null;
+      delete updates.removeFileReference;
+    }
+    Object.assign(row, {
+      ...updates,
+      storageDeletionRetryCount: Number(row.storageDeletionRetryCount || 0) + 1,
+      storageDeletionLastRetriedAt: input.retriedAt || nowIso(),
+      storageDeletionLastRetriedByUserId: input.actorUserId,
+      updatedAt: nowIso()
+    });
     if (row.storageDeletionStatus === "deleted") row.fileReference = null;
     await this.persist();
     return row;
@@ -632,6 +781,13 @@ export class FileRepository {
     if (row.organizationId !== organizationId) throw forbidden(`${label} belongs to another organization`);
     return row;
   }
+}
+
+function lifecycleConflict(message, code) {
+  const error = validationError(message);
+  error.status = 409;
+  error.code = code;
+  return error;
 }
 
 function leaseLostError(id) {

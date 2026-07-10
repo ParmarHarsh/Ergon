@@ -37,6 +37,7 @@ This checklist supports a controlled pilot with a small group of manufacturing o
 - [ ] Confirm anonymous object access is denied and bucket public-access blocks are enabled.
 - [ ] Confirm evidence and packets download only through authenticated tenant-scoped routes.
 - [ ] Test object deletion and document the retry/escalation path for failed deletion.
+- [ ] Exercise legal hold, release, due-retention enforcement, failed-deletion retry, and safe metadata restore on synthetic pilot data.
 - [ ] Confirm encryption, object versioning/lifecycle, backup, and restore expectations with the provider.
 
 ## Scanner Checklist
@@ -96,7 +97,7 @@ Review [PILOT_DATA_POLICY.md](./PILOT_DATA_POLICY.md) with every pilot organizat
 ## Known Limitations
 
 - Starter rules remain demo/unverified unless separately expert-reviewed.
-- Production OCR, scheduled retention, legal holds, automated deletion retries, and account recovery are not implemented. Login throttling is implemented, but production monitoring and alerting around repeated throttling events still need deployment-specific setup.
+- Production OCR and account recovery are not implemented. Legal holds, explicit retention enforcement, failed-deletion retry, and safe metadata restore are implemented for reviewer/admin users, but autonomous external lifecycle scheduling is not. Login throttling is implemented, but production monitoring and alerting around repeated throttling events still need deployment-specific setup.
 - Queue jobs are durable in PostgreSQL, but scheduling is still application-managed rather than an external queue service.
 - Backup, scanner, bucket policy, KMS, monitoring, and restore operations are deployment responsibilities.
 - Live infrastructure validation has not passed until the target-specific commands run successfully.

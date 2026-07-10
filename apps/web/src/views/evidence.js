@@ -11,6 +11,8 @@ export function evidenceView() {
       <div class="card">${emptyFacilityPrompt()}</div>
     `;
   }
+  const activeEvidence = state.evidence.filter((item) => !item.archived);
+  const archivedEvidence = state.evidence.filter((item) => item.archived);
   return `
     <div class="page-head">
       <div>
@@ -24,15 +26,20 @@ export function evidenceView() {
         <div class="card-head">
           <div>
             <h2>Evidence records</h2>
-            <p class="hint">${state.evidence.length} item${state.evidence.length === 1 ? "" : "s"} · AI ${state.aiStatus.enabled ? "enabled" : "disabled"}</p>
+            <p class="hint">${activeEvidence.length} active item${activeEvidence.length === 1 ? "" : "s"} · AI ${state.aiStatus.enabled ? "enabled" : "disabled"}</p>
           </div>
         </div>
         <div class="card-body tight">
-          ${state.evidence.length ? state.evidence.map(evidenceItem).join("") : emptyState({
+          ${activeEvidence.length ? activeEvidence.map(evidenceItem).join("") : emptyState({
             icon: "evidence",
             title: "No evidence logged",
             copy: "Upload facility files — training records, inspection logs, permits — or log manual evidence records to start closing gaps."
           })}
+          ${canReview() && archivedEvidence.length ? `
+            <div class="section-divider"></div>
+            <h3 class="compact-heading">Archived evidence</h3>
+            ${archivedEvidence.map(evidenceItem).join("")}
+          ` : ""}
         </div>
       </section>
 
@@ -94,6 +101,8 @@ function evidenceItem(item) {
   const job = jobFor(item.id);
   const active = ["queued", "processing"].includes(job?.status);
   const blocked = ["scan_suspicious", "scan_pending"].includes(item.scanStatus);
+  const canRestore = item.archived && item.storageDeletionStatus !== "deleted";
+  const canRetryDeletion = item.storageDeletionStatus === "failed" && item.fileReference;
   return `
     <article class="evidence-item">
       <div class="evidence-top">
@@ -103,17 +112,25 @@ function evidenceItem(item) {
             <span>${html(label(item.evidenceType))}</span>
             ${item.fileName ? `<span>·</span><span>${html(item.fileName)} (${formatBytes(item.fileSizeBytes)})</span>` : "<span>·</span><span>manual record</span>"}
             ${item.expirationDate ? `<span>·</span><span>expires ${html(item.expirationDate)}</span>` : ""}
+            ${item.archived ? `<span>·</span><span>archived</span>` : ""}
           </div>
         </div>
         <div class="evidence-actions">
-          ${item.fileReference && item.scanStatus !== "scan_suspicious" ? `<button class="btn btn-ghost btn-sm" data-action="download-evidence" data-evidence-id="${html(item.id)}">${ICONS.download} File</button>` : ""}
-          <button class="btn btn-secondary btn-sm" data-action="process-ai" data-evidence-id="${html(item.id)}" ${state.aiStatus.enabled && !active && !blocked && item.fileReference ? "" : "disabled"}>${ICONS.spark} ${active ? "Processing…" : analysis ? "Reprocess" : "Analyze"}</button>
-          ${canReview() ? `<button class="btn btn-danger btn-sm" data-action="archive-evidence" data-evidence-id="${html(item.id)}">Archive</button>` : ""}
+          ${item.fileReference && item.scanStatus !== "scan_suspicious" && !item.archived ? `<button class="btn btn-ghost btn-sm" data-action="download-evidence" data-evidence-id="${html(item.id)}">${ICONS.download} File</button>` : ""}
+          <button class="btn btn-secondary btn-sm" data-action="process-ai" data-evidence-id="${html(item.id)}" ${state.aiStatus.enabled && !active && !blocked && item.fileReference && !item.archived ? "" : "disabled"}>${ICONS.spark} ${active ? "Processing…" : analysis ? "Reprocess" : "Analyze"}</button>
+          ${canReview() && !item.archived ? (item.legalHoldActive
+            ? `<button class="btn btn-secondary btn-sm" data-action="release-evidence-hold" data-evidence-id="${html(item.id)}">Release hold</button>`
+            : `<button class="btn btn-secondary btn-sm" data-action="hold-evidence" data-evidence-id="${html(item.id)}">Hold</button>`) : ""}
+          ${canReview() && canRetryDeletion ? `<button class="btn btn-secondary btn-sm" data-action="retry-evidence-deletion" data-evidence-id="${html(item.id)}">Retry deletion</button>` : ""}
+          ${canReview() && canRestore ? `<button class="btn btn-secondary btn-sm" data-action="restore-evidence" data-evidence-id="${html(item.id)}">Restore</button>` : ""}
+          ${canReview() && !item.archived ? `<button class="btn btn-danger btn-sm" data-action="archive-evidence" data-evidence-id="${html(item.id)}" ${item.legalHoldActive ? "disabled" : ""}>Archive</button>` : ""}
         </div>
       </div>
+      ${item.legalHoldActive ? `<div class="alert-info small">Legal hold active${item.legalHoldReason ? `: ${html(item.legalHoldReason)}` : ""}</div>` : ""}
+      ${item.storageDeletionStatus === "failed" ? `<div class="alert small">Private-object deletion failed${item.storageDeletionError ? `: ${html(item.storageDeletionError)}` : ""}</div>` : ""}
       ${processingBadges(item, job)}
       ${analysis ? aiAnalysisPanel(analysis) : `<p class="small muted">${state.aiStatus.enabled ? (item.fileReference ? "No AI analysis yet — processing starts after a clean file scan." : "Manual record — no file to analyze.") : "AI is disabled; deterministic matching and manual review still apply."}</p>`}
-      ${reviewForm(item, analysis)}
+      ${item.archived ? "" : reviewForm(item, analysis)}
     </article>
   `;
 }
