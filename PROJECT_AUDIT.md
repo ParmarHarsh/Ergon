@@ -769,3 +769,46 @@ Safe next action:
   - ComplianceIQ repository is now focused on the ComplianceIQ project without the unrelated Royal Engitech source tree or its Royal-only LFS metadata.
 - Recommended next phase:
   - Audit and normalize ComplianceIQ documentation, environment templates, readiness documents, and local-start instructions against the actual implementation before beginning missing-feature work.
+
+## Phase 12 documentation and configuration normalization note
+
+- Pulled latest `main` after Phase 11 cleanup merge confirmation.
+- Created `phase-12-docs-config-normalization`.
+- Documentation normalized:
+  - `README.md`
+  - `DEPLOYMENT_READINESS.md`
+  - `PILOT_READINESS.md`
+- Environment templates normalized:
+  - `deploy/env/local.env.example`
+  - `deploy/env/staging.env.example`
+  - `deploy/env/closed-pilot.env.example`
+- Readiness documents normalized:
+  - `DEPLOYMENT_READINESS.md`
+  - `PILOT_READINESS.md`
+- Key corrections:
+  - Clarified the repository is now ComplianceIQ-only.
+  - Clarified `npm ci`, Node 20+ support, and CI Node 20.
+  - Clarified `npm run typecheck` is a custom JavaScript/module consistency check.
+  - Corrected stale readiness language: login throttling is implemented; account recovery remains future work.
+  - Added safe env-template placeholders for login-rate-limit, queue, scanner, AI, storage, proxy, and worker-health knobs.
+- Source/runtime behavior changed:
+  - No.
+- Dependency changes:
+  - No.
+- Database schema changes:
+  - No.
+- Secrets added:
+  - No.
+- Royal Engitech active scope:
+  - None.
+- Verification:
+  - `npm run lint` - passed; linted 69 files.
+  - `npm run typecheck` - passed; checked 77 JavaScript files.
+  - `npm test` - passed; 46 passed, 2 skipped, 0 failed.
+  - `npm run build` - passed.
+  - `npm audit` - passed; found 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+  - `npm run scan:claims` - passed; linted 69 files.
+  - `npm run scan:random` - passed; 1 deterministic-safety test passed.
+- Recommended next phase:
+  - Conduct a product-gap audit against the normalized docs and actual implementation, then prioritize focused ComplianceIQ feature/compliance gaps.

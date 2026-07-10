@@ -4,6 +4,8 @@ Industrial Audit Readiness Platform for Manufacturers.
 
 ComplianceIQ helps manufacturers organize compliance evidence, use optional AI-assisted classification to structure uploaded documents, identify jurisdiction-specific audit gaps, assign corrective actions, and export professional audit-readiness packets. The product remains intentionally narrow: facility setup, evidence intelligence, evidence gap matrix, action plan, and audit packet export.
 
+This repository now contains only the ComplianceIQ application. Historical audit notes may mention earlier repository cleanup work, but no unrelated project is active in the current application scope.
+
 ## Product Scope
 
 ComplianceIQ supports North America at the architecture level:
@@ -144,13 +146,14 @@ Reviewer/admin users receive a focused Evidence Review Queue inside the Audit Pa
 
 ## Local Setup
 
-This rebuild uses npm scripts and Node 20+. Root scripts load `.env` when it exists.
+This rebuild uses npm scripts and Node 20+. CI runs on Node 20; local development has also been verified on newer Node releases. Root scripts load `.env` when it exists.
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
-# Edit .env to configure Postgres and replace every placeholder.
-npm run db:migrate
+# Edit .env. Use REPOSITORY_BACKEND=file for a quick local smoke test,
+# or configure Postgres before running migrations.
+REPOSITORY_BACKEND=postgres npm run db:migrate
 npm run typecheck
 npm test
 ```
@@ -270,6 +273,8 @@ npm run typecheck
 npm run lint
 npm run build
 ```
+
+`npm run typecheck` is a custom JavaScript/module consistency check (`scripts/check-js.mjs`), not a TypeScript compiler run.
 
 To exercise the real Postgres repository adapter, provide a disposable test database URL:
 
@@ -570,7 +575,7 @@ The release-readiness report and Vercel guidance are in [DEPLOYMENT_READINESS.md
 - Archives and Office ZIP containers are intentionally unsupported. DOCX parsing may be added only with bounded entry/count/size controls and path-safe extraction.
 - Images and scanned PDFs still require a production OCR provider or human review.
 - Scheduled retention enforcement, legal holds, deletion retry workers, and restore UI are not implemented.
-- Login rate limiting and account recovery are not implemented yet.
+- Login rate limiting is implemented; account recovery is not implemented yet.
 - The static frontend is focused on the core workflow; future work can replace it with a richer React/Next app without moving compliance logic to the client.
 - Province/state-specific Canadian and Mexican rule depth needs expert legal/EHS review before commercial reliance.
 
@@ -588,4 +593,4 @@ The application includes pilot-oriented infrastructure validation paths, but thi
 1. Run the four staging validators and complete the go/no-go checklist with named pilot owners.
 2. Conduct a controlled workflow session with 3–5 EHS/manufacturing users using agreed, minimized pilot data.
 3. Move scheduling to Redis/SQS/BullMQ while preserving the lease/idempotency repository contract.
-4. Add production OCR, scheduled deletion retries, retention/legal holds, login throttling, recovery, monitoring, and AI budget controls.
+4. Add production OCR, scheduled deletion retries, retention/legal holds, account recovery, monitoring, and AI budget controls.

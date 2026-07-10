@@ -1,10 +1,10 @@
 # ComplianceIQ Deployment Readiness
 
-Status date: 2026-06-25
+Status date: 2026-07-10
 
 ## 1. Current readiness status
 
-ComplianceIQ is ready for local and CI pilot-workflow testing and is structurally ready for a split staging deployment. It is not yet a one-click all-Vercel production app.
+ComplianceIQ is ready for local and CI pilot-workflow testing and is structurally ready for a split staging deployment. The repository is now ComplianceIQ-only after the Phase 11 cleanup. It is not yet a one-click all-Vercel production app.
 
 Go for Vercel frontend testing: yes, once `WEB_API_ORIGIN` points to a deployed HTTPS API.
 
@@ -92,7 +92,8 @@ Implemented:
 
 Still required before pilot:
 
-- login throttling/account recovery;
+- account recovery;
+- production monitoring and alerting around repeated login throttling events;
 - secret rotation procedure;
 - backup/restore exercise;
 - retention/deletion retry operations;
@@ -238,7 +239,7 @@ Go only when all are true:
 - Worker requires a persistent host or a replacement background-job platform.
 - Scanner requires separate ClamAV-compatible infrastructure.
 - Live Postgres, S3, and scanner validation require external env vars and target infrastructure.
-- Login throttling, account recovery, production OCR, retention jobs, legal holds, automated deletion retry, and restore UI are not implemented.
+- Account recovery, production OCR, retention jobs, legal holds, automated deletion retry, and restore UI are not implemented.
 - Starter rules remain demo/unverified unless expert-reviewed.
 
 ## 15. Recommended deployment topology
