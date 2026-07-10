@@ -123,3 +123,114 @@ test("repository blocks cross-organization access", async () => {
 
   await assert.rejects(() => repo.getFacility(orgB.id, facility.id), /another organization/);
 });
+
+test("file repository enforces lifecycle legal holds, retention candidates, retry guards, and restore rules", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "ciq-lifecycle-"));
+  const repo = await repoAt(path.join(dir, "db.json"));
+  const org = await repo.createOrganization({ name: "Tenant A" });
+  const user = await repo.createUser({ organizationId: org.id, email: "lifecycle@example.com", passwordHash: "hash", name: "Lifecycle Admin", role: "admin", isActive: true });
+  const facility = await repo.createFacility(parseFacilityInput({
+    name: "Plant A",
+    country: "US",
+    stateProvince: "OH",
+    region: "OH",
+    industry: "industrial_manufacturing",
+    facilityType: "fabrication",
+    employeeCount: 20,
+    hazardProfile: { machinery: true }
+  }, org.id));
+
+  const due = await repo.createEvidence(parseEvidenceInput({
+    facilityId: facility.id,
+    title: "Expired record",
+    evidenceType: "other",
+    retentionUntil: "2026-01-01T00:00:00.000Z"
+  }, org.id, user.id));
+  const held = await repo.createEvidence(parseEvidenceInput({
+    facilityId: facility.id,
+    title: "Held expired record",
+    evidenceType: "other",
+    retentionUntil: "2026-01-01T00:00:00.000Z",
+    fileReference: "held.txt",
+    storageDeletionStatus: "failed"
+  }, org.id, user.id));
+
+  await repo.setEvidenceLegalHold(org.id, held.id, { legalHoldReason: "Counsel review", legalHoldByUserId: user.id });
+  await assert.rejects(() => repo.archiveEvidence(org.id, held.id, { deletionReason: "Cleanup" }), (error) => error.code === "LEGAL_HOLD_ACTIVE");
+  await assert.rejects(() => repo.markEvidenceStorageDeletionRetried(org.id, held.id, { actorUserId: user.id, updates: { storageDeletionStatus: "deleted" } }), (error) => error.code === "LEGAL_HOLD_ACTIVE");
+
+  const candidates = await repo.listRetentionCandidates(org.id, "2026-07-01T00:00:00.000Z");
+  assert.deepEqual(candidates.evidence.map((item) => item.id), [due.id]);
+  assert.equal(candidates.skippedLegalHold.evidence, 1);
+
+  await repo.archiveEvidence(org.id, due.id, {
+    deletedAt: "2026-07-01T00:00:00.000Z",
+    deletedByUserId: user.id,
+    deletionReason: "Metadata cleanup",
+    storageDeletionStatus: "not_applicable"
+  });
+  const restored = await repo.restoreEvidence(org.id, due.id, { restoredByUserId: user.id, restoreReason: "Metadata archived by mistake" });
+  assert.equal(restored.archived, false);
+  assert.equal(restored.restoreReason, "Metadata archived by mistake");
+
+  await repo.releaseEvidenceLegalHold(org.id, held.id, { legalHoldReleasedByUserId: user.id, legalHoldReleaseReason: "Counsel cleared" });
+  await repo.archiveEvidence(org.id, held.id, {
+    deletedAt: "2026-07-02T00:00:00.000Z",
+    deletedByUserId: user.id,
+    deletionReason: "Private object deleted",
+    storageDeletionStatus: "deleted"
+  });
+  await assert.rejects(() => repo.restoreEvidence(org.id, held.id, { restoredByUserId: user.id, restoreReason: "Cannot restore private file" }), (error) => error.code === "PRIVATE_OBJECT_DELETED");
+
+  const generated = generateReview({ facility, evidence: [restored], now: new Date("2026-06-18T12:00:00Z") });
+  const review = await repo.createReview({
+    organizationId: org.id,
+    facilityId: facility.id,
+    rulesPackId: generated.rulesPack.rulesPackId,
+    country: generated.country,
+    region: generated.region,
+    readinessScore: generated.readinessScore,
+    scoreExplanation: generated.scoreExplanation,
+    summary: generated.summary,
+    generatedByUserId: user.id,
+    evidenceMatches: generated.evidenceMatches,
+    gapRows: generated.gapRows,
+    findings: generated.findings,
+    actionPlan: generated.actionPlan
+  });
+  const packet = await repo.createAuditPacket({
+    organizationId: org.id,
+    facilityId: facility.id,
+    reviewId: review.id,
+    title: "Packet",
+    fileReference: "packet.pdf",
+    generatedByUserId: user.id,
+    country: facility.country,
+    region: facility.region,
+    rulesPackId: generated.rulesPack.rulesPackId,
+    status: "generated",
+    retentionUntil: "2026-01-01T00:00:00.000Z",
+    storageDeletionStatus: "failed"
+  });
+
+  await repo.setAuditPacketLegalHold(org.id, packet.id, { legalHoldReason: "Regulator request", legalHoldByUserId: user.id });
+  const heldPackets = await repo.listRetentionCandidates(org.id, "2026-07-01T00:00:00.000Z");
+  assert.equal(heldPackets.auditPackets.length, 0);
+  assert.equal(heldPackets.skippedLegalHold.auditPackets, 1);
+  await assert.rejects(() => repo.markAuditPacketStorageDeletionRetried(org.id, packet.id, { actorUserId: user.id, updates: { storageDeletionStatus: "deleted" } }), (error) => error.code === "LEGAL_HOLD_ACTIVE");
+  await repo.releaseAuditPacketLegalHold(org.id, packet.id, { legalHoldReleasedByUserId: user.id, legalHoldReleaseReason: "Regulator released" });
+  const retriedPacket = await repo.markAuditPacketStorageDeletionRetried(org.id, packet.id, {
+    actorUserId: user.id,
+    updates: {
+      archived: true,
+      removeFileReference: true,
+      deletedAt: "2026-07-01T00:00:00.000Z",
+      deletedByUserId: user.id,
+      deletionReason: "Retry cleanup",
+      storageDeletionStatus: "deleted"
+    }
+  });
+  assert.equal(retriedPacket.archived, true);
+  assert.equal(retriedPacket.fileReference, null);
+  assert.equal(retriedPacket.storageDeletionRetryCount, 1);
+});

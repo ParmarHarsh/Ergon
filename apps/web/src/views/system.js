@@ -1,4 +1,4 @@
-import { API_BASE, currentFacility, state } from "../store.js";
+import { API_BASE, canReview, currentFacility, state } from "../store.js";
 import { formatDateTime, html, kv, pill, titleCase } from "../ui.js";
 
 export function systemView() {
@@ -10,6 +10,7 @@ export function systemView() {
         <p class="page-sub">Runtime configuration and dependency health for this workspace. Secrets are never exposed to the browser.</p>
       </div>
       <div class="page-actions">
+        ${canReview() ? `<button class="btn btn-secondary" data-action="enforce-retention">Enforce retention</button>` : ""}
         <button class="btn btn-secondary" data-action="refresh-system">Refresh</button>
       </div>
     </div>

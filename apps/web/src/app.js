@@ -262,12 +262,76 @@ const clickActions = {
       await refreshFacilityData();
     }, { successMessage: "Packet archived and private PDF deleted." });
   },
+  "hold-packet": async (dataset) => {
+    const reason = window.prompt("Reason for legal hold:", "");
+    if (!reason) return;
+    await run(async () => {
+      await api(`/api/audit-packets/${encodeURIComponent(dataset.packetId)}/legal-hold`, { method: "POST", body: { reason } });
+      await refreshFacilityData();
+    }, { successMessage: "Packet legal hold applied." });
+  },
+  "release-packet-hold": async (dataset) => {
+    const reason = window.prompt("Reason for releasing legal hold:", "");
+    if (!reason) return;
+    await run(async () => {
+      await api(`/api/audit-packets/${encodeURIComponent(dataset.packetId)}/legal-hold`, { method: "DELETE", body: { reason } });
+      await refreshFacilityData();
+    }, { successMessage: "Packet legal hold released." });
+  },
+  "restore-packet": async (dataset) => {
+    const reason = window.prompt("Reason for restoring this packet metadata:", "");
+    if (!reason) return;
+    await run(async () => {
+      await api(`/api/audit-packets/${encodeURIComponent(dataset.packetId)}/restore`, { method: "POST", body: { reason } });
+      await refreshFacilityData();
+    }, { successMessage: "Packet restored." });
+  },
+  "retry-packet-deletion": async (dataset) => {
+    const reason = window.prompt("Reason for retrying packet private-object deletion:", "");
+    if (!reason) return;
+    await run(async () => {
+      await api(`/api/audit-packets/${encodeURIComponent(dataset.packetId)}/retry-storage-deletion`, { method: "POST", body: { reason } });
+      await refreshFacilityData();
+    }, { successMessage: "Packet deletion retry completed." });
+  },
   "archive-evidence": async (dataset) => {
     if (!window.confirm("Archive this evidence record and delete its private file? Audit history is preserved.")) return;
     await run(async () => {
       await api(`/api/evidence/${encodeURIComponent(dataset.evidenceId)}?reason=${encodeURIComponent("Archived from evidence workspace")}`, { method: "DELETE" });
       await refreshFacilityData();
     }, { successMessage: "Evidence archived and private file deleted." });
+  },
+  "hold-evidence": async (dataset) => {
+    const reason = window.prompt("Reason for legal hold:", "");
+    if (!reason) return;
+    await run(async () => {
+      await api(`/api/evidence/${encodeURIComponent(dataset.evidenceId)}/legal-hold`, { method: "POST", body: { reason } });
+      await refreshFacilityData();
+    }, { successMessage: "Evidence legal hold applied." });
+  },
+  "release-evidence-hold": async (dataset) => {
+    const reason = window.prompt("Reason for releasing legal hold:", "");
+    if (!reason) return;
+    await run(async () => {
+      await api(`/api/evidence/${encodeURIComponent(dataset.evidenceId)}/legal-hold`, { method: "DELETE", body: { reason } });
+      await refreshFacilityData();
+    }, { successMessage: "Evidence legal hold released." });
+  },
+  "restore-evidence": async (dataset) => {
+    const reason = window.prompt("Reason for restoring this evidence metadata:", "");
+    if (!reason) return;
+    await run(async () => {
+      await api(`/api/evidence/${encodeURIComponent(dataset.evidenceId)}/restore`, { method: "POST", body: { reason } });
+      await refreshFacilityData();
+    }, { successMessage: "Evidence restored." });
+  },
+  "retry-evidence-deletion": async (dataset) => {
+    const reason = window.prompt("Reason for retrying evidence private-object deletion:", "");
+    if (!reason) return;
+    await run(async () => {
+      await api(`/api/evidence/${encodeURIComponent(dataset.evidenceId)}/retry-storage-deletion`, { method: "POST", body: { reason } });
+      await refreshFacilityData();
+    }, { successMessage: "Evidence deletion retry completed." });
   },
   "process-ai": async (dataset) => {
     await run(async () => {
@@ -305,6 +369,16 @@ const clickActions = {
   },
   "refresh-system": async () => {
     await run(() => refreshSystemData());
+  },
+  "enforce-retention": async () => {
+    const reason = window.prompt("Reason for retention enforcement:", "Pilot retention enforcement");
+    if (!reason) return;
+    await run(async () => {
+      const result = await api("/api/lifecycle/retention/enforce", { method: "POST", body: { reason } });
+      await refreshFacilityData();
+      await refreshSystemData();
+      toast(`Retention checked ${result.considered}; archived ${result.archived}; skipped holds ${result.skippedDueLegalHold}.`);
+    });
   }
 };
 

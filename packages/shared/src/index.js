@@ -3,7 +3,7 @@ export const COUNTRIES = ["US", "CA", "MX"];
 export const PRIORITIES = ["critical", "high", "medium", "low"];
 export const EVIDENCE_STATUSES = ["pending", "accepted", "rejected", "expired", "needs_review"];
 export const FILE_SCAN_STATUSES = ["scan_pending", "scan_clean", "scan_failed", "scan_suspicious", "scan_unavailable"];
-export const PROCESSING_JOB_STATUSES = ["queued", "processing", "completed", "failed", "cancelled"];
+export const PROCESSING_JOB_STATUSES = ["queued", "processing", "completed", "failed", "dead_letter", "cancelled"];
 export const GAP_STATUSES = ["missing", "partial", "accepted", "rejected", "expired", "not_applicable"];
 export const USER_ROLES = ["admin", "compliance_manager", "reviewer", "auditor", "executive"];
 export const EVIDENCE_TAXONOMY = [
@@ -186,7 +186,20 @@ export function parseEvidenceInput(input, organizationId, uploadedByUserId) {
     deletionReason: optionalString(input.deletionReason),
     retentionUntil: optionalString(input.retentionUntil),
     storageDeletionStatus: optionalString(input.storageDeletionStatus) || (input.fileReference ? "retained" : "not_applicable"),
-    storageDeletionError: optionalString(input.storageDeletionError)
+    storageDeletionError: optionalString(input.storageDeletionError),
+    legalHoldActive: Boolean(input.legalHoldActive ?? false),
+    legalHoldReason: optionalString(input.legalHoldReason),
+    legalHoldByUserId: optionalString(input.legalHoldByUserId),
+    legalHoldAt: optionalString(input.legalHoldAt),
+    legalHoldReleasedByUserId: optionalString(input.legalHoldReleasedByUserId),
+    legalHoldReleasedAt: optionalString(input.legalHoldReleasedAt),
+    legalHoldReleaseReason: optionalString(input.legalHoldReleaseReason),
+    restoredAt: optionalString(input.restoredAt),
+    restoredByUserId: optionalString(input.restoredByUserId),
+    restoreReason: optionalString(input.restoreReason),
+    storageDeletionRetryCount: optionalInteger(input.storageDeletionRetryCount, 0),
+    storageDeletionLastRetriedAt: optionalString(input.storageDeletionLastRetriedAt),
+    storageDeletionLastRetriedByUserId: optionalString(input.storageDeletionLastRetriedByUserId)
   };
 }
 

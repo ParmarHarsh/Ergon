@@ -198,7 +198,7 @@ Evidence matches are persisted when a backend review is generated, so the rule-t
 
 `0002_persistence_hardening` persists `selected_rules_pack_id` on facilities, adds integrity constraints, and adds composite and foreign-key indexes for tenant-scoped access patterns. The API uses a bounded Postgres connection pool with connection, idle, and statement timeouts.
 
-`0003_ai_evidence_intelligence` adds tenant-scoped AI analysis and private file metadata. `0004_production_file_intelligence` adds scan state, bounded processing jobs, immutable analysis versions, lineage hashes, supersession links, queue claim indexes, and one-active-job/one-current-analysis constraints. `0005_pilot_readiness_hardening` adds detected file metadata, deletion/retention foundations, storage-deletion outcomes, worker ownership, leases, heartbeats, dead-letter state, and supporting partial/foreign-key indexes. PostgreSQL workers claim due jobs with `FOR UPDATE SKIP LOCKED`; external AI and file operations remain outside database transactions.
+`0003_ai_evidence_intelligence` adds tenant-scoped AI analysis and private file metadata. `0004_production_file_intelligence` adds scan state, bounded processing jobs, immutable analysis versions, lineage hashes, supersession links, queue claim indexes, and one-active-job/one-current-analysis constraints. `0005_pilot_readiness_hardening` adds detected file metadata, deletion/retention foundations, storage-deletion outcomes, worker ownership, leases, heartbeats, dead-letter state, and supporting partial/foreign-key indexes. `0006_data_lifecycle_hardening` adds legal-hold, restore, and storage-deletion retry metadata plus retention/deletion indexes for evidence and audit packets. PostgreSQL workers claim due jobs with `FOR UPDATE SKIP LOCKED`; external AI and file operations remain outside database transactions.
 
 ## Development Seed
 
@@ -369,12 +369,16 @@ Rules:
 
 Evidence:
 
-- `GET /api/evidence?facilityId=...`
+- `GET /api/evidence?facilityId=...&includeArchived=true` (`includeArchived` requires admin/reviewer)
 - `POST /api/evidence`
 - `POST /api/evidence/upload`
 - `GET /api/evidence/:id`
 - `PATCH /api/evidence/:id`
 - `DELETE /api/evidence/:id?reason=...` (admin/reviewer; archives metadata and deletes the private object)
+- `POST /api/evidence/:id/legal-hold` (admin/reviewer)
+- `DELETE /api/evidence/:id/legal-hold` (admin/reviewer)
+- `POST /api/evidence/:id/restore` (admin/reviewer; metadata restore only when the private object was not deleted)
+- `POST /api/evidence/:id/retry-storage-deletion` (admin/reviewer)
 - `GET /api/evidence/:id/download`
 - `POST /api/evidence/:id/process-ai`
 - `POST /api/evidence/:id/retry-processing` (admin/reviewer)
@@ -398,10 +402,18 @@ Audit readiness:
 
 Audit packets:
 
-- `GET /api/audit-packets`
+- `GET /api/audit-packets?facilityId=...&includeArchived=true` (`includeArchived` requires admin/reviewer)
 - `POST /api/audit-packets/export`
 - `GET /api/audit-packets/:id/download`
 - `DELETE /api/audit-packets/:id?reason=...` (admin/reviewer; archives metadata and deletes the private PDF)
+- `POST /api/audit-packets/:id/legal-hold` (admin/reviewer)
+- `DELETE /api/audit-packets/:id/legal-hold` (admin/reviewer)
+- `POST /api/audit-packets/:id/restore` (admin/reviewer; metadata restore only when the private PDF was not deleted)
+- `POST /api/audit-packets/:id/retry-storage-deletion` (admin/reviewer)
+
+Lifecycle:
+
+- `POST /api/lifecycle/retention/enforce` (admin/reviewer; enforces due retention dates and skips active legal holds)
 
 Expert review and logs:
 
@@ -446,9 +458,13 @@ Health:
 
 The API writes newline-delimited JSON operational logs with request IDs and safe correlation fields for HTTP requests, uploads, facility/evidence/job identifiers, processing state, status code, error code, and duration. Queue logs include worker and job correlation. A denylist redacts authorization/cookie/secret/password/token/prompt/raw-content/document-text/employee-name fields. Raw documents, prompts, model responses, and file bytes are never intentionally written to operational logs. Tenant audit logs remain separate persisted product records.
 
-## Retention And Deletion Foundation
+## Compliance Data Lifecycle
 
-Evidence and packet records carry archive/deletion actor, time, reason, optional retention date, and private-storage deletion status/error fields. Admin/reviewer `DELETE` routes explicitly delete the private object, preserve the soft-deleted metadata and audit history, and log the outcome. A failed object deletion returns a visible `502`, records `storageDeletionStatus=failed`, and does not silently pretend deletion succeeded. The current implementation does not run scheduled retention jobs, legal holds, restoration, immutable/WORM storage, or customer-configurable retention policies; those remain deployment/product work.
+Evidence and packet records carry archive/deletion actor, time, reason, optional retention date, private-storage deletion status/error fields, legal-hold metadata, restore metadata, and storage-deletion retry counters. Admin/reviewer `DELETE` routes explicitly delete the private object, preserve the soft-deleted metadata and audit history, and log the outcome. A failed object deletion returns a visible `502`, records `storageDeletionStatus=failed`, and does not silently pretend deletion succeeded.
+
+Admin/reviewer users can set and release legal holds for evidence and audit packets. Active holds block direct archive/delete, retention enforcement, restore, and private-object deletion retry. Reviewers/admins can include archived evidence or packets in list views, retry failed private-object deletion, and restore archived metadata only when the private object was not deleted. Retention enforcement is an explicit admin/reviewer command that archives due evidence and packets, deletes private objects when present, skips active legal holds, records failures, and writes tenant audit logs.
+
+ComplianceIQ does not provide storage-provider WORM guarantees, bucket lifecycle policy, object-lock configuration, autonomous external scheduling, or backup orchestration. Those remain deployment and operational responsibilities.
 
 ## Rules And Scoring
 
@@ -559,7 +575,7 @@ The release-readiness report and Vercel guidance are in [DEPLOYMENT_READINESS.md
 - Verify `/health/live` and `/health/ready` through the deployment load balancer
 - Verify the selected private object-storage adapter is durable and non-public
 - Configure log collection/retention without capturing document bodies or secrets
-- Define pilot retention, object lifecycle, backup/restore, incident response, and deletion-retry procedures
+- Define pilot retention, object lifecycle, backup/restore, incident response, legal-hold approval, and deletion-retry procedures
 
 ## Known Limitations
 
@@ -569,12 +585,12 @@ The release-readiness report and Vercel guidance are in [DEPLOYMENT_READINESS.md
 - Queue jobs and leases are durable in PostgreSQL and scheduling can run in a separate worker process. A dedicated external queue service remains preferable for stronger back-pressure and independent scheduler operations.
 - The mock provider is for tests/development only and is rejected in production.
 - A ClamAV-compatible production transport is implemented, but scanner infrastructure, signature freshness, capacity, alerting, and operational approval remain deployment responsibilities.
-- S3-compatible storage is implemented, but bucket policies, customer-managed KMS requirements, legal holds, retention, lifecycle, deletion retry, and restore procedures remain deployment responsibilities.
+- S3-compatible storage is implemented, but bucket policies, customer-managed KMS requirements, object lock/WORM, provider lifecycle, and backup/restore procedures remain deployment responsibilities.
 - A real Postgres integration run still requires a disposable `TEST_DATABASE_URL`; the self-contained suite deliberately does not emulate Postgres.
 - A real S3 integration run still requires private `TEST_S3_*` infrastructure; the self-contained suite uses a mock client.
 - Archives and Office ZIP containers are intentionally unsupported. DOCX parsing may be added only with bounded entry/count/size controls and path-safe extraction.
 - Images and scanned PDFs still require a production OCR provider or human review.
-- Scheduled retention enforcement, legal holds, deletion retry workers, and restore UI are not implemented.
+- Legal holds, explicit retention enforcement, failed-deletion retry, and safe metadata restore workflows are implemented for reviewer/admin users. Autonomous external scheduling and storage-provider WORM/object-lock policies are not implemented in application code.
 - Login rate limiting is implemented; account recovery is not implemented yet.
 - The static frontend is focused on the core workflow; future work can replace it with a richer React/Next app without moving compliance logic to the client.
 - Province/state-specific Canadian and Mexican rule depth needs expert legal/EHS review before commercial reliance.
@@ -593,4 +609,4 @@ The application includes pilot-oriented infrastructure validation paths, but thi
 1. Run the four staging validators and complete the go/no-go checklist with named pilot owners.
 2. Conduct a controlled workflow session with 3–5 EHS/manufacturing users using agreed, minimized pilot data.
 3. Move scheduling to Redis/SQS/BullMQ while preserving the lease/idempotency repository contract.
-4. Add production OCR, scheduled deletion retries, retention/legal holds, account recovery, monitoring, and AI budget controls.
+4. Add production OCR, account recovery, external lifecycle scheduling, monitoring, and AI budget controls.

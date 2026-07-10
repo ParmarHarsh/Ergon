@@ -85,9 +85,10 @@ export async function refreshFacilityData() {
     return;
   }
   const facilityId = encodeURIComponent(facility.id);
+  const archivedQuery = canReview() ? "&includeArchived=true" : "";
   const [evidence, packets, reviews, aiAnalyses, applicable, processingJobs] = await Promise.all([
-    api(`/api/evidence?facilityId=${facilityId}`),
-    api(`/api/audit-packets?facilityId=${facilityId}`),
+    api(`/api/evidence?facilityId=${facilityId}${archivedQuery}`),
+    api(`/api/audit-packets?facilityId=${facilityId}${archivedQuery}`),
     api(`/api/audit-readiness/reviews?facilityId=${facilityId}`),
     api(`/api/evidence-ai-analyses?facilityId=${facilityId}`),
     api(`/api/facilities/${facilityId}/applicable-rules`),

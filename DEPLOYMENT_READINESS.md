@@ -36,7 +36,7 @@ AI output is validated against the evidence taxonomy and applicable facility rul
 
 ## 5. Database status
 
-Postgres migrations exist for organizations, users, sessions, facilities, rules, evidence, matches, reviews, gap rows, findings, action items, packets, expert reviews, audit logs, AI analyses, processing jobs, scan/deletion metadata, and queue lease fields.
+Postgres migrations exist for organizations, users, sessions, facilities, rules, evidence, matches, reviews, gap rows, findings, action items, packets, expert reviews, audit logs, AI analyses, processing jobs, scan/deletion metadata, lifecycle legal holds/restores/retries, and queue lease fields.
 
 The migration runner records migrations in `schema_migrations` and uses an advisory lock. The Postgres queue claim path uses `FOR UPDATE SKIP LOCKED`.
 
@@ -96,7 +96,7 @@ Still required before pilot:
 - production monitoring and alerting around repeated login throttling events;
 - secret rotation procedure;
 - backup/restore exercise;
-- retention/deletion retry operations;
+- legal-hold, retention, deletion-retry, and restore operating procedures;
 - deployed ingress/proxy verification.
 
 ## 10. Vercel deployment guidance
@@ -239,7 +239,8 @@ Go only when all are true:
 - Worker requires a persistent host or a replacement background-job platform.
 - Scanner requires separate ClamAV-compatible infrastructure.
 - Live Postgres, S3, and scanner validation require external env vars and target infrastructure.
-- Account recovery, production OCR, retention jobs, legal holds, automated deletion retry, and restore UI are not implemented.
+- Account recovery and production OCR are not implemented.
+- Lifecycle controls exist as reviewer/admin workflows, but autonomous external retention scheduling, storage-provider WORM/object-lock policy, and backup/restore execution remain deployment responsibilities.
 - Starter rules remain demo/unverified unless expert-reviewed.
 
 ## 15. Recommended deployment topology

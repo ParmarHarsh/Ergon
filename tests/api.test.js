@@ -31,6 +31,7 @@ test("API requires auth and blocks cross-organization access", async () => {
 
   const { server, repo, processingQueue } = await import("../apps/api/src/server.js");
   const { hashPassword } = await import("../apps/api/src/security.js");
+  const { parseEvidenceInput } = await import("../packages/shared/src/index.js");
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = server.address().port;
   const base = `http://127.0.0.1:${port}`;
@@ -247,6 +248,103 @@ test("API requires auth and blocks cross-organization access", async () => {
     assert.ok(auditLogs.some((entry) => entry.action === "human_accepted_ai_result"));
     assert.ok(auditLogs.some((entry) => entry.action === "packet_exported_with_ai_lineage"));
     assert.ok(auditLogs.some((entry) => entry.action === "evidence_upload_rejected"));
+
+    const holdEvidence = await fetch(`${base}/api/evidence/${evidence.id}/legal-hold`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ reason: "Counsel review" })
+    });
+    assert.equal(holdEvidence.status, 200);
+    assert.equal((await holdEvidence.json()).legalHoldActive, true);
+    const viewerHold = await fetch(`${base}/api/evidence/${evidence.id}/legal-hold`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie: viewerCookie },
+      body: JSON.stringify({ reason: "Viewer attempt" })
+    });
+    assert.equal(viewerHold.status, 403);
+    assert.equal((await fetch(`${base}/api/evidence/${evidence.id}?reason=Held`, { method: "DELETE", headers: { cookie } })).status, 409);
+    const releaseEvidenceHold = await fetch(`${base}/api/evidence/${evidence.id}/legal-hold`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ reason: "Counsel cleared" })
+    });
+    assert.equal(releaseEvidenceHold.status, 200);
+    assert.equal((await releaseEvidenceHold.json()).legalHoldActive, false);
+
+    const holdPacket = await fetch(`${base}/api/audit-packets/${packet.id}/legal-hold`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ reason: "Audit response freeze" })
+    });
+    assert.equal(holdPacket.status, 200);
+    assert.equal((await holdPacket.json()).legalHoldActive, true);
+    assert.equal((await fetch(`${base}/api/audit-packets/${packet.id}?reason=Held`, { method: "DELETE", headers: { cookie } })).status, 409);
+    const releasePacketHold = await fetch(`${base}/api/audit-packets/${packet.id}/legal-hold`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ reason: "Audit response released" })
+    });
+    assert.equal(releasePacketHold.status, 200);
+    assert.equal((await releasePacketHold.json()).legalHoldActive, false);
+
+    const retryUpload = await fetch(`${base}/api/evidence/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({
+        facilityId: facility.id,
+        title: "Retry deletion evidence",
+        evidenceType: "other",
+        contentBase64: Buffer.from("retry me").toString("base64"),
+        fileName: "retry.txt"
+      })
+    });
+    assert.equal(retryUpload.status, 201);
+    const retryEvidence = await retryUpload.json();
+    await repo.updateEvidence(orgA.id, retryEvidence.id, { storageDeletionStatus: "failed", storageDeletionError: "simulated prior storage outage" });
+    const retryDelete = await fetch(`${base}/api/evidence/${retryEvidence.id}/retry-storage-deletion`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ reason: "Retry after storage recovery" })
+    });
+    assert.equal(retryDelete.status, 200);
+    const retriedEvidence = await retryDelete.json();
+    assert.equal(retriedEvidence.archived, true);
+    assert.equal(retriedEvidence.storageDeletionStatus, "deleted");
+    assert.equal(retriedEvidence.fileReference, null);
+    assert.equal(retriedEvidence.storageDeletionRetryCount, 1);
+
+    const restoreDeleted = await fetch(`${base}/api/evidence/${retryEvidence.id}/restore`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ reason: "Restore deleted file" })
+    });
+    assert.equal(restoreDeleted.status, 409);
+
+    const dueEvidence = await repo.createEvidence(parseEvidenceInput({
+      facilityId: facility.id,
+      title: "Expired metadata evidence",
+      evidenceType: "other",
+      retentionUntil: "2026-01-01T00:00:00.000Z"
+    }, orgA.id, user.id));
+    const heldDueEvidence = await repo.createEvidence(parseEvidenceInput({
+      facilityId: facility.id,
+      title: "Held expired evidence",
+      evidenceType: "other",
+      retentionUntil: "2026-01-01T00:00:00.000Z"
+    }, orgA.id, user.id));
+    await repo.setEvidenceLegalHold(orgA.id, heldDueEvidence.id, { legalHoldReason: "Matter open", legalHoldByUserId: user.id });
+    const retention = await fetch(`${base}/api/lifecycle/retention/enforce`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ reason: "Pilot retention sweep", dueAt: "2026-07-01T00:00:00.000Z" })
+    });
+    assert.equal(retention.status, 200);
+    const retentionSummary = await retention.json();
+    assert.equal(retentionSummary.considered, 2);
+    assert.equal(retentionSummary.skippedDueLegalHold, 1);
+    assert.equal(retentionSummary.archived, 1);
+    assert.equal((await repo.getEvidence(orgA.id, dueEvidence.id)).archived, true);
+    assert.equal((await repo.getEvidence(orgA.id, heldDueEvidence.id)).archived, false);
 
     const packetDelete = await fetch(`${base}/api/audit-packets/${packet.id}?reason=Pilot%20cleanup`, { method: "DELETE", headers: { cookie } });
     assert.equal(packetDelete.status, 200);
