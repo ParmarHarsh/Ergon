@@ -727,3 +727,45 @@ Safe next action:
   - No source code, dependency file, database schema, cleanup deletion, move, rename, `.gitattributes` change, `LFS_ASSET_AUDIT.md` change, or `02-new-rebuild/` content change was performed.
 - Recommended next phase:
   - Execute only the approved ComplianceIQ cleanup set in one focused PR: remove `02-new-rebuild/`, remove `LFS_ASSET_AUDIT.md`, remove `.gitattributes`, rerun the full ComplianceIQ verification suite, and confirm CI stays green.
+
+## Phase 11 ComplianceIQ focused cleanup execution note
+
+- Pulled latest `main` after Phase 10 cleanup-readiness merge confirmation.
+- Used `phase-11-remove-unrelated-royal-project`; the branch already existed locally and matched updated `main` exactly before cleanup.
+- Explicitly approved cleanup set executed:
+  - Removed `02-new-rebuild/`.
+  - Removed `LFS_ASSET_AUDIT.md`.
+  - Removed `.gitattributes`.
+- Cleanup scope:
+  - No other path was deleted.
+  - No file or folder was moved or renamed.
+- Royal Engitech preservation status:
+  - Independent local repository remains separate from ComplianceIQ.
+  - Dedicated GitHub repository remains `git@github.com:ParmarHarsh/RoyalEngitech-Rebuild.git`.
+  - Remote `main` was visible at `6131dd1743bbc0704458a31b1e53eee46ab711a6`.
+  - Removal from ComplianceIQ does not remove the independent Royal repository or its Git history.
+- Cross-project dependency status:
+  - No runtime, build, test, deployment, import, package, or asset dependency from ComplianceIQ to the removed Royal project was found.
+- Active ComplianceIQ Royal-reference scan:
+  - No matches in active ComplianceIQ scopes.
+- Post-cleanup verification:
+  - `npm run lint` - passed; linted 69 files.
+  - `npm run typecheck` - passed; checked 77 JavaScript files.
+  - `npm test` - passed after approved localhost-capable rerun; 46 passed, 2 skipped, 0 failed.
+  - `npm run build` - passed.
+  - `npm audit` - passed after approved registry-capable rerun; found 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+  - `npm run scan:claims` - passed; linted 69 files.
+  - `npm run scan:random` - passed; 1 deterministic-safety test passed.
+- Root package metadata:
+  - Unchanged.
+- Application source:
+  - Unchanged.
+- Database schema:
+  - Unchanged.
+- CI workflow files:
+  - Unchanged.
+- Final cleanup result:
+  - ComplianceIQ repository is now focused on the ComplianceIQ project without the unrelated Royal Engitech source tree or its Royal-only LFS metadata.
+- Recommended next phase:
+  - Audit and normalize ComplianceIQ documentation, environment templates, readiness documents, and local-start instructions against the actual implementation before beginning missing-feature work.
