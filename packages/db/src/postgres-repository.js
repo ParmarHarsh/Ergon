@@ -206,6 +206,18 @@ export class PostgresRepository {
     return row ? camelPasswordResetToken(row) : null;
   }
 
+  async invalidatePasswordResetToken(input) {
+    const invalidatedAt = input.invalidatedAt || new Date().toISOString();
+    const [row] = await this.query(
+      `UPDATE password_reset_tokens
+       SET invalidated_at = $4
+       WHERE organization_id = $1 AND user_id = $2 AND token_hash = $3 AND used_at IS NULL AND invalidated_at IS NULL
+       RETURNING *`,
+      [input.organizationId, input.userId, input.tokenHash, invalidatedAt]
+    );
+    return row ? camelPasswordResetToken(row) : null;
+  }
+
   async completePasswordReset(input) {
     const usedAt = input.usedAt || new Date().toISOString();
     const client = await this.pool.connect();

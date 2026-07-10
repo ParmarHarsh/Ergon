@@ -149,9 +149,26 @@ export function readConfig(env = process.env) {
 
   const loginRateLimitMaxAttempts = boundedInteger(env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || "10", "LOGIN_RATE_LIMIT_MAX_ATTEMPTS", 3, 1_000);
   const loginRateLimitWindowMs = boundedInteger(env.LOGIN_RATE_LIMIT_WINDOW_MS || "900000", "LOGIN_RATE_LIMIT_WINDOW_MS", 10_000, 86_400_000);
+  const recoveryDeliveryProvider = env.RECOVERY_DELIVERY_PROVIDER || "disabled";
+  if (!["disabled", "smtp"].includes(recoveryDeliveryProvider)) throw new Error("RECOVERY_DELIVERY_PROVIDER must be disabled or smtp");
   const recoveryExposeTestToken = env.RECOVERY_EXPOSE_TEST_TOKEN === "true";
   if (isSecureDeployment && recoveryExposeTestToken) {
     throw new Error("RECOVERY_EXPOSE_TEST_TOKEN must not be true outside local development");
+  }
+  const smtpPort = env.SMTP_PORT ? boundedInteger(env.SMTP_PORT, "SMTP_PORT", 1, 65_535) : 587;
+  const smtpUseTls = env.SMTP_USE_TLS === undefined || env.SMTP_USE_TLS === "" ? true : parseBoolean(env.SMTP_USE_TLS, "SMTP_USE_TLS");
+  const smtpHost = stringWithoutHeaderBreaks(env.SMTP_HOST || "", "SMTP_HOST");
+  const smtpUsername = stringWithoutHeaderBreaks(env.SMTP_USERNAME || "", "SMTP_USERNAME");
+  const smtpPassword = stringWithoutHeaderBreaks(env.SMTP_PASSWORD || "", "SMTP_PASSWORD");
+  const smtpFromEmail = stringWithoutHeaderBreaks(env.SMTP_FROM_EMAIL || "", "SMTP_FROM_EMAIL").toLowerCase();
+  if (Boolean(smtpUsername) !== Boolean(smtpPassword)) throw new Error("SMTP_USERNAME and SMTP_PASSWORD must be configured together");
+  if (recoveryDeliveryProvider === "smtp") {
+    if (!smtpHost) throw new Error("SMTP_HOST is required when RECOVERY_DELIVERY_PROVIDER=smtp");
+    if (!smtpFromEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(smtpFromEmail)) throw new Error("SMTP_FROM_EMAIL must be a valid email address");
+    if (!env.APP_URL) throw new Error("APP_URL is required when RECOVERY_DELIVERY_PROVIDER=smtp");
+    const resetOrigin = new URL(env.APP_URL);
+    if (isSecureDeployment && ["localhost", "127.0.0.1", "::1"].includes(resetOrigin.hostname)) throw new Error("APP_URL must not use a localhost reset origin in secure deployment profiles");
+    if (isSecureDeployment && !smtpUseTls) throw new Error("SMTP_USE_TLS must be true in secure deployment profiles");
   }
 
   const logLevel = env.LOG_LEVEL || "info";
@@ -203,7 +220,14 @@ export function readConfig(env = process.env) {
     trustProxy,
     loginRateLimitMaxAttempts,
     loginRateLimitWindowMs,
+    recoveryDeliveryProvider,
     recoveryExposeTestToken,
+    smtpHost,
+    smtpPort,
+    smtpUseTls,
+    smtpUsername,
+    smtpPassword,
+    smtpFromEmail,
     sessionCookieSameSite: sessionCookieSameSite[0].toUpperCase() + sessionCookieSameSite.slice(1),
     enableDemoData: env.ENABLE_DEMO_DATA === "true",
     adminEmail: env.ADMIN_EMAIL || "admin@complianceiq.local",
@@ -234,4 +258,16 @@ function boundedInteger(value, name, min, max) {
   const parsed = Number.parseInt(String(value), 10);
   if (!Number.isInteger(parsed) || parsed < min || parsed > max) throw new Error(`${name} must be an integer between ${min} and ${max}`);
   return parsed;
+}
+
+function parseBoolean(value, name) {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`${name} must be true or false`);
+}
+
+function stringWithoutHeaderBreaks(value, name) {
+  const text = String(value || "").trim();
+  if (/[\r\n]/.test(text)) throw new Error(`${name} must not contain line breaks`);
+  return text;
 }

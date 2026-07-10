@@ -215,6 +215,21 @@ export class FileRepository {
     return row;
   }
 
+  async invalidatePasswordResetToken(input) {
+    const invalidatedAt = input.invalidatedAt || nowIso();
+    const token = this.data.passwordResetTokens.find((row) =>
+      row.organizationId === input.organizationId &&
+      row.userId === input.userId &&
+      row.tokenHash === input.tokenHash &&
+      !row.usedAt &&
+      !row.invalidatedAt
+    );
+    if (!token) return null;
+    token.invalidatedAt = invalidatedAt;
+    await this.persist();
+    return token;
+  }
+
   async completePasswordReset(input) {
     const usedAt = input.usedAt || nowIso();
     const token = await this.findValidPasswordResetToken(input.tokenHash, usedAt);

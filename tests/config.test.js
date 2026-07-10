@@ -44,6 +44,47 @@ test("production config accepts optional integrations as absent", () => {
   assert.equal(config.deploymentProfile, "staging");
   assert.equal(config.runsApi, true);
   assert.equal(config.runsWorker, false);
+  assert.equal(config.recoveryDeliveryProvider, "disabled");
+});
+
+test("SMTP recovery delivery config validates required safe settings", () => {
+  const smtpEnv = {
+    ...productionEnv,
+    RECOVERY_DELIVERY_PROVIDER: "smtp",
+    SMTP_HOST: "smtp.example.com",
+    SMTP_PORT: "465",
+    SMTP_USE_TLS: "true",
+    SMTP_FROM_EMAIL: "security@complianceiq.example"
+  };
+  const config = readConfig(smtpEnv);
+  assert.equal(config.recoveryDeliveryProvider, "smtp");
+  assert.equal(config.smtpHost, "smtp.example.com");
+  assert.equal(config.smtpPort, 465);
+  assert.equal(config.smtpUseTls, true);
+  assert.equal(config.smtpFromEmail, "security@complianceiq.example");
+
+  assert.throws(() => readConfig({ ...smtpEnv, SMTP_HOST: "" }), /SMTP_HOST/);
+  assert.throws(() => readConfig({ ...smtpEnv, SMTP_PORT: "70000" }), /SMTP_PORT/);
+  assert.throws(() => readConfig({ ...smtpEnv, SMTP_FROM_EMAIL: "" }), /SMTP_FROM_EMAIL/);
+  assert.throws(() => readConfig({ ...smtpEnv, SMTP_FROM_EMAIL: "bad-address" }), /SMTP_FROM_EMAIL/);
+  assert.throws(() => readConfig({ ...smtpEnv, SMTP_USERNAME: "user-only" }), /SMTP_USERNAME and SMTP_PASSWORD/);
+  assert.throws(() => readConfig({ ...smtpEnv, SMTP_PASSWORD: "password-only" }), /SMTP_USERNAME and SMTP_PASSWORD/);
+  assert.throws(() => readConfig({ ...smtpEnv, SMTP_HOST: "smtp.example.com\r\nBcc: attacker@example.com" }), /SMTP_HOST/);
+  assert.throws(() => readConfig({ ...smtpEnv, SMTP_FROM_EMAIL: "security@example.com\nBcc: attacker@example.com" }), /SMTP_FROM_EMAIL/);
+  assert.throws(() => readConfig({ ...smtpEnv, APP_URL: "https://localhost" }), /localhost reset origin/);
+  assert.throws(() => readConfig({ ...smtpEnv, SMTP_USE_TLS: "false" }), /SMTP_USE_TLS/);
+  assert.throws(() => readConfig({ ...smtpEnv, RECOVERY_EXPOSE_TEST_TOKEN: "true" }), /RECOVERY_EXPOSE_TEST_TOKEN/);
+});
+
+test("SMTP recovery validation errors do not reveal secrets", () => {
+  const secret = "super-secret-smtp-password";
+  assert.throws(
+    () => readConfig({ ...productionEnv, RECOVERY_DELIVERY_PROVIDER: "smtp", SMTP_USERNAME: "smtp-user", SMTP_PASSWORD: secret }),
+    (error) => {
+      assert.equal(String(error.message).includes(secret), false);
+      return /SMTP_HOST/.test(error.message);
+    }
+  );
 });
 
 test("deployment profiles and process roles fail closed outside local development", () => {

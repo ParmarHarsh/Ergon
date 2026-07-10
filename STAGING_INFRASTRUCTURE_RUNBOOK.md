@@ -87,7 +87,14 @@ Variables marked validator-only should be configured only for validator jobs or 
 | `DATABASE_URL` | API, worker, migrations | `postgresql://REDACTED@staging-db.example.com:5432/complianceiq_staging` | Yes | Database owner | `npm run db:migrate`, `/health/ready` |
 | `REPOSITORY_BACKEND` | API, worker | `postgres` | No | App release owner | Startup and `/health/ready` |
 | `SESSION_SECRET` | API sessions | `replace-from-secret-manager` | Yes | Security owner | Login/logout smoke |
+| `RECOVERY_DELIVERY_PROVIDER` | API account recovery | `smtp` | No | Security owner | Startup and recovery smoke |
 | `RECOVERY_EXPOSE_TEST_TOKEN` | API account recovery | `false` | No | Security owner | Startup and recovery smoke |
+| `SMTP_HOST` | API account recovery | `smtp.example.com` | No | Security owner | Approved SMTP validation |
+| `SMTP_PORT` | API account recovery | `587` | No | Security owner | Approved SMTP validation |
+| `SMTP_USE_TLS` | API account recovery | `true` | No | Security owner | Approved SMTP validation |
+| `SMTP_USERNAME` | API account recovery | `replace-from-secret-manager` or blank with no password | Yes if set | Security owner | Approved SMTP validation |
+| `SMTP_PASSWORD` | API account recovery | `replace-from-secret-manager` or blank with no username | Yes if set | Security owner | Approved SMTP validation |
+| `SMTP_FROM_EMAIL` | API account recovery | `security@staging.example.com` | No | Security owner | Approved SMTP validation |
 | `STORAGE_BACKEND` | API, worker | `s3` | No | Storage owner | `/health/ready`, storage validator |
 | `S3_BUCKET` | API, worker | `complianceiq-staging-private` | No | Storage owner | `/health/ready`, storage validator |
 | `S3_REGION` | API, worker | `ca-central-1` | No | Storage owner | `/health/ready`, storage validator |

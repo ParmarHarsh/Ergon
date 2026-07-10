@@ -74,8 +74,9 @@ Optional:
 - `CLAMAV_HOST`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT_MS`
 - `LOG_LEVEL`, `WORKER_HEALTH_HOST`, `WORKER_HEALTH_PORT`
 - `TRUST_PROXY`, `SESSION_COOKIE_SAME_SITE`
+- `RECOVERY_DELIVERY_PROVIDER` (`disabled` or `smtp`)
 - `RECOVERY_EXPOSE_TEST_TOKEN` for local/test recovery inspection only; it is rejected for secure deployment profiles
-- SMTP variables
+- SMTP variables: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USE_TLS`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`
 
 OpenAI and SMTP are optional. The core audit packet workflow works without them.
 
@@ -440,7 +441,8 @@ Health:
 - Login attempts are rate-limited per client IP + email pair (`LOGIN_RATE_LIMIT_MAX_ATTEMPTS` in `LOGIN_RATE_LIMIT_WINDOW_MS`; defaults 10 in 15 minutes) and return `429` when exceeded.
 - Password reset requests return the same generic `202` response for existing and missing accounts, persist only a SHA-256 reset-token hash, expire reset tokens after 30 minutes, invalidate prior outstanding tokens, and audit request/completion events without raw tokens.
 - Successful password reset consumes the token once, updates the scrypt password hash, invalidates sibling tokens, revokes all active sessions for that user, and clears the current session cookie.
-- Production reset-token delivery is `DELIVERY_ABSTRACTION_ONLY` until an approved email/SMS sender is configured. Local/test raw-token inspection requires `RECOVERY_EXPOSE_TEST_TOKEN=true` and is rejected for staging/closed-pilot profiles.
+- Password reset delivery supports `RECOVERY_DELIVERY_PROVIDER=disabled` or `smtp`. SMTP uses `APP_URL` to build the existing `#/reset-password?token=...` frontend link, sends only to the stored account email, and records safe delivery sent/failed audit events. Failed delivery invalidates the undelivered token. Self-contained tests use fake transport; live external SMTP validation still requires approved staging credentials.
+- Local/test raw-token inspection requires `RECOVERY_EXPOSE_TEST_TOKEN=true` and is rejected for staging/closed-pilot profiles.
 - User management is admin-only, tenant-scoped, audit-logged, and blocks self-deactivation/self-demotion.
 - Core routes require authentication.
 - Customer-owned repository methods are scoped by `organizationId`.
@@ -598,7 +600,7 @@ The release-readiness report and Vercel guidance are in [DEPLOYMENT_READINESS.md
 - Archives and Office ZIP containers are intentionally unsupported. DOCX parsing may be added only with bounded entry/count/size controls and path-safe extraction.
 - Images and scanned PDFs still require a production OCR provider or human review.
 - Legal holds, explicit retention enforcement, failed-deletion retry, and safe metadata restore workflows are implemented for reviewer/admin users. Autonomous external scheduling and storage-provider WORM/object-lock policies are not implemented in application code.
-- Account recovery token lifecycle, reset UI, generic request response, audit logging, and session revocation are implemented. Production self-service delivery remains blocked on an approved sender integration.
+- Account recovery token lifecycle, SMTP delivery adapter, reset UI, generic request response, audit logging, and session revocation are implemented. Real external SMTP validation remains a staging responsibility before relying on live email delivery.
 - The static frontend is focused on the core workflow; future work can replace it with a richer React/Next app without moving compliance logic to the client.
 - Province/state-specific Canadian and Mexican rule depth needs expert legal/EHS review before commercial reliance.
 
@@ -616,4 +618,4 @@ The application includes pilot-oriented infrastructure validation paths, but thi
 1. Run the four staging validators and complete the go/no-go checklist with named pilot owners.
 2. Conduct a controlled workflow session with 3–5 EHS/manufacturing users using agreed, minimized pilot data.
 3. Move scheduling to Redis/SQS/BullMQ while preserving the lease/idempotency repository contract.
-4. Add production OCR, approved account-recovery delivery, external lifecycle scheduling, monitoring, and AI budget controls.
+4. Add production OCR, MFA, external lifecycle scheduling, monitoring, and AI budget controls.

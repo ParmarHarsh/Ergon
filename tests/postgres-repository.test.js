@@ -33,6 +33,19 @@ test("postgres repository persists facilities, evidence, reviews, matches, and p
   try {
     const org = await repo.createOrganization({ name: `Tenant ${suffix}` });
     const user = await repo.createUser({ organizationId: org.id, email: `admin-${suffix}@example.com`, passwordHash: "hash", name: "Admin", role: "admin", isActive: true });
+    const failedDeliveryToken = await repo.createPasswordResetToken({
+      organizationId: org.id,
+      userId: user.id,
+      tokenHash: `delivery-failed-reset-hash-${suffix}`,
+      expiresAt: new Date(Date.now() + 60_000).toISOString()
+    });
+    assert.equal((await repo.findValidPasswordResetToken(`delivery-failed-reset-hash-${suffix}`)).id, failedDeliveryToken.id);
+    assert.equal((await repo.invalidatePasswordResetToken({
+      organizationId: org.id,
+      userId: user.id,
+      tokenHash: `delivery-failed-reset-hash-${suffix}`
+    })).id, failedDeliveryToken.id);
+    assert.equal(await repo.findValidPasswordResetToken(`delivery-failed-reset-hash-${suffix}`), null);
     const resetToken = await repo.createPasswordResetToken({
       organizationId: org.id,
       userId: user.id,

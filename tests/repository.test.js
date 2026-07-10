@@ -105,6 +105,33 @@ test("file repository persists sessions and rejects tenant-mismatched writes", a
   }, orgB.id, user.id)), /another organization/);
 });
 
+test("file repository invalidates a specific password reset token", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "ciq-reset-invalidate-"));
+  const repo = await repoAt(path.join(dir, "db.json"));
+  const org = await repo.createOrganization({ name: "Tenant Reset" });
+  const user = await repo.createUser({ organizationId: org.id, email: "reset@example.com", passwordHash: "hash", name: "Reset", role: "admin", isActive: true });
+  const token = await repo.createPasswordResetToken({
+    organizationId: org.id,
+    userId: user.id,
+    tokenHash: "delivery-failed-token-hash",
+    expiresAt: new Date(Date.now() + 60_000).toISOString()
+  });
+  assert.equal((await repo.findValidPasswordResetToken("delivery-failed-token-hash")).id, token.id);
+  const invalidated = await repo.invalidatePasswordResetToken({
+    organizationId: org.id,
+    userId: user.id,
+    tokenHash: "delivery-failed-token-hash",
+    invalidatedAt: "2026-07-10T19:00:00.000Z"
+  });
+  assert.equal(invalidated.id, token.id);
+  assert.equal(await repo.findValidPasswordResetToken("delivery-failed-token-hash"), null);
+  assert.equal(await repo.invalidatePasswordResetToken({
+    organizationId: org.id,
+    userId: user.id,
+    tokenHash: "delivery-failed-token-hash"
+  }), null);
+});
+
 test("repository blocks cross-organization access", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "ciq-scope-"));
   const repo = await repoAt(path.join(dir, "db.json"));
