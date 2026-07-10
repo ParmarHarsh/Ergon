@@ -2,6 +2,8 @@
 
 This checklist supports a controlled pilot with a small group of manufacturing or EHS users. It is not evidence of broad public-launch or enterprise readiness.
 
+Use [STAGING_INFRASTRUCTURE_RUNBOOK.md](./STAGING_INFRASTRUCTURE_RUNBOOK.md) before the next validator-execution phase. It converts the Phase 15 `NO_GO` blockers into a staging setup checklist, secret-safe environment checklist, backup/restore drill plan, monitoring checklist, and secret rotation procedure.
+
 ## Required Infrastructure
 
 - Separate API and worker processes using the same release and PostgreSQL database.

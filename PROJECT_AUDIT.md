@@ -917,6 +917,44 @@ Safe next action:
 - Recommended next phase:
   - Phase 16 - Safe Staging Infrastructure Provisioning, External Validator Execution, and Restore Drill.
 
+## Phase 16 staging infrastructure setup runbook note
+
+- Pulled latest `main` after Phase 15 merge confirmation.
+- Created `phase-16-staging-infra-runbook`.
+- Created:
+  - `STAGING_INFRASTRUCTURE_RUNBOOK.md`
+- Updated references in:
+  - `README.md`
+  - `DEPLOYMENT_READINESS.md`
+  - `PILOT_READINESS.md`
+  - `PILOT_INFRASTRUCTURE_AUDIT.md`
+  - `PROJECT_AUDIT.md`
+- Infrastructure provisioned:
+  - No.
+- Secrets added or exposed:
+  - No.
+- Runtime behavior changed:
+  - No.
+- Dependencies changed:
+  - No.
+- Database schema changed:
+  - No.
+- Phase 15 pilot decision remains:
+  - `NO_GO`.
+- Purpose of Phase 16:
+  - Convert missing infrastructure and operational blockers into a safe setup, validation, and recovery-drill checklist.
+- Verification:
+  - `npm run lint` - passed; linted 69 files.
+  - `npm run typecheck` - passed; checked 77 JavaScript files.
+  - `npm test` - passed; 49 tests total, 47 passed, 2 skipped, 0 failed.
+  - `npm run build` - passed.
+  - `npm audit` - passed; found 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+  - `npm run scan:claims` - passed; linted 69 files.
+  - `npm run scan:random` - passed; 1 deterministic-safety test passed.
+- Recommended next phase:
+  - Phase 17 - Execute Safe Staging Validators and Recovery Drill.
+
 ## Phase 14 compliance data lifecycle hardening note
 
 - Branch:

@@ -10,6 +10,8 @@ Go for Vercel frontend testing: yes, once `WEB_API_ORIGIN` points to a deployed 
 
 Go for real pilot evidence: not until target-environment PostgreSQL, private storage, scanner, API, worker, backups, and smoke validation pass.
 
+Use [STAGING_INFRASTRUCTURE_RUNBOOK.md](./STAGING_INFRASTRUCTURE_RUNBOOK.md) to prepare the provider-neutral staging setup, validator execution order, backup/restore drill, monitoring checks, and secret rotation procedure before any real pilot evidence is handled.
+
 ## 2. Backend status
 
 The backend is a custom Node HTTP API with signed cookie sessions, organization-scoped repository methods, protected evidence and packet downloads, role-gated reviewer actions, health/readiness endpoints, and structured operational logs. It should run on a persistent Node host or container for pilot use.
