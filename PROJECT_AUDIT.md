@@ -857,6 +857,66 @@ Safe next action:
 - Recommended next phase:
   - Phase 14 - Compliance Data Lifecycle Hardening.
 
+## Phase 15 pilot infrastructure validation and recovery readiness note
+
+- Pulled latest `main` after Phase 14 merge confirmation.
+- Created `phase-15-pilot-infrastructure-validation`.
+- Created:
+  - `PILOT_INFRASTRUCTURE_AUDIT.md`
+- Phase 14 merge:
+  - Passed. `main` includes merge commit `d27adc0ccbe7b883eba0039a7d37f9f85cb8ec74`, Phase 14 implementation commit `5261e7586d2985bd9acd072f80a66991c3ad2be1`, Phase 14C browser-smoke correction commit `1399132125e365a02e6d6aec235e490235fc9498`, and migration `packages/db/migrations/0006_data_lifecycle_hardening.sql`.
+- Browser smoke:
+  - GitHub Actions Phase 14C `browser-smoke` passed in workflow run `29097164567`; local Phase 15 browser smoke was blocked by missing Playwright Chromium after localhost server permission was allowed.
+- PostgreSQL validation:
+  - `BLOCKED_BY_MISSING_SAFE_CONFIGURATION`. No `TEST_DATABASE_URL` or `STAGING_DATABASE_URL` was present; validator skipped by design.
+- Storage validation:
+  - `BLOCKED_BY_MISSING_SAFE_CONFIGURATION`. Required `TEST_S3_*` variables were absent; validator skipped by design.
+- Scanner validation:
+  - `BLOCKED_BY_MISSING_SAFE_CONFIGURATION`. ClamAV provider variables and `CLAMAV_HOST` were absent; validator skipped by design.
+- API/worker readiness:
+  - Implemented and locally tested. Secure profiles require separate `api` and `worker`; local `api-and-worker` remains development-only.
+- Ingress/proxy readiness:
+  - App-level HTTPS-origin, CORS, secure-cookie, HSTS, CSP, and trusted-proxy controls exist, but real target ingress/proxy/TLS validation remains required.
+- Backup readiness:
+  - `BLOCKED_BY_MISSING_BACKUP_EVIDENCE`. Docs require PostgreSQL and object-storage backups, but provider backup/PITR/object-versioning evidence was not available.
+- Restore exercise:
+  - `RESTORE_NOT_PROVEN`. No disposable/staging database, object storage, backup tooling evidence, or safe restore target was configured.
+- Monitoring/alerting:
+  - Signals exist through structured logs, health/readiness, worker metrics, queue states, scanner/storage failure states, and login throttling events; collection, alerting, and escalation ownership are not proven.
+- Secret rotation:
+  - `NOT_DOCUMENTED` and `NOT_EXERCISED`.
+- Final pilot decision:
+  - `NO_GO`
+- Confidence:
+  - High.
+- Source/runtime behavior changed:
+  - No.
+- Dependencies changed:
+  - No.
+- Database schema changed:
+  - No.
+- Infrastructure provisioned:
+  - No.
+- Secrets exposed:
+  - No.
+- Verification:
+  - `node --version` - `v24.4.0`.
+  - `npm --version` - `11.4.2`.
+  - `npm run lint` - passed; linted 69 files.
+  - `npm run typecheck` - passed; checked 77 JavaScript files.
+  - `npm test` - passed; 49 tests total, 47 passed, 2 skipped, 0 failed.
+  - `npm run build` - passed.
+  - `npm audit` - passed; found 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+  - `npm run scan:claims` - passed; linted 69 files.
+  - `npm run scan:random` - passed; 1 deterministic-safety test passed.
+  - `npm run validate:postgres` - skipped by design because safe database configuration was absent.
+  - `npm run validate:storage` - skipped by design because safe storage configuration was absent.
+  - `npm run validate:scanner` - skipped by design because safe scanner configuration was absent.
+  - `npm run qa:pilot` - local run blocked by missing Playwright Chromium; GitHub Actions browser smoke passed for Phase 14C.
+- Recommended next phase:
+  - Phase 16 - Safe Staging Infrastructure Provisioning, External Validator Execution, and Restore Drill.
+
 ## Phase 14 compliance data lifecycle hardening note
 
 - Branch:
