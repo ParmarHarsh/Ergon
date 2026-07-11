@@ -258,6 +258,207 @@ export class PostgresRepository {
     }
   }
 
+  async getUserMfaSettings(organizationId, userId) {
+    const [row] = await this.query("SELECT * FROM user_mfa_settings WHERE organization_id = $1 AND user_id = $2", [organizationId, userId]);
+    return row ? camelMfaSettings(row) : null;
+  }
+
+  async createPendingMfaEnrollment(input) {
+    await this.assertUserOrganization(input.userId, input.organizationId);
+    const [row] = await this.query(
+      `INSERT INTO user_mfa_settings (
+         user_id, organization_id, enabled, pending_secret_ciphertext, pending_secret_iv,
+         pending_secret_tag, pending_enrollment_expires_at
+       ) VALUES ($1,$2,false,$3,$4,$5,$6)
+       ON CONFLICT (user_id) DO UPDATE SET
+         pending_secret_ciphertext=EXCLUDED.pending_secret_ciphertext,
+         pending_secret_iv=EXCLUDED.pending_secret_iv,
+         pending_secret_tag=EXCLUDED.pending_secret_tag,
+         pending_enrollment_expires_at=EXCLUDED.pending_enrollment_expires_at,
+         updated_at=now()
+       RETURNING *`,
+      [input.userId, input.organizationId, input.encryptedSecret.ciphertext, input.encryptedSecret.iv, input.encryptedSecret.tag, input.expiresAt]
+    );
+    return camelMfaSettings(row);
+  }
+
+  async confirmMfaEnrollment(input) {
+    const confirmedAt = input.confirmedAt || new Date().toISOString();
+    const [row] = await this.query(
+      `UPDATE user_mfa_settings SET
+         enabled=true,
+         secret_ciphertext=pending_secret_ciphertext,
+         secret_iv=pending_secret_iv,
+         secret_tag=pending_secret_tag,
+         pending_secret_ciphertext=NULL,
+         pending_secret_iv=NULL,
+         pending_secret_tag=NULL,
+         pending_enrollment_expires_at=NULL,
+         last_accepted_totp_counter=$4,
+         enrolled_at=$5,
+         disabled_at=NULL,
+         updated_at=$5
+       WHERE organization_id=$1 AND user_id=$2
+         AND pending_secret_ciphertext IS NOT NULL
+         AND pending_enrollment_expires_at > $3
+       RETURNING *`,
+      [input.organizationId, input.userId, confirmedAt, input.acceptedCounter, confirmedAt]
+    );
+    return row ? camelMfaSettings(row) : null;
+  }
+
+  async cancelExpiredPendingEnrollment(organizationId, userId, at = new Date().toISOString()) {
+    const [row] = await this.query(
+      `UPDATE user_mfa_settings SET
+         pending_secret_ciphertext=NULL,
+         pending_secret_iv=NULL,
+         pending_secret_tag=NULL,
+         pending_enrollment_expires_at=NULL,
+         updated_at=$3
+       WHERE organization_id=$1 AND user_id=$2
+         AND pending_enrollment_expires_at IS NOT NULL
+         AND pending_enrollment_expires_at <= $3
+       RETURNING *`,
+      [organizationId, userId, at]
+    );
+    return row ? camelMfaSettings(row) : null;
+  }
+
+  async disableUserMfa(input) {
+    const disabledAt = input.disabledAt || new Date().toISOString();
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query(
+        `UPDATE user_mfa_settings SET
+           enabled=false, secret_ciphertext=NULL, secret_iv=NULL, secret_tag=NULL,
+           pending_secret_ciphertext=NULL, pending_secret_iv=NULL, pending_secret_tag=NULL,
+           pending_enrollment_expires_at=NULL, last_accepted_totp_counter=NULL,
+           disabled_at=$3, updated_at=$3
+         WHERE organization_id=$1 AND user_id=$2 RETURNING *`,
+        [input.organizationId, input.userId, disabledAt]
+      );
+      await client.query(
+        "UPDATE mfa_recovery_codes SET invalidated_at=$3 WHERE organization_id=$1 AND user_id=$2 AND used_at IS NULL AND invalidated_at IS NULL",
+        [input.organizationId, input.userId, disabledAt]
+      );
+      await client.query(
+        "UPDATE mfa_login_challenges SET invalidated_at=$3 WHERE organization_id=$1 AND user_id=$2 AND used_at IS NULL AND invalidated_at IS NULL",
+        [input.organizationId, input.userId, disabledAt]
+      );
+      await client.query("COMMIT");
+      return result.rows[0] ? camelMfaSettings(result.rows[0]) : null;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async createMfaLoginChallenge(input) {
+    await this.assertUserOrganization(input.userId, input.organizationId);
+    const id = input.id || this.createId();
+    const [row] = await this.query(
+      `INSERT INTO mfa_login_challenges (id, organization_id, user_id, challenge_token_hash, created_at, expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [id, input.organizationId, input.userId, input.challengeTokenHash, input.createdAt || new Date().toISOString(), input.expiresAt]
+    );
+    return camelMfaLoginChallenge(row);
+  }
+
+  async getValidMfaLoginChallengeByHash(challengeTokenHash, at = new Date().toISOString()) {
+    const [row] = await this.query(
+      `SELECT * FROM mfa_login_challenges
+       WHERE challenge_token_hash=$1 AND used_at IS NULL AND invalidated_at IS NULL AND expires_at > $2`,
+      [challengeTokenHash, at]
+    );
+    return row ? camelMfaLoginChallenge(row) : null;
+  }
+
+  async recordMfaChallengeFailure(input) {
+    const failedAt = input.failedAt || new Date().toISOString();
+    const [row] = await this.query(
+      `UPDATE mfa_login_challenges SET
+         failed_attempt_count=failed_attempt_count + 1,
+         invalidated_at=CASE WHEN failed_attempt_count + 1 >= $3 THEN $4 ELSE invalidated_at END
+       WHERE challenge_token_hash=$1 AND used_at IS NULL AND invalidated_at IS NULL AND expires_at > $2
+       RETURNING *`,
+      [input.challengeTokenHash, failedAt, input.maxAttempts, failedAt]
+    );
+    return row ? camelMfaLoginChallenge(row) : null;
+  }
+
+  async consumeMfaChallenge(input) {
+    const usedAt = input.usedAt || new Date().toISOString();
+    const [row] = await this.query(
+      `UPDATE mfa_login_challenges SET used_at=$2, invalidated_at=$2
+       WHERE challenge_token_hash=$1 AND used_at IS NULL AND invalidated_at IS NULL AND expires_at > $2
+       RETURNING *`,
+      [input.challengeTokenHash, usedAt]
+    );
+    return row ? camelMfaLoginChallenge(row) : null;
+  }
+
+  async updateLastAcceptedTotpCounter(input) {
+    const acceptedAt = input.acceptedAt || new Date().toISOString();
+    const [row] = await this.query(
+      `UPDATE user_mfa_settings SET last_accepted_totp_counter=$3, updated_at=$4
+       WHERE organization_id=$1 AND user_id=$2 AND enabled=true
+         AND (last_accepted_totp_counter IS NULL OR last_accepted_totp_counter < $3)
+       RETURNING *`,
+      [input.organizationId, input.userId, input.counter, acceptedAt]
+    );
+    return row ? camelMfaSettings(row) : null;
+  }
+
+  async replaceMfaRecoveryCodes(input) {
+    await this.assertUserOrganization(input.userId, input.organizationId);
+    const createdAt = input.createdAt || new Date().toISOString();
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "UPDATE mfa_recovery_codes SET invalidated_at=$3 WHERE organization_id=$1 AND user_id=$2 AND used_at IS NULL AND invalidated_at IS NULL",
+        [input.organizationId, input.userId, createdAt]
+      );
+      const rows = [];
+      for (const codeHash of input.codeHashes) {
+        const result = await client.query(
+          `INSERT INTO mfa_recovery_codes (id, organization_id, user_id, code_hash, created_at)
+           VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+          [this.createId(), input.organizationId, input.userId, codeHash, createdAt]
+        );
+        rows.push(camelMfaRecoveryCode(result.rows[0]));
+      }
+      await client.query("COMMIT");
+      return rows;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async consumeMfaRecoveryCode(input) {
+    const usedAt = input.usedAt || new Date().toISOString();
+    const [row] = await this.query(
+      `UPDATE mfa_recovery_codes SET used_at=$4
+       WHERE organization_id=$1 AND user_id=$2 AND code_hash=$3 AND used_at IS NULL AND invalidated_at IS NULL
+       RETURNING *`,
+      [input.organizationId, input.userId, input.codeHash, usedAt]
+    );
+    return row ? camelMfaRecoveryCode(row) : null;
+  }
+
+  async invalidateUserMfaChallenges(input) {
+    await this.query(
+      "UPDATE mfa_login_challenges SET invalidated_at=$3 WHERE organization_id=$1 AND user_id=$2 AND used_at IS NULL AND invalidated_at IS NULL",
+      [input.organizationId, input.userId, input.invalidatedAt || new Date().toISOString()]
+    );
+  }
+
   async createFacility(input) {
     const id = input.id || this.createId();
     const [row] = await this.query(
@@ -1064,6 +1265,52 @@ function camelPasswordResetToken(row) {
     usedAt: row.used_at,
     invalidatedAt: row.invalidated_at,
     createdAt: row.created_at
+  };
+}
+
+function camelMfaSettings(row) {
+  return {
+    userId: row.user_id,
+    organizationId: row.organization_id,
+    enabled: row.enabled,
+    secretCiphertext: row.secret_ciphertext,
+    secretIv: row.secret_iv,
+    secretTag: row.secret_tag,
+    pendingSecretCiphertext: row.pending_secret_ciphertext,
+    pendingSecretIv: row.pending_secret_iv,
+    pendingSecretTag: row.pending_secret_tag,
+    pendingEnrollmentExpiresAt: row.pending_enrollment_expires_at,
+    lastAcceptedTotpCounter: row.last_accepted_totp_counter === null || row.last_accepted_totp_counter === undefined ? null : Number(row.last_accepted_totp_counter),
+    enrolledAt: row.enrolled_at,
+    disabledAt: row.disabled_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function camelMfaLoginChallenge(row) {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    userId: row.user_id,
+    challengeTokenHash: row.challenge_token_hash,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    usedAt: row.used_at,
+    invalidatedAt: row.invalidated_at,
+    failedAttemptCount: Number(row.failed_attempt_count || 0)
+  };
+}
+
+function camelMfaRecoveryCode(row) {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    userId: row.user_id,
+    codeHash: row.code_hash,
+    createdAt: row.created_at,
+    usedAt: row.used_at,
+    invalidatedAt: row.invalidated_at
   };
 }
 

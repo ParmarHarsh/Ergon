@@ -26,6 +26,13 @@ export const state = {
   users: [],
   expertReviews: [],
   auditLogs: [],
+  mfaStatus: null,
+  mfaEnrollment: null,
+  mfaRecoveryCodes: [],
+  mfaMessage: "",
+  mfaError: "",
+  mfaChallengeToken: "",
+  mfaChallengeExpiresAt: "",
   health: null,
   drawerRuleId: null,
   error: "",
@@ -149,13 +156,19 @@ export async function refreshSystemData() {
   state.auditLogs = results[1].status === "fulfilled" ? results[1].value.slice(0, 40) : [];
 }
 
+export async function refreshMfaStatus() {
+  state.mfaStatus = await api("/api/auth/mfa/status");
+}
+
 export function resetSession() {
   Object.assign(state, {
     user: null, organization: null, facilities: [], selectedFacilityId: null,
     evidence: [], aiAnalyses: [], processingJobs: [], reviewQueue: [],
     applicableRules: [], rulesPack: null, latestReview: null, gapRows: [],
     actionItems: [], packets: [], users: [], expertReviews: [], auditLogs: [],
-    health: null, drawerRuleId: null, error: "", loginError: "", recoveryMessage: "",
+    health: null, mfaStatus: null, mfaEnrollment: null, mfaRecoveryCodes: [],
+    mfaMessage: "", mfaError: "", mfaChallengeToken: "", mfaChallengeExpiresAt: "",
+    drawerRuleId: null, error: "", loginError: "", recoveryMessage: "",
     recoveryError: "", resetToken: "", resetMessage: "", resetError: "", route: "builder"
   });
 }

@@ -1111,3 +1111,84 @@ Safe next action:
   - `npm run scan:random` - passed; 1 deterministic-safety test passed.
 - Recommended next phase:
   - Phase 19 - Multi-Factor Authentication.
+
+## Phase 19 multi-factor authentication hardening note
+
+- Pulled latest `main` after Phase 18 merge confirmation.
+- Created:
+  - `phase-19-mfa-hardening`.
+- MFA type:
+  - TOTP authenticator app.
+- TOTP dependency:
+  - Added exact direct dependency `otplib@13.4.1`.
+  - npm metadata check reported no explicit `otplib` engines field; installed transitive `@noble/hashes@2.2.0` requires Node `>=20.19.0`, satisfied by local Node `v24.4.0`.
+- TOTP parameters:
+  - SHA-1, 6 digits, 30-second period, at most +/-1 time step.
+- TOTP secret storage:
+  - AES-256-GCM encrypted at rest.
+- MFA encryption key:
+  - External config only; no key committed.
+  - `MFA_ENCRYPTION_KEY` must Base64-decode to exactly 32 bytes when `MFA_ENABLED=true`.
+- MFA login challenge:
+  - Short-lived, one-time, hash-only token storage.
+  - 5-minute TTL and 5 failed attempts per challenge.
+- Session creation:
+  - Deferred until successful MFA verification for MFA-enabled users.
+- Recovery codes:
+  - 10 one-time codes.
+  - Hash-only persistence.
+  - Plaintext shown only on enrollment confirmation and explicit regeneration.
+- TOTP replay protection:
+  - Implemented with persisted last accepted TOTP counter and atomic greater-than update.
+- MFA challenge rate limiting:
+  - Implemented per challenge with invalidation at the maximum failed-attempt count.
+- MFA disable flow:
+  - Requires current password plus TOTP or recovery code.
+- Password reset behavior:
+  - Does not disable MFA.
+- MFA loss without recovery codes:
+  - Still requires a future designed support recovery process.
+- SMS/email OTP:
+  - Not implemented.
+- WebAuthn/passkeys:
+  - Not implemented.
+- Additive migration:
+  - `packages/db/migrations/0008_multi_factor_authentication.sql`.
+- Destructive migration:
+  - No.
+- Existing migrations changed:
+  - No.
+- Infrastructure provisioned:
+  - No.
+- Real staging validation:
+  - No.
+- Pilot decision:
+  - `NO_GO` remains.
+- Verification:
+  - `node --version` - `v24.4.0`.
+  - `npm --version` - `11.4.2`.
+  - `npm view otplib version` - `13.4.1`.
+  - `npm view otplib engines --json` - no engines field returned.
+  - `npm install otplib@13.4.1` - passed; install audit found 0 vulnerabilities.
+  - `node --check` changed source and test files - passed.
+  - `node --test tests/config.test.js` - passed; 11 tests.
+  - `node --test tests/migrations.test.js` - passed; 1 test.
+  - `node --test tests/mfa-security.test.js` - passed; 2 tests.
+  - `node --test tests/mfa-repository.test.js` - passed; 1 test.
+  - `node --test tests/mfa-api.test.js` - passed with localhost server permission; 1 test.
+  - `node --test tests/account-recovery.test.js` - passed with localhost server permission; 2 tests.
+  - `node --test tests/account-recovery-delivery.test.js` - passed with localhost server permission; 2 tests.
+  - `node --test tests/recovery-delivery.test.js` - passed; 5 tests.
+  - `node --test tests/api.test.js` - passed with localhost server permission; 1 test.
+  - `node --test tests/repository.test.js` - passed; 5 tests.
+  - `node --test tests/postgres-repository.test.js` - skipped by design because `TEST_DATABASE_URL` is absent.
+  - `npm run lint` - passed; linted 78 files.
+  - `npm run typecheck` - passed; checked 86 JavaScript files.
+  - `npm test` - passed; 66 tests total, 64 passed, 2 skipped, 0 failed.
+  - `npm run build` - passed.
+  - `npm audit` - passed; found 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+  - `npm run scan:claims` - passed; linted 78 files.
+  - `npm run scan:random` - passed; 1 deterministic-safety test passed.
+- Recommended next phase:
+  - Phase 20 - Operational Monitoring and Secret Rotation.

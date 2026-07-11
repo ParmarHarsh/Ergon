@@ -87,6 +87,36 @@ test("SMTP recovery validation errors do not reveal secrets", () => {
   );
 });
 
+test("MFA configuration validates feature flag, encryption key, and issuer safely", () => {
+  const key = Buffer.alloc(32, 7).toString("base64");
+  const localDisabled = readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_ENABLED: "false" });
+  assert.equal(localDisabled.mfaEnabled, false);
+  assert.equal(localDisabled.mfaEncryptionKey, null);
+  assert.equal(localDisabled.mfaTotpIssuer, "ComplianceIQ");
+
+  assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_ENABLED: "true" }), /MFA_ENCRYPTION_KEY/);
+  assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_ENABLED: "true", MFA_ENCRYPTION_KEY: "not-base64" }), /MFA_ENCRYPTION_KEY/);
+  assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_ENABLED: "true", MFA_ENCRYPTION_KEY: Buffer.alloc(31, 1).toString("base64") }), /32 bytes/);
+  assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_TOTP_ISSUER: "ComplianceIQ\nBcc: attacker@example.com" }), /MFA_TOTP_ISSUER/);
+  assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_TOTP_ISSUER: "x".repeat(65) }), /MFA_TOTP_ISSUER/);
+
+  const localEnabled = readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_ENABLED: "true", MFA_ENCRYPTION_KEY: key, MFA_TOTP_ISSUER: "ComplianceIQ Test" });
+  assert.equal(localEnabled.mfaEnabled, true);
+  assert.equal(localEnabled.mfaEncryptionKey.length, 32);
+  assert.equal(localEnabled.mfaTotpIssuer, "ComplianceIQ Test");
+
+  assert.throws(
+    () => readConfig({ ...productionEnv, MFA_ENABLED: "true", MFA_ENCRYPTION_KEY: "super-secret-mfa-key" }),
+    (error) => {
+      assert.equal(String(error.message).includes("super-secret-mfa-key"), false);
+      return /MFA_ENCRYPTION_KEY/.test(error.message);
+    }
+  );
+  assert.throws(() => readConfig({ ...productionEnv, MFA_ENABLED: "true", MFA_ENCRYPTION_KEY: Buffer.alloc(32, 0).toString("base64") }), /placeholder/);
+  const productionMfa = readConfig({ ...productionEnv, MFA_ENABLED: "true", MFA_ENCRYPTION_KEY: key });
+  assert.equal(productionMfa.mfaEnabled, true);
+});
+
 test("deployment profiles and process roles fail closed outside local development", () => {
   const local = readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file" });
   assert.equal(local.deploymentProfile, "local");

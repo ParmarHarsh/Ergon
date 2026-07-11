@@ -3,6 +3,7 @@ import { html, ICONS } from "../ui.js";
 
 export function loginView() {
   const mode = authMode();
+  if (state.mfaChallengeToken) return mfaChallengePanel();
   return `
     <div class="login-shell">
       <aside class="login-brand">
@@ -27,6 +28,41 @@ export function loginView() {
       </aside>
       <main class="login-form-col">
         ${mode === "forgot" ? forgotPasswordPanel() : mode === "reset" ? resetPasswordPanel() : loginPanel()}
+      </main>
+    </div>
+  `;
+}
+
+function mfaChallengePanel() {
+  return `
+    <div class="login-shell">
+      <aside class="login-brand">
+        <div class="brand">
+          <div class="brand-mark">${ICONS.logo}</div>
+          <div>
+            <div class="brand-name">ComplianceIQ</div>
+            <div class="brand-sub">Industrial Evidence Intelligence</div>
+          </div>
+        </div>
+      </aside>
+      <main class="login-form-col">
+        <div class="login-panel">
+          <div>
+            <h2>Enter your MFA code</h2>
+            <p class="hint">Use your authenticator app or a saved recovery code.</p>
+          </div>
+          ${state.loginError ? `<div class="alert">${html(state.loginError)}</div>` : ""}
+          <form class="form-grid" data-form="mfa-login">
+            <label class="field">
+              <span class="field-label">Authenticator or recovery code</span>
+              <input name="code" autocomplete="one-time-code" required autofocus />
+            </label>
+            <button type="submit" class="btn btn-primary btn-lg">Verify</button>
+          </form>
+          <div class="auth-links">
+            <a href="#/login" data-action="cancel-mfa-login">Back to sign in</a>
+          </div>
+        </div>
       </main>
     </div>
   `;

@@ -26,7 +26,7 @@ Evidence reviewed included `README.md`, `DEPLOYMENT_READINESS.md`, `PILOT_READIN
 | Identity/access | Login throttling | `IMPLEMENTED_AND_TESTED` | `apps/api/src/rate-limit.js`, `tests/admin-users.test.js`. |
 | Identity/access | User creation/update/deactivation and role enforcement | `IMPLEMENTED_AND_TESTED` | Admin API/UI and `tests/admin-users.test.js`. |
 | Identity/access | Account recovery/password reset | `IMPLEMENTED_AND_TESTED_WITH_FAKE_TRANSPORT` | Secure reset-token lifecycle, reset routes, SMTP delivery adapter, failed-delivery invalidation, repository support, UI, tests, and docs exist; live external SMTP validation is still pending. |
-| Identity/access | MFA | `NOT_IMPLEMENTED` | No MFA enrollment, challenge, recovery code, TOTP, or WebAuthn implementation found. |
+| Identity/access | MFA | `IMPLEMENTED_AND_TESTED` | Optional TOTP MFA, encrypted secrets, password-first challenges, replay protection, and hash-only recovery codes are implemented; staging validation and lost-factor support recovery remain open. |
 | Tenant isolation | Organization scoping, API authorization, repository isolation, cross-org behavior | `IMPLEMENTED_AND_TESTED` | Scoped repositories and 401/403 tests in `tests/api.test.js`, `tests/repository.test.js`, `tests/postgres-repository.test.js`. |
 | Tenant isolation | Audit logging | `IMPLEMENTED_AND_TESTED` | `repo.logAudit` calls and assertions in API, provisioning, seed, and Postgres tests. |
 | Facilities/rules | Facility CRUD, rules-pack selection, applicable rules | `IMPLEMENTED_AND_TESTED` | `apps/api/src/server.js`, `packages/rules/src/index.js`, `tests/rules.test.js`, repository tests. |
@@ -104,7 +104,7 @@ Items rejected as stale or false source gaps:
 
 ## Newly discovered gaps
 
-- MFA is absent.
+- Optional TOTP MFA is implemented; it is not mandatory for all users and has not been live-tested in staging.
 - Expert-review workflow tests are lighter than evidence, AI, and packet workflow tests.
 - Worker `/metrics` exists, but no deployed scrape/alert integration is represented in the repo.
 - Phase 14 reconciled `dead_letter` in shared processing status validation.
@@ -128,7 +128,7 @@ Items rejected as stale or false source gaps:
 
 Implemented controls include authenticated routes, signed cookie sessions, session persistence, login throttling, CORS/origin checks for unsafe browser methods, tenant-scoped repositories, role gates, upload signature checks, archive/active-content rejection, private downloads, suspicious-file blocks, backend-only AI processing, schema validation, audit logs, and operational log redaction.
 
-Confirmed security/identity gaps are MFA, live external SMTP validation for account recovery, repeated login-throttling alerting, and secret rotation procedure. This audit does not claim a vulnerability; it identifies missing controls or operational gaps supported by repository evidence.
+Confirmed security/identity gaps are lost-factor recovery without saved MFA recovery codes, live external SMTP validation for account recovery, repeated login-throttling alerting, and secret rotation procedure. This audit does not claim a vulnerability; it identifies missing controls or operational gaps supported by repository evidence.
 
 ## Database and migration implications
 
@@ -311,6 +311,33 @@ Reason for approval requirement:
   - No raw token persistence, production response exposure, or operational logging.
 - MFA:
   - Not implemented.
+- Pilot decision:
+  - `NO_GO` remains until external staging gates are proven.
+
+## Phase 19 MFA hardening follow-up
+
+- TOTP MFA:
+  - `IMPLEMENTED_AND_TESTED` as an optional user-controlled authenticator-app MFA flow.
+- TOTP secret storage:
+  - AES-256-GCM encrypted at rest with a Base64 32-byte external `MFA_ENCRYPTION_KEY`.
+- MFA login challenge:
+  - Password-first, short-lived, one-time challenge with hash-only token persistence and no normal session until MFA succeeds.
+- TOTP replay protection:
+  - Last accepted TOTP counter is persisted and same-step replay is rejected.
+- Recovery codes:
+  - one-time;
+  - hash-only persistence;
+  - displayed only on issuance/regeneration.
+- Password-reset interaction:
+  - password reset does not disable MFA.
+- Lost-factor recovery without recovery codes:
+  - not implemented.
+- SMS/email OTP:
+  - not implemented.
+- WebAuthn/passkeys:
+  - not implemented.
+- Real staging MFA validation:
+  - `NOT_RUN`; no deployed staging target and secret-manager-backed MFA key were validated in this phase.
 - Pilot decision:
   - `NO_GO` remains until external staging gates are proven.
 

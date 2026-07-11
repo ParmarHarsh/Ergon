@@ -777,6 +777,22 @@ input[type="file"] { padding: 7px; font-size: 0.8rem; color: var(--muted); }
 .muted { color: var(--muted); }
 .small { font-size: 0.8rem; }
 .mono { font-variant-numeric: tabular-nums; }
+.wrap-text { overflow-wrap: anywhere; word-break: break-word; }
+
+.recovery-code-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.recovery-code-grid span {
+  display: block;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  background: var(--surface);
+}
 
 .divider { height: 1px; background: var(--line-2); border: 0; margin: 4px 0; }
 

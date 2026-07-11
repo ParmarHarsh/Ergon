@@ -8,7 +8,27 @@ import { EVIDENCE_TAXONOMY, USER_ROLES, forbidden, parseEvidenceInput, parseFaci
 import { getApplicableRules, generateReview, RULES_PACKS, COMPLIANCE_RULES } from "../../../packages/rules/src/index.js";
 import { generateAuditPacketPdf } from "../../../packages/pdf/src/index.js";
 import { createPrivateStorage } from "./storage.js";
-import { generateResetToken, hashPassword, hashResetToken, signSessionId, verifyPassword, verifySignedSession } from "./security.js";
+import {
+  decryptMfaSecret,
+  encryptMfaSecret,
+  generateMfaChallengeToken,
+  generateMfaRecoveryCodes,
+  generateResetToken,
+  hashMfaChallengeToken,
+  hashMfaRecoveryCode,
+  hashPassword,
+  hashResetToken,
+  signSessionId,
+  verifyPassword,
+  verifySignedSession
+} from "./security.js";
+import {
+  createTotpEnrollment,
+  MFA_LOGIN_CHALLENGE_MAX_ATTEMPTS,
+  MFA_LOGIN_CHALLENGE_TTL_MS,
+  MFA_PENDING_ENROLLMENT_TTL_MS,
+  verifyTotpCode
+} from "./mfa.js";
 import { createLoginRateLimiter } from "./rate-limit.js";
 import { createRecoveryDelivery } from "./recovery-delivery.js";
 import { createEvidenceAiService } from "./evidence-ai-service.js";
@@ -134,6 +154,7 @@ async function handleRequest(req, res) {
   if (method === "GET" && ["/health", "/health/ready", "/api/health"].includes(path)) return readiness(res, { service: "ComplianceIQ API", requireWorker: config.runsWorker });
 
   if (method === "POST" && path === "/api/auth/login") return login(req, res);
+  if (method === "POST" && path === "/api/auth/mfa/login/verify") return verifyMfaLogin(req, res);
   if (method === "POST" && path === "/api/auth/logout") return logout(req, res);
   if (method === "POST" && path === "/api/auth/recovery/request") return requestPasswordRecovery(req, res);
   if (method === "POST" && path === "/api/auth/recovery/reset") return resetPassword(req, res);
@@ -142,6 +163,11 @@ async function handleRequest(req, res) {
   const user = await requireSession(req);
 
   if (method === "GET" && path === "/api/auth/me") return sendJson(res, { status: 200, body: toPublicUser(user) });
+  if (method === "GET" && path === "/api/auth/mfa/status") return mfaStatus(res, user);
+  if (method === "POST" && path === "/api/auth/mfa/enrollment/start") return startMfaEnrollment(req, res, user);
+  if (method === "POST" && path === "/api/auth/mfa/enrollment/confirm") return confirmMfaEnrollment(req, res, user);
+  if (method === "POST" && path === "/api/auth/mfa/recovery-codes/regenerate") return regenerateMfaRecoveryCodes(req, res, user);
+  if (method === "POST" && path === "/api/auth/mfa/disable") return disableMfa(req, res, user);
   if (method === "GET" && path === "/api/ai/status") return sendJson(res, { status: 200, body: { enabled: config.aiEnabled, provider: aiProvider.kind, model: aiProvider.model || null, queueBackend: config.queueBackend, storageBackend: config.storageBackend, malwareScanner: malwareScanner.kind } });
   if (method === "GET" && path === "/api/evidence-taxonomy") return sendJson(res, { status: 200, body: EVIDENCE_TAXONOMY });
   if (method === "GET" && path === "/api/organization") return currentOrganization(res, user);
@@ -233,14 +259,193 @@ async function login(req, res) {
     throw unauthorized("Invalid credentials");
   }
   loginRateLimiter.reset(rateKey);
+  const mfaSettings = config.mfaEnabled ? await repo.getUserMfaSettings(user.organizationId, user.id) : null;
+  if (mfaSettings?.enabled) {
+    const challengeToken = generateMfaChallengeToken();
+    const challengeTokenHash = hashMfaChallengeToken(challengeToken);
+    const expiresAt = new Date(Date.now() + MFA_LOGIN_CHALLENGE_TTL_MS).toISOString();
+    await repo.createMfaLoginChallenge({
+      organizationId: user.organizationId,
+      userId: user.id,
+      challengeTokenHash,
+      expiresAt
+    });
+    return sendJson(res, { status: 200, body: { ok: true, mfaRequired: true, challengeToken, expiresAt } });
+  }
+  await createAuthenticatedSession(res, user, req);
+}
+
+async function createAuthenticatedSession(res, user, req, action = "login") {
   const session = await repo.createSession({
     organizationId: user.organizationId,
     userId: user.id,
     expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
   });
-  await repo.logAudit({ organizationId: user.organizationId, actorUserId: user.id, action: "login", entityType: "user", entityId: user.id, metadata: {}, ipAddress: clientIp(req) });
+  await repo.logAudit({ organizationId: user.organizationId, actorUserId: user.id, action, entityType: "user", entityId: user.id, metadata: {}, ipAddress: clientIp(req) });
   setCookie(res, "ciq.sid", signSessionId(session.id, config.sessionSecret), { maxAge: 8 * 60 * 60, httpOnly: true, sameSite: config.sessionCookieSameSite, secure: config.isProduction });
   sendJson(res, { status: 200, body: { user: toPublicUser(user) } });
+}
+
+async function verifyMfaLogin(req, res) {
+  if (!config.mfaEnabled) throw unauthorized("Invalid MFA challenge");
+  const body = await readJson(req);
+  const challengeToken = String(body.challengeToken || "");
+  const code = String(body.code || "");
+  if (!challengeToken || !code) throw unauthorized("Invalid MFA code or recovery code");
+  const challengeTokenHash = hashMfaChallengeToken(challengeToken);
+  const challenge = await repo.getValidMfaLoginChallengeByHash(challengeTokenHash);
+  if (!challenge) throw unauthorized("Invalid MFA code or recovery code");
+  const user = await repo.findUserById(challenge.userId);
+  const settings = user?.isActive ? await repo.getUserMfaSettings(challenge.organizationId, challenge.userId) : null;
+  if (!user || !user.isActive || user.organizationId !== challenge.organizationId || !settings?.enabled) {
+    await repo.recordMfaChallengeFailure({ challengeTokenHash, maxAttempts: MFA_LOGIN_CHALLENGE_MAX_ATTEMPTS });
+    throw unauthorized("Invalid MFA code or recovery code");
+  }
+  const verified = await verifySecondFactor(user, settings, code, { allowRecoveryCode: true });
+  if (!verified.ok) {
+    await repo.recordMfaChallengeFailure({ challengeTokenHash, maxAttempts: MFA_LOGIN_CHALLENGE_MAX_ATTEMPTS });
+    throw unauthorized("Invalid MFA code or recovery code");
+  }
+  const consumed = await repo.consumeMfaChallenge({ challengeTokenHash });
+  if (!consumed) throw unauthorized("Invalid MFA code or recovery code");
+  if (verified.method === "recovery_code") {
+    await repo.logAudit({ organizationId: user.organizationId, actorUserId: user.id, action: "mfa_recovery_code_used", entityType: "user", entityId: user.id, metadata: {}, ipAddress: clientIp(req) });
+  }
+  await repo.logAudit({ organizationId: user.organizationId, actorUserId: user.id, action: "mfa_login_succeeded", entityType: "user", entityId: user.id, metadata: { method: verified.method }, ipAddress: clientIp(req) });
+  await createAuthenticatedSession(res, user, req, "login");
+}
+
+async function mfaStatus(res, user) {
+  const settings = config.mfaEnabled ? await repo.getUserMfaSettings(user.organizationId, user.id) : null;
+  sendJson(res, { status: 200, body: { available: config.mfaEnabled, enabled: Boolean(settings?.enabled), issuer: config.mfaTotpIssuer } });
+}
+
+async function startMfaEnrollment(req, res, user) {
+  requireMfaFeature();
+  const body = await readJson(req);
+  await requireCurrentPassword(user, body.currentPassword || body.password);
+  const existing = await repo.getUserMfaSettings(user.organizationId, user.id);
+  if (existing?.enabled) throw validationError("MFA is already enabled");
+  const enrollment = createTotpEnrollment({ issuer: config.mfaTotpIssuer, label: user.email });
+  const encryptedSecret = encryptMfaSecret(enrollment.secret, config.mfaEncryptionKey);
+  const expiresAt = new Date(Date.now() + MFA_PENDING_ENROLLMENT_TTL_MS).toISOString();
+  await repo.createPendingMfaEnrollment({
+    organizationId: user.organizationId,
+    userId: user.id,
+    encryptedSecret,
+    expiresAt
+  });
+  sendJson(res, {
+    status: 200,
+    body: {
+      ok: true,
+      manualSecret: enrollment.secret,
+      otpauthUri: enrollment.otpauthUri,
+      issuer: enrollment.issuer,
+      label: enrollment.label,
+      expiresAt
+    }
+  });
+}
+
+async function confirmMfaEnrollment(req, res, user) {
+  requireMfaFeature();
+  const body = await readJson(req);
+  const settings = await repo.getUserMfaSettings(user.organizationId, user.id);
+  if (!settings?.pendingSecretCiphertext) throw validationError("No pending MFA enrollment");
+  if (new Date(settings.pendingEnrollmentExpiresAt).getTime() <= Date.now()) throw validationError("MFA enrollment expired");
+  const secret = decryptMfaSecret({
+    ciphertext: settings.pendingSecretCiphertext,
+    iv: settings.pendingSecretIv,
+    tag: settings.pendingSecretTag
+  }, config.mfaEncryptionKey);
+  const verified = await verifyTotpCode({ secret, code: body.code, lastAcceptedCounter: settings.lastAcceptedTotpCounter });
+  if (!verified.valid) throw unauthorized("Invalid MFA code");
+  const confirmed = await repo.confirmMfaEnrollment({
+    organizationId: user.organizationId,
+    userId: user.id,
+    acceptedCounter: verified.counter,
+    confirmedAt: new Date().toISOString()
+  });
+  if (!confirmed) throw validationError("No pending MFA enrollment");
+  const recoveryCodes = generateMfaRecoveryCodes(10);
+  await repo.replaceMfaRecoveryCodes({
+    organizationId: user.organizationId,
+    userId: user.id,
+    codeHashes: recoveryCodes.map(hashMfaRecoveryCode)
+  });
+  await repo.logAudit({ organizationId: user.organizationId, actorUserId: user.id, action: "mfa_enabled", entityType: "user", entityId: user.id, metadata: {}, ipAddress: clientIp(req) });
+  sendJson(res, { status: 200, body: { ok: true, enabled: true, recoveryCodes } });
+}
+
+async function regenerateMfaRecoveryCodes(req, res, user) {
+  requireMfaFeature();
+  const body = await readJson(req);
+  await requireCurrentPassword(user, body.currentPassword || body.password);
+  const settings = await requireEnabledMfaSettings(user);
+  const verified = await verifyTotpOnly(user, settings, body.code);
+  if (!verified) throw unauthorized("Invalid MFA code");
+  const recoveryCodes = generateMfaRecoveryCodes(10);
+  await repo.replaceMfaRecoveryCodes({
+    organizationId: user.organizationId,
+    userId: user.id,
+    codeHashes: recoveryCodes.map(hashMfaRecoveryCode)
+  });
+  await repo.logAudit({ organizationId: user.organizationId, actorUserId: user.id, action: "mfa_recovery_codes_regenerated", entityType: "user", entityId: user.id, metadata: {}, ipAddress: clientIp(req) });
+  sendJson(res, { status: 200, body: { ok: true, recoveryCodes } });
+}
+
+async function disableMfa(req, res, user) {
+  requireMfaFeature();
+  const body = await readJson(req);
+  await requireCurrentPassword(user, body.currentPassword || body.password);
+  const settings = await requireEnabledMfaSettings(user);
+  const verified = await verifySecondFactor(user, settings, body.code, { allowRecoveryCode: true });
+  if (!verified.ok) throw unauthorized("Invalid MFA code or recovery code");
+  await repo.disableUserMfa({ organizationId: user.organizationId, userId: user.id });
+  await repo.logAudit({ organizationId: user.organizationId, actorUserId: user.id, action: "mfa_disabled", entityType: "user", entityId: user.id, metadata: { method: verified.method }, ipAddress: clientIp(req) });
+  sendJson(res, { status: 200, body: { ok: true, enabled: false } });
+}
+
+function requireMfaFeature() {
+  if (!config.mfaEnabled) {
+    const error = new Error("MFA is not available");
+    error.status = 404;
+    error.code = "NOT_FOUND";
+    throw error;
+  }
+}
+
+async function requireCurrentPassword(user, password) {
+  if (!(await verifyPassword(String(password || ""), user.passwordHash))) throw unauthorized("Invalid credentials");
+}
+
+async function requireEnabledMfaSettings(user) {
+  const settings = await repo.getUserMfaSettings(user.organizationId, user.id);
+  if (!settings?.enabled) throw validationError("MFA is not enabled");
+  return settings;
+}
+
+async function verifyTotpOnly(user, settings, code) {
+  const secret = decryptMfaSecret({ ciphertext: settings.secretCiphertext, iv: settings.secretIv, tag: settings.secretTag }, config.mfaEncryptionKey);
+  const verified = await verifyTotpCode({ secret, code, lastAcceptedCounter: settings.lastAcceptedTotpCounter });
+  if (!verified.valid) return false;
+  return Boolean(await repo.updateLastAcceptedTotpCounter({
+    organizationId: user.organizationId,
+    userId: user.id,
+    counter: verified.counter
+  }));
+}
+
+async function verifySecondFactor(user, settings, code, { allowRecoveryCode = false } = {}) {
+  if (await verifyTotpOnly(user, settings, code)) return { ok: true, method: "totp" };
+  if (!allowRecoveryCode) return { ok: false };
+  const consumed = await repo.consumeMfaRecoveryCode({
+    organizationId: user.organizationId,
+    userId: user.id,
+    codeHash: hashMfaRecoveryCode(code)
+  });
+  return consumed ? { ok: true, method: "recovery_code" } : { ok: false };
 }
 
 async function logout(req, res) {

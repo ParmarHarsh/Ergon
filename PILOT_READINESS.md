@@ -20,6 +20,7 @@ Use [STAGING_INFRASTRUCTURE_RUNBOOK.md](./STAGING_INFRASTRUCTURE_RUNBOOK.md) bef
 - `DATABASE_URL`, `REPOSITORY_BACKEND=postgres`
 - `STORAGE_BACKEND=s3`, `S3_BUCKET`, `S3_REGION`, and provider credentials/identity
 - `SESSION_SECRET`, `APP_URL`, `ALLOWED_ORIGINS`, `MAX_UPLOAD_MB`
+- Optional MFA: `MFA_ENABLED=false` unless an approved Base64 32-byte `MFA_ENCRYPTION_KEY` is stored in the secret manager and enrollment/challenge/recovery-code handling has been tested
 - `MALWARE_SCAN_ENABLED=true`, `MALWARE_SCAN_REQUIRED_IN_PRODUCTION=true`, `MALWARE_SCANNER_PROVIDER=clamav`, `MALWARE_SCAN_FAIL_POLICY=closed`
 - `CLAMAV_HOST`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT_MS`
 - Explicit `AI_ENABLED`; when enabled, an approved OpenAI model/key and human-review process
@@ -32,6 +33,7 @@ Use [STAGING_INFRASTRUCTURE_RUNBOOK.md](./STAGING_INFRASTRUCTURE_RUNBOOK.md) bef
 - [ ] Confirm the API and worker use the same schema/version.
 - [ ] Verify tenant isolation, queue claims, audit logs, and migration cleanup from validation output.
 - [ ] Record the migration and rollback decision in the pilot change log.
+- [ ] If optional MFA is enabled, confirm TOTP enrollment, MFA login challenge, one-time recovery-code storage by users, and recovery-code regeneration in staging.
 
 ## Storage Checklist
 

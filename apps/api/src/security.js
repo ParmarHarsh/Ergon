@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCallback);
@@ -30,6 +30,53 @@ export function generateResetToken() {
 
 export function hashResetToken(token) {
   return createHash("sha256").update(String(token)).digest("base64url");
+}
+
+export function encryptMfaSecret(secret, encryptionKey) {
+  assertMfaKey(encryptionKey);
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", encryptionKey, iv);
+  const ciphertext = Buffer.concat([cipher.update(String(secret), "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return {
+    ciphertext: ciphertext.toString("base64url"),
+    iv: iv.toString("base64url"),
+    tag: tag.toString("base64url")
+  };
+}
+
+export function decryptMfaSecret(payload, encryptionKey) {
+  assertMfaKey(encryptionKey);
+  const decipher = createDecipheriv("aes-256-gcm", encryptionKey, Buffer.from(payload.iv || "", "base64url"));
+  decipher.setAuthTag(Buffer.from(payload.tag || "", "base64url"));
+  return Buffer.concat([
+    decipher.update(Buffer.from(payload.ciphertext || "", "base64url")),
+    decipher.final()
+  ]).toString("utf8");
+}
+
+export function generateMfaChallengeToken() {
+  return randomBytes(32).toString("base64url");
+}
+
+export function hashMfaChallengeToken(token) {
+  return createHash("sha256").update(String(token)).digest("base64url");
+}
+
+export function hashMfaRecoveryCode(code) {
+  return createHash("sha256").update(normalizeMfaRecoveryCode(code)).digest("base64url");
+}
+
+export function generateMfaRecoveryCodes(count = 10) {
+  return Array.from({ length: count }, () => randomBytes(15).toString("base64url").toUpperCase().match(/.{1,5}/g).join("-"));
+}
+
+export function normalizeMfaRecoveryCode(code) {
+  return String(code || "").trim().replace(/[\s-]/g, "").toUpperCase();
+}
+
+function assertMfaKey(encryptionKey) {
+  if (!Buffer.isBuffer(encryptionKey) || encryptionKey.length !== 32) throw new Error("MFA encryption key must be exactly 32 bytes");
 }
 
 export function verifySignedSession(value, secret) {
