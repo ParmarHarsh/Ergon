@@ -24,6 +24,9 @@ const TABLES = [
   "auditPackets",
   "expertReviews",
   "passwordResetTokens",
+  "userMfaSettings",
+  "mfaLoginChallenges",
+  "mfaRecoveryCodes",
   "auditLogs"
 ];
 
@@ -247,6 +250,206 @@ export class FileRepository {
     this.data.sessions = this.data.sessions.filter((session) => session.organizationId !== token.organizationId || session.userId !== token.userId);
     await this.persist();
     return { user, token };
+  }
+
+  async getUserMfaSettings(organizationId, userId) {
+    return this.data.userMfaSettings.find((row) => row.organizationId === organizationId && row.userId === userId) || null;
+  }
+
+  async createPendingMfaEnrollment(input) {
+    await this.assertUserOrganization(input.userId, input.organizationId);
+    const now = nowIso();
+    let row = await this.getUserMfaSettings(input.organizationId, input.userId);
+    if (!row) {
+      row = {
+        userId: input.userId,
+        organizationId: input.organizationId,
+        enabled: false,
+        secretCiphertext: null,
+        secretIv: null,
+        secretTag: null,
+        pendingSecretCiphertext: null,
+        pendingSecretIv: null,
+        pendingSecretTag: null,
+        pendingEnrollmentExpiresAt: null,
+        lastAcceptedTotpCounter: null,
+        enrolledAt: null,
+        disabledAt: null,
+        createdAt: now,
+        updatedAt: now
+      };
+      this.data.userMfaSettings.push(row);
+    }
+    Object.assign(row, {
+      pendingSecretCiphertext: input.encryptedSecret.ciphertext,
+      pendingSecretIv: input.encryptedSecret.iv,
+      pendingSecretTag: input.encryptedSecret.tag,
+      pendingEnrollmentExpiresAt: input.expiresAt,
+      updatedAt: now
+    });
+    await this.persist();
+    return row;
+  }
+
+  async confirmMfaEnrollment(input) {
+    const row = await this.getUserMfaSettings(input.organizationId, input.userId);
+    if (!row || !row.pendingSecretCiphertext || new Date(row.pendingEnrollmentExpiresAt).getTime() <= new Date(input.confirmedAt || nowIso()).getTime()) return null;
+    Object.assign(row, {
+      enabled: true,
+      secretCiphertext: row.pendingSecretCiphertext,
+      secretIv: row.pendingSecretIv,
+      secretTag: row.pendingSecretTag,
+      pendingSecretCiphertext: null,
+      pendingSecretIv: null,
+      pendingSecretTag: null,
+      pendingEnrollmentExpiresAt: null,
+      lastAcceptedTotpCounter: input.acceptedCounter,
+      enrolledAt: input.confirmedAt || nowIso(),
+      disabledAt: null,
+      updatedAt: input.confirmedAt || nowIso()
+    });
+    await this.persist();
+    return row;
+  }
+
+  async cancelExpiredPendingEnrollment(organizationId, userId, at = nowIso()) {
+    const row = await this.getUserMfaSettings(organizationId, userId);
+    if (!row?.pendingEnrollmentExpiresAt || new Date(row.pendingEnrollmentExpiresAt).getTime() > new Date(at).getTime()) return null;
+    Object.assign(row, {
+      pendingSecretCiphertext: null,
+      pendingSecretIv: null,
+      pendingSecretTag: null,
+      pendingEnrollmentExpiresAt: null,
+      updatedAt: at
+    });
+    await this.persist();
+    return row;
+  }
+
+  async disableUserMfa(input) {
+    const disabledAt = input.disabledAt || nowIso();
+    const row = await this.getUserMfaSettings(input.organizationId, input.userId);
+    if (!row) return null;
+    Object.assign(row, {
+      enabled: false,
+      secretCiphertext: null,
+      secretIv: null,
+      secretTag: null,
+      pendingSecretCiphertext: null,
+      pendingSecretIv: null,
+      pendingSecretTag: null,
+      pendingEnrollmentExpiresAt: null,
+      lastAcceptedTotpCounter: null,
+      disabledAt,
+      updatedAt: disabledAt
+    });
+    for (const code of this.data.mfaRecoveryCodes) {
+      if (code.organizationId === input.organizationId && code.userId === input.userId && !code.usedAt && !code.invalidatedAt) code.invalidatedAt = disabledAt;
+    }
+    for (const challenge of this.data.mfaLoginChallenges) {
+      if (challenge.organizationId === input.organizationId && challenge.userId === input.userId && !challenge.usedAt && !challenge.invalidatedAt) challenge.invalidatedAt = disabledAt;
+    }
+    await this.persist();
+    return row;
+  }
+
+  async createMfaLoginChallenge(input) {
+    await this.assertUserOrganization(input.userId, input.organizationId);
+    const createdAt = input.createdAt || nowIso();
+    const row = {
+      id: input.id || this.createId(),
+      organizationId: input.organizationId,
+      userId: input.userId,
+      challengeTokenHash: input.challengeTokenHash,
+      createdAt,
+      expiresAt: input.expiresAt,
+      usedAt: null,
+      invalidatedAt: null,
+      failedAttemptCount: 0
+    };
+    this.data.mfaLoginChallenges.push(row);
+    await this.persist();
+    return row;
+  }
+
+  async getValidMfaLoginChallengeByHash(challengeTokenHash, at = nowIso()) {
+    const row = this.data.mfaLoginChallenges.find((challenge) => challenge.challengeTokenHash === challengeTokenHash);
+    if (!row || row.usedAt || row.invalidatedAt || new Date(row.expiresAt).getTime() <= new Date(at).getTime()) return null;
+    return row;
+  }
+
+  async recordMfaChallengeFailure(input) {
+    const failedAt = input.failedAt || nowIso();
+    const row = await this.getValidMfaLoginChallengeByHash(input.challengeTokenHash, failedAt);
+    if (!row) return null;
+    row.failedAttemptCount = Number(row.failedAttemptCount || 0) + 1;
+    if (row.failedAttemptCount >= input.maxAttempts) row.invalidatedAt = failedAt;
+    await this.persist();
+    return row;
+  }
+
+  async consumeMfaChallenge(input) {
+    const usedAt = input.usedAt || nowIso();
+    const row = await this.getValidMfaLoginChallengeByHash(input.challengeTokenHash, usedAt);
+    if (!row) return null;
+    row.usedAt = usedAt;
+    row.invalidatedAt = usedAt;
+    await this.persist();
+    return row;
+  }
+
+  async updateLastAcceptedTotpCounter(input) {
+    const row = await this.getUserMfaSettings(input.organizationId, input.userId);
+    if (!row || !row.enabled) return null;
+    const current = row.lastAcceptedTotpCounter === null || row.lastAcceptedTotpCounter === undefined ? null : Number(row.lastAcceptedTotpCounter);
+    if (current !== null && Number(input.counter) <= current) return null;
+    row.lastAcceptedTotpCounter = Number(input.counter);
+    row.updatedAt = input.acceptedAt || nowIso();
+    await this.persist();
+    return row;
+  }
+
+  async replaceMfaRecoveryCodes(input) {
+    await this.assertUserOrganization(input.userId, input.organizationId);
+    const createdAt = input.createdAt || nowIso();
+    for (const code of this.data.mfaRecoveryCodes) {
+      if (code.organizationId === input.organizationId && code.userId === input.userId && !code.usedAt && !code.invalidatedAt) code.invalidatedAt = createdAt;
+    }
+    const rows = input.codeHashes.map((codeHash) => ({
+      id: this.createId(),
+      organizationId: input.organizationId,
+      userId: input.userId,
+      codeHash,
+      createdAt,
+      usedAt: null,
+      invalidatedAt: null
+    }));
+    this.data.mfaRecoveryCodes.push(...rows);
+    await this.persist();
+    return rows;
+  }
+
+  async consumeMfaRecoveryCode(input) {
+    const usedAt = input.usedAt || nowIso();
+    const row = this.data.mfaRecoveryCodes.find((code) =>
+      code.organizationId === input.organizationId &&
+      code.userId === input.userId &&
+      code.codeHash === input.codeHash &&
+      !code.usedAt &&
+      !code.invalidatedAt
+    );
+    if (!row) return null;
+    row.usedAt = usedAt;
+    await this.persist();
+    return row;
+  }
+
+  async invalidateUserMfaChallenges(input) {
+    const invalidatedAt = input.invalidatedAt || nowIso();
+    for (const challenge of this.data.mfaLoginChallenges) {
+      if (challenge.organizationId === input.organizationId && challenge.userId === input.userId && !challenge.usedAt && !challenge.invalidatedAt) challenge.invalidatedAt = invalidatedAt;
+    }
+    await this.persist();
   }
 
   async createFacility(input) {

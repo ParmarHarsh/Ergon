@@ -74,6 +74,7 @@ Optional:
 - `CLAMAV_HOST`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT_MS`
 - `LOG_LEVEL`, `WORKER_HEALTH_HOST`, `WORKER_HEALTH_PORT`
 - `TRUST_PROXY`, `SESSION_COOKIE_SAME_SITE`
+- `MFA_ENABLED` (`false` by default), `MFA_ENCRYPTION_KEY` (Base64-encoded 32-byte key), `MFA_TOTP_ISSUER`
 - `RECOVERY_DELIVERY_PROVIDER` (`disabled` or `smtp`)
 - `RECOVERY_EXPOSE_TEST_TOKEN` for local/test recovery inspection only; it is rejected for secure deployment profiles
 - SMTP variables: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USE_TLS`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`
@@ -443,6 +444,11 @@ Health:
 - Successful password reset consumes the token once, updates the scrypt password hash, invalidates sibling tokens, revokes all active sessions for that user, and clears the current session cookie.
 - Password reset delivery supports `RECOVERY_DELIVERY_PROVIDER=disabled` or `smtp`. SMTP uses `APP_URL` to build the existing `#/reset-password?token=...` frontend link, sends only to the stored account email, and records safe delivery sent/failed audit events. Failed delivery invalidates the undelivered token. Self-contained tests use fake transport; live external SMTP validation still requires approved staging credentials.
 - Local/test raw-token inspection requires `RECOVERY_EXPOSE_TEST_TOKEN=true` and is rejected for staging/closed-pilot profiles.
+- Optional TOTP MFA is available when `MFA_ENABLED=true` and `MFA_ENCRYPTION_KEY` is a Base64 encoding of exactly 32 random bytes. Authenticator-app TOTP uses SHA-1, six digits, 30-second periods, and a one-step skew window for broad app compatibility.
+- MFA enrollment requires the current password and a confirmation TOTP before activation. TOTP secrets are AES-256-GCM encrypted at rest using the external MFA key; plaintext secrets and `otpauth://` URIs are not persisted or logged.
+- MFA-enabled users complete password verification first, then a short-lived one-time MFA challenge. A normal signed session is created only after TOTP or recovery-code verification succeeds.
+- Recovery codes are generated in sets of 10, stored only as SHA-256 hashes, displayed only after enrollment or regeneration, and each code is one-time-use. SMS OTP, email OTP, WebAuthn/passkeys, mandatory org-wide MFA policy, and admin bypass are not implemented.
+- Password reset changes the password and revokes sessions, but does not disable MFA. Loss of both authenticator access and saved recovery codes still requires a future explicitly designed support/admin recovery process.
 - User management is admin-only, tenant-scoped, audit-logged, and blocks self-deactivation/self-demotion.
 - Core routes require authentication.
 - Customer-owned repository methods are scoped by `organizationId`.
@@ -618,4 +624,4 @@ The application includes pilot-oriented infrastructure validation paths, but thi
 1. Run the four staging validators and complete the go/no-go checklist with named pilot owners.
 2. Conduct a controlled workflow session with 3–5 EHS/manufacturing users using agreed, minimized pilot data.
 3. Move scheduling to Redis/SQS/BullMQ while preserving the lease/idempotency repository contract.
-4. Add production OCR, MFA, external lifecycle scheduling, monitoring, and AI budget controls.
+4. Add production OCR, external lifecycle scheduling, monitoring, secret rotation, and AI budget controls.

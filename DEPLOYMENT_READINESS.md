@@ -232,6 +232,7 @@ Go only when all are true:
 - [ ] Scanner validation passed in staging.
 - [ ] Admin provisioning is complete and `PROVISION_*` secrets are removed.
 - [ ] CORS only allows trusted web origins.
+- [ ] If MFA is enabled, `MFA_ENCRYPTION_KEY` is stored in the secret manager, TOTP enrollment/challenge has been tested in staging, recovery-code handling is documented, and key rotation implications are approved.
 - [ ] Backup and restore were tested.
 - [ ] Pilot support, security escalation, reviewer, and data policy are assigned.
 
@@ -241,7 +242,8 @@ Go only when all are true:
 - Worker requires a persistent host or a replacement background-job platform.
 - Scanner requires separate ClamAV-compatible infrastructure.
 - Live Postgres, S3, and scanner validation require external env vars and target infrastructure.
-- Account recovery token lifecycle, SMTP delivery adapter, reset UI, generic request behavior, audit logging, failed-delivery token invalidation, and session revocation are implemented; live external SMTP validation and production OCR are not complete.
+- Account recovery token lifecycle, SMTP delivery adapter, reset UI, generic request behavior, audit logging, failed-delivery token invalidation, session revocation, and optional TOTP MFA are implemented in source. Live external SMTP validation, staging MFA exercise, and production OCR are not complete.
+- Optional TOTP MFA requires `MFA_ENABLED=true` plus a valid `MFA_ENCRYPTION_KEY`; it is not mandatory for all pilot users and does not solve lost-authenticator recovery without saved recovery codes.
 - Lifecycle controls exist as reviewer/admin workflows, but autonomous external retention scheduling, storage-provider WORM/object-lock policy, and backup/restore execution remain deployment responsibilities.
 - Starter rules remain demo/unverified unless expert-reviewed.
 

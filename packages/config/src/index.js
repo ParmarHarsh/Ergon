@@ -149,6 +149,10 @@ export function readConfig(env = process.env) {
 
   const loginRateLimitMaxAttempts = boundedInteger(env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || "10", "LOGIN_RATE_LIMIT_MAX_ATTEMPTS", 3, 1_000);
   const loginRateLimitWindowMs = boundedInteger(env.LOGIN_RATE_LIMIT_WINDOW_MS || "900000", "LOGIN_RATE_LIMIT_WINDOW_MS", 10_000, 86_400_000);
+  const mfaEnabled = env.MFA_ENABLED === undefined || env.MFA_ENABLED === "" ? false : parseBoolean(env.MFA_ENABLED, "MFA_ENABLED");
+  const mfaTotpIssuer = stringWithoutHeaderBreaks(env.MFA_TOTP_ISSUER || "ComplianceIQ", "MFA_TOTP_ISSUER");
+  if (!mfaTotpIssuer || mfaTotpIssuer.length > 64) throw new Error("MFA_TOTP_ISSUER must be between 1 and 64 characters");
+  const mfaEncryptionKey = mfaEnabled ? decodeMfaEncryptionKey(env.MFA_ENCRYPTION_KEY || "", isSecureDeployment) : null;
   const recoveryDeliveryProvider = env.RECOVERY_DELIVERY_PROVIDER || "disabled";
   if (!["disabled", "smtp"].includes(recoveryDeliveryProvider)) throw new Error("RECOVERY_DELIVERY_PROVIDER must be disabled or smtp");
   const recoveryExposeTestToken = env.RECOVERY_EXPOSE_TEST_TOKEN === "true";
@@ -220,6 +224,9 @@ export function readConfig(env = process.env) {
     trustProxy,
     loginRateLimitMaxAttempts,
     loginRateLimitWindowMs,
+    mfaEnabled,
+    mfaEncryptionKey,
+    mfaTotpIssuer,
     recoveryDeliveryProvider,
     recoveryExposeTestToken,
     smtpHost,
@@ -270,4 +277,22 @@ function stringWithoutHeaderBreaks(value, name) {
   const text = String(value || "").trim();
   if (/[\r\n]/.test(text)) throw new Error(`${name} must not contain line breaks`);
   return text;
+}
+
+function decodeMfaEncryptionKey(value, isSecureDeployment) {
+  const text = String(value || "").trim();
+  if (!text) throw new Error("MFA_ENCRYPTION_KEY is required when MFA_ENABLED=true");
+  let decoded;
+  try {
+    decoded = Buffer.from(text, "base64");
+  } catch {
+    throw new Error("MFA_ENCRYPTION_KEY must be a Base64-encoded 32-byte key");
+  }
+  if (decoded.length !== 32 || decoded.toString("base64") !== text.replace(/=+$/, "") + "=".repeat((4 - (text.replace(/=+$/, "").length % 4)) % 4)) {
+    throw new Error("MFA_ENCRYPTION_KEY must decode to exactly 32 bytes");
+  }
+  if (isSecureDeployment && decoded.every((byte) => byte === 0)) {
+    throw new Error("MFA_ENCRYPTION_KEY must not be an obvious placeholder");
+  }
+  return decoded;
 }

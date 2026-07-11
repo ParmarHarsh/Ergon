@@ -1,4 +1,4 @@
-import { API_BASE, api, bootstrap, canReview, currentFacility, fileToBase64, isAdmin, refreshAdminData, refreshExpertReviews, refreshFacilityData, refreshReviewQueue, refreshSystemData, resetSession, state } from "./store.js";
+import { API_BASE, api, bootstrap, canReview, currentFacility, fileToBase64, isAdmin, refreshAdminData, refreshExpertReviews, refreshFacilityData, refreshMfaStatus, refreshReviewQueue, refreshSystemData, resetSession, state } from "./store.js";
 import { ICONS, html } from "./ui.js";
 import { loginView } from "./views/login.js";
 import { builderView } from "./views/builder.js";
@@ -11,6 +11,7 @@ import { packetsView } from "./views/packets.js";
 import { expertsView } from "./views/experts.js";
 import { adminView } from "./views/admin.js";
 import { systemView } from "./views/system.js";
+import { accountSecurityView } from "./views/account-security.js";
 
 const root = document.querySelector("#app");
 
@@ -24,6 +25,7 @@ const ROUTES = {
   packets: { title: "Audit packets", view: packetsView },
   experts: { title: "Expert review", view: expertsView },
   admin: { title: "Admin", view: adminView },
+  security: { title: "Account security", view: accountSecurityView },
   system: { title: "System status", view: systemView }
 };
 
@@ -42,6 +44,7 @@ const NAV = [
   ["Organization", [
     ["experts", "Expert review", "expert"],
     ["admin", "Admin", "admin"],
+    ["security", "Security", "security"],
     ["system", "System", "system"]
   ]]
 ];
@@ -196,6 +199,9 @@ async function loadRouteData(route) {
     } else if (route === "system") {
       await refreshSystemData();
       render();
+    } else if (route === "security") {
+      await refreshMfaStatus();
+      render();
     }
   } catch (error) {
     if (error.status === 401 && state.user) {
@@ -217,6 +223,12 @@ const clickActions = {
       await api("/api/auth/logout", { method: "POST", body: {} });
       resetSession();
     });
+  },
+  "cancel-mfa-login": () => {
+    state.mfaChallengeToken = "";
+    state.mfaChallengeExpiresAt = "";
+    state.loginError = "";
+    render();
   },
   "close-drawer": () => {
     state.drawerRuleId = null;
@@ -389,6 +401,31 @@ const formActions = {
     state.resetMessage = "";
     try {
       const result = await api("/api/auth/login", { method: "POST", body: data });
+      if (result.mfaRequired) {
+        state.mfaChallengeToken = result.challengeToken;
+        state.mfaChallengeExpiresAt = result.expiresAt;
+        state.loginError = "";
+        render();
+        return;
+      }
+      state.user = result.user;
+      state.booted = true;
+      await bootstrap();
+      state.route = "builder";
+      window.location.hash = "#/builder";
+      render();
+    } catch (error) {
+      state.loginError = error.message;
+      render();
+    }
+  },
+  "mfa-login": async (form) => {
+    const data = Object.fromEntries(new FormData(form));
+    state.loginError = "";
+    try {
+      const result = await api("/api/auth/mfa/login/verify", { method: "POST", body: { challengeToken: state.mfaChallengeToken, code: data.code } });
+      state.mfaChallengeToken = "";
+      state.mfaChallengeExpiresAt = "";
       state.user = result.user;
       state.booted = true;
       await bootstrap();
@@ -494,6 +531,50 @@ const formActions = {
     const data = new FormData(form);
     state.reviewQueueFilters = { status: String(data.get("status") || ""), priority: String(data.get("priority") || "") };
     await run(() => refreshReviewQueue());
+  },
+  "mfa-enrollment-start": async (form) => {
+    const data = Object.fromEntries(new FormData(form));
+    await run(async () => {
+      state.mfaEnrollment = await api("/api/auth/mfa/enrollment/start", { method: "POST", body: data });
+      state.mfaRecoveryCodes = [];
+      state.mfaMessage = "";
+      state.mfaError = "";
+      await refreshMfaStatus();
+    });
+  },
+  "mfa-enrollment-confirm": async (form) => {
+    const data = Object.fromEntries(new FormData(form));
+    await run(async () => {
+      const result = await api("/api/auth/mfa/enrollment/confirm", { method: "POST", body: data });
+      state.mfaEnrollment = null;
+      state.mfaRecoveryCodes = result.recoveryCodes || [];
+      state.mfaMessage = "MFA is enabled. Save the recovery codes shown below.";
+      state.mfaError = "";
+      await refreshMfaStatus();
+    });
+  },
+  "mfa-recovery-regenerate": async (form) => {
+    const data = Object.fromEntries(new FormData(form));
+    await run(async () => {
+      const result = await api("/api/auth/mfa/recovery-codes/regenerate", { method: "POST", body: data });
+      state.mfaRecoveryCodes = result.recoveryCodes || [];
+      state.mfaMessage = "New recovery codes generated. Save them now.";
+      state.mfaError = "";
+      form.reset();
+      await refreshMfaStatus();
+    });
+  },
+  "mfa-disable": async (form) => {
+    const data = Object.fromEntries(new FormData(form));
+    await run(async () => {
+      await api("/api/auth/mfa/disable", { method: "POST", body: data });
+      state.mfaEnrollment = null;
+      state.mfaRecoveryCodes = [];
+      state.mfaMessage = "MFA has been disabled.";
+      state.mfaError = "";
+      form.reset();
+      await refreshMfaStatus();
+    });
   }
 };
 
