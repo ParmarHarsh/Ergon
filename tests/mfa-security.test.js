@@ -10,6 +10,13 @@ import {
   hashMfaRecoveryCode
 } from "../apps/api/src/security.js";
 
+function flipFirstEncodedByte(value) {
+  const bytes = Buffer.from(value, "base64url");
+  assert.ok(bytes.length > 0);
+  bytes[0] ^= 0x01;
+  return bytes.toString("base64url");
+}
+
 test("MFA AES-256-GCM encryption round-trips and rejects tampering", () => {
   const key = randomBytes(32);
   const otherKey = randomBytes(32);
@@ -20,8 +27,12 @@ test("MFA AES-256-GCM encryption round-trips and rejects tampering", () => {
   assert.notEqual(first.ciphertext, secret);
   assert.notEqual(first.iv, second.iv);
   assert.equal(decryptMfaSecret(first, key), secret);
-  assert.throws(() => decryptMfaSecret({ ...first, ciphertext: `${first.ciphertext.slice(0, -1)}A` }, key));
-  assert.throws(() => decryptMfaSecret({ ...first, tag: `${first.tag.slice(0, -1)}A` }, key));
+  const tamperedCiphertext = flipFirstEncodedByte(first.ciphertext);
+  assert.notDeepEqual(Buffer.from(tamperedCiphertext, "base64url"), Buffer.from(first.ciphertext, "base64url"));
+  assert.throws(() => decryptMfaSecret({ ...first, ciphertext: tamperedCiphertext }, key));
+  const tamperedTag = flipFirstEncodedByte(first.tag);
+  assert.notDeepEqual(Buffer.from(tamperedTag, "base64url"), Buffer.from(first.tag, "base64url"));
+  assert.throws(() => decryptMfaSecret({ ...first, tag: tamperedTag }, key));
   assert.throws(() => decryptMfaSecret(first, otherKey));
 });
 
