@@ -10,18 +10,17 @@ export function loginView() {
         <div class="brand">
           <div class="brand-mark">${ICONS.logo}</div>
           <div>
-            <div class="brand-name">Ergon</div>
-            <div class="brand-sub">Industrial Evidence Intelligence</div>
+            <div class="brand-name">ERGON</div>
+            <div class="brand-sub">Manufacturing Compliance</div>
           </div>
         </div>
         <div class="login-hero">
-          <h1>Turn scattered facility files into audit-ready evidence.</h1>
-          <p>Ergon classifies uploaded compliance evidence, maps it to jurisdiction-specific obligations, flags gaps, and assembles export-ready audit packets — with human review at every decision point.</p>
+          <h1>AI-native compliance intelligence for manufacturing.</h1>
+          <p>Ergon turns facility evidence into review queues, priority gaps, action plans, and audit-ready packets while humans keep accountability for decisions.</p>
           <ul class="login-points">
-            <li>${ICONS.check} Optional AI-assisted document classification with confidence scoring and reviewer sign-off</li>
-            <li>${ICONS.check} Deterministic rules packs for US, Canada, and Mexico industrial manufacturing</li>
-            <li>${ICONS.check} Evidence gap analysis, prioritized action plan, and full source-to-packet lineage</li>
-            <li>${ICONS.check} Tenant-scoped access, malware-screened uploads, and private evidence storage</li>
+            <li>${ICONS.check} Evidence intake, classification, and reviewer sign-off</li>
+            <li>${ICONS.check} Deterministic gap analysis for supported manufacturing rules packs</li>
+            <li>${ICONS.check} Action planning and source-to-packet lineage</li>
           </ul>
         </div>
         <p class="login-legal">Audit-preparation support only. Not legal advice and not a compliance certification. Starter rules packs are demo/unverified content unless expert-reviewed. Current rules coverage: United States, Canada, and Mexico.</p>
@@ -40,8 +39,8 @@ function mfaChallengePanel() {
         <div class="brand">
           <div class="brand-mark">${ICONS.logo}</div>
           <div>
-            <div class="brand-name">Ergon</div>
-            <div class="brand-sub">Industrial Evidence Intelligence</div>
+            <div class="brand-name">ERGON</div>
+            <div class="brand-sub">Manufacturing Compliance</div>
           </div>
         </div>
       </aside>
@@ -88,7 +87,7 @@ function loginPanel() {
         </label>
         <button type="submit" class="btn btn-primary btn-lg">Log in</button>
       </form>
-      ${state.authFeatures.recoveryAvailable ? `<div class="auth-links"><a href="#/forgot-password">Forgot password?</a></div>` : ""}
+      <div class="auth-links"><a href="#/forgot-password">Forgot password?</a></div>
       <p class="field-hint">Sessions expire after 8 hours. Login attempts are rate-limited.</p>
     </div>
   `;

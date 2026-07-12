@@ -20,12 +20,22 @@ export function reviewView() {
       <div class="card">${emptyFacilityPrompt()}</div>
     `;
   }
+  const critical = state.reviewQueue.filter((item) => item.priorityImpact === "critical").length;
+  const high = state.reviewQueue.filter((item) => item.priorityImpact === "high").length;
+  const lowConfidence = state.reviewQueue.filter((item) => item.confidence !== null && item.confidence < 0.8).length;
   return `
     <div class="page-head">
       <div>
         <h1>AI Review</h1>
-        <p class="page-sub">Evidence requiring a human decision: low-confidence AI classifications, extraction failures, suspicious scans, expirations, and unmatched items. Every decision is persisted to the audit trail.</p>
+        <p class="page-sub">Decide whether ERGON’s evidence suggestions are acceptable, need override, or require better evidence.</p>
       </div>
+    </div>
+
+    <div class="summary-strip">
+      <div class="summary-chip"><span>Awaiting review</span><strong>${state.reviewQueue.length}</strong></div>
+      <div class="summary-chip"><span>Critical impact</span><strong class="${critical ? "danger" : "ok"}">${critical}</strong></div>
+      <div class="summary-chip"><span>High impact</span><strong class="${high ? "warn" : "ok"}">${high}</strong></div>
+      <div class="summary-chip"><span>Low confidence</span><strong>${lowConfidence}</strong></div>
     </div>
 
     <section class="card">
@@ -34,16 +44,19 @@ export function reviewView() {
           <h2>${state.reviewQueue.length} item${state.reviewQueue.length === 1 ? "" : "s"} awaiting review</h2>
           <p class="hint">${html(facility.name)} · tenant-scoped</p>
         </div>
-        <form id="review-queue-filters" class="filters-row" data-form="review-filters">
-          <label class="field">
-            <span class="field-label">Review state</span>
-            <select name="status">${STATUS_FILTERS.map((value) => `<option value="${value}" ${value === state.reviewQueueFilters.status ? "selected" : ""}>${html(value ? titleCase(value) : "All review states")}</option>`).join("")}</select>
-          </label>
-          <label class="field">
-            <span class="field-label">Priority impact</span>
-            <select name="priority">${PRIORITY_FILTERS.map((value) => `<option value="${value}" ${value === state.reviewQueueFilters.priority ? "selected" : ""}>${html(value ? titleCase(value) : "All priorities")}</option>`).join("")}</select>
-          </label>
-        </form>
+        <details class="detail-disclosure">
+          <summary>Filters</summary>
+          <form id="review-queue-filters" class="filters-row disclosure-body" data-form="review-filters">
+            <label class="field">
+              <span class="field-label">Review state</span>
+              <select name="status">${STATUS_FILTERS.map((value) => `<option value="${value}" ${value === state.reviewQueueFilters.status ? "selected" : ""}>${html(value ? titleCase(value) : "All review states")}</option>`).join("")}</select>
+            </label>
+            <label class="field">
+              <span class="field-label">Priority impact</span>
+              <select name="priority">${PRIORITY_FILTERS.map((value) => `<option value="${value}" ${value === state.reviewQueueFilters.priority ? "selected" : ""}>${html(value ? titleCase(value) : "All priorities")}</option>`).join("")}</select>
+            </label>
+          </form>
+        </details>
       </div>
       <div class="card-body tight review-queue-list">
         ${state.reviewQueue.length ? state.reviewQueue.map(queueItem).join("") : emptyState({
@@ -61,7 +74,7 @@ function queueItem(item) {
   const analysis = analysisFor(item.id);
   const canRetry = item.processingStatus === "failed" || item.categories.some((category) => ["processing_failed", "extraction_failed", "ocr_required"].includes(category));
   return `
-    <article class="evidence-item ${item.scanStatus === "scan_suspicious" ? "blocked-card" : ""}">
+    <article class="evidence-item priority-card ${html(item.priorityImpact)} ${item.scanStatus === "scan_suspicious" ? "blocked-card" : ""}">
       <div class="evidence-top">
         <div>
           <div class="evidence-title">${html(item.evidenceTitle)}</div>
@@ -81,8 +94,9 @@ function queueItem(item) {
         ${item.categories.map((category) => `<span class="pill pill-neutral plain">${html(titleCase(category))}</span>`).join("")}
       </div>
       <div class="kv-grid">
-        <div class="kv"><dt>Likely type</dt><dd>${html(label(item.detectedEvidenceType || "other"))}</dd></div>
-        <div class="kv"><dt>Suggested obligation</dt><dd>${html(item.suggestedObligationTitle || "Unmatched")}</dd></div>
+        <div class="kv"><dt>What ERGON found</dt><dd>${html(label(item.detectedEvidenceType || "other"))}</dd></div>
+        <div class="kv"><dt>Why it matters</dt><dd>${html(item.suggestedObligationTitle || "No obligation match yet")}</dd></div>
+        <div class="kv"><dt>Human decision</dt><dd>Accept, override, reject, or request better evidence.</dd></div>
       </div>
       ${item.issueSummary?.length ? `<ul class="issue-list">${item.issueSummary.map((issue) => `<li>${html(issue)}</li>`).join("")}</ul>` : ""}
       ${canRetry && item.scanStatus !== "scan_suspicious" ? `<div><button class="btn btn-secondary btn-sm" data-action="retry-processing" data-evidence-id="${html(item.id)}">Retry processing</button></div>` : ""}

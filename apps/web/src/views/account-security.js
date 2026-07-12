@@ -7,7 +7,7 @@ export function accountSecurityView() {
     <div class="page-head">
       <div>
         <h1>Security</h1>
-        <p class="page-sub">Manage account protection settings when this environment enables them. Core sessions, roles, tenancy, and audit logging remain active.</p>
+        <p class="page-sub">Manage account protection. Sessions, roles, tenancy, and audit logging remain enforced.</p>
       </div>
     </div>
 
@@ -18,7 +18,7 @@ export function accountSecurityView() {
       <div class="card-head">
         <div>
           <h2>Multi-factor authentication</h2>
-          <p class="hint">${status?.available ? "Authenticator app MFA is available for this account." : "Authenticator app MFA is not enabled for this deployment."}</p>
+          <p class="hint">${status?.available ? "Authenticator app MFA is available." : "Authenticator app MFA is not enabled for this deployment."}</p>
         </div>
         ${pill(status?.enabled ? "ok" : "inactive", { text: status?.enabled ? "Enabled" : "Disabled" })}
       </div>

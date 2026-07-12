@@ -1,5 +1,11 @@
 # Ergon UX Principles
 
+## Phase 21 operating standard
+
+One screen, one purpose, one obvious next action.
+
+Visible product wordmark uses `ERGON`. Normal prose uses `Ergon`. Technical identifiers use `ergon`.
+
 ## Outcome-first, not module-first
 
 Screens should be organized around manufacturer questions and outcomes: what to upload, what needs review, what gaps matter, what action comes next, and what proof can be produced.
@@ -12,6 +18,8 @@ The interface should show Ergon as a workspace that reduces repetitive complianc
 
 Start with the decision a user needs to make. Keep expert detail, lineage, citations, confidence, and audit history available without making every screen feel like a database console.
 
+Default pages should show summary first and expert detail second. Use drawers, native disclosure, compact filters, and focused details before adding more always-visible panels.
+
 ## Plain language
 
 Use manufacturing and compliance language that a plant manager, EHS lead, quality manager, or operations owner can understand. Avoid unnecessary internal terms.
@@ -19,6 +27,8 @@ Use manufacturing and compliance language that a plant manager, EHS lead, qualit
 ## One clear primary action per screen
 
 Each screen should make the next useful action obvious. Secondary actions should remain visible but not compete with the main task.
+
+Home answers "What needs my attention today?" Evidence prioritizes "Add evidence." AI Review prioritizes "What decision does a human need to make?" Gaps & Actions prioritizes "What is missing and what should happen next?"
 
 ## Show what needs attention
 
@@ -67,6 +77,14 @@ Interactive controls must be reachable by keyboard, visibly focused, and labeled
 ## Responsive design
 
 The app should remain usable around 390px mobile, 768px tablet, and desktop widths. Tables may scroll horizontally, but primary actions and labels should remain usable.
+
+Mobile uses a drawer navigation pattern with visible close control, Escape-to-close behavior, single-column content, reachable sign out, and no page-level horizontal overflow. Desktop uses grouped persistent navigation and a visible account/sign-out area. Tablet reduces columns before content becomes cramped.
+
+Tables may remain tables when relationships matter, but they must sit inside controlled scroll containers. Priority summaries should be card/list based before dense tables.
+
+Motion should clarify state changes, stay fast, and respect `prefers-reduced-motion`.
+
+Loading, empty, and error states should be finite and actionable: loading resolves to success, empty, unavailable, or error; empty states name the next step; errors explain recovery without exposing secrets.
 
 ## No fake automation claims
 

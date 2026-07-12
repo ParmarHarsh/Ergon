@@ -21,8 +21,8 @@ export function adminView() {
   return `
     <div class="page-head">
       <div>
-        <h1>Admin — users and roles</h1>
-        <p class="page-sub">Members of <strong>${html(state.organization?.name || "your organization")}</strong>. All management actions are audit-logged.</p>
+        <h1>Team & Roles</h1>
+        <p class="page-sub">Manage who can add evidence, review decisions, and administer <strong>${html(state.organization?.name || "your organization")}</strong>.</p>
       </div>
     </div>
 
@@ -52,7 +52,7 @@ export function adminView() {
         <div class="card-head">
           <div>
             <h2>Invite a member</h2>
-            <p class="hint">Creates the account immediately with the password you set. Share credentials over a secure channel.</p>
+            <p class="hint">Creates an account immediately. Share credentials over a secure channel.</p>
           </div>
         </div>
         <div class="card-body">

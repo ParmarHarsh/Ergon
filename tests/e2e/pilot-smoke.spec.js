@@ -14,15 +14,28 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
   });
   await page.addInitScript(() => window.localStorage.setItem("ergon_api_base", "http://127.0.0.1:4100"));
   await page.goto("/");
-  await expect(page).toHaveTitle(/Ergon/);
+  await expect(page).toHaveTitle(/ERGON/);
   await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  await page.getByRole("link", { name: "Forgot password?" }).click();
+  await expect(page.getByRole("heading", { name: "Password recovery is unavailable here" })).toBeVisible();
+  await page.getByRole("link", { name: "Back to sign in" }).click();
 
   // Login
   await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
   await page.getByLabel("Email").fill("pilot-admin@ergon.local");
   await page.getByLabel("Password").fill("PilotPassword#2026");
   await page.getByRole("button", { name: "Log in" }).click();
-  await expect(page.getByRole("heading", { name: "Your AI compliance workspace for manufacturing." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your manufacturing compliance workspace." })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeVisible();
+
+  // Mobile navigation drawer exposes grouped routes and sign out.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Menu" }).click();
+  await expect(page.locator("#app-navigation")).toBeVisible();
+  await expect(page.locator("#app-navigation").getByRole("button", { name: "Facilities" })).toBeVisible();
+  await expect(page.locator("#app-navigation").getByRole("button", { name: "Sign out" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 1280, height: 900 });
 
   // Create facility
   await page.locator(".sidebar").getByRole("button", { name: "Facilities" }).click();
@@ -37,6 +50,7 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
 
   // Upload evidence with a private file
   await page.locator(".sidebar").getByRole("button", { name: "Evidence", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Add evidence" }).first()).toBeVisible();
   await page.locator('#evidence-form input[name="title"]').fill("Pilot LOTO procedure");
   await page.locator('#evidence-form select[name="evidenceType"]').selectOption("other");
   await page.locator('#evidence-form textarea[name="description"]').fill("Synthetic lockout tagout procedure dated 2026-04-15.");

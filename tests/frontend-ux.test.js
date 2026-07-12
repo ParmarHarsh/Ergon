@@ -14,15 +14,20 @@ globalThis.window = {
 const { state } = await import("../apps/web/src/store.js");
 const { loginView } = await import("../apps/web/src/views/login.js");
 const { homeView } = await import("../apps/web/src/views/home.js");
+const { evidenceView } = await import("../apps/web/src/views/evidence.js");
+const { reviewView } = await import("../apps/web/src/views/review.js");
+const { matrixView } = await import("../apps/web/src/views/matrix.js");
+const { packetsView } = await import("../apps/web/src/views/packets.js");
 
-test("login view uses Ergon branding and hides recovery when disabled", () => {
+test("login view uses ERGON branding and always exposes recovery entry", () => {
   window.location.hash = "#/login";
   state.authFeatures.recoveryAvailable = false;
   state.mfaChallengeToken = "";
   const html = loginView();
-  assert.match(html, /Ergon/);
+  assert.match(html, /ERGON/);
+  assert.match(html, /AI-native compliance intelligence for manufacturing/);
+  assert.match(html, /Forgot password/);
   assert.doesNotMatch(html, new RegExp("Compliance" + "IQ"));
-  assert.doesNotMatch(html, /Forgot password/);
 });
 
 test("disabled recovery route resolves to an actionable unavailable state", () => {
@@ -47,10 +52,84 @@ test("home view explains Ergon without fake AI-enabled claims", () => {
     latestReview: null
   });
   const html = homeView();
-  assert.match(html, /Your AI compliance workspace for manufacturing/);
+  assert.match(html, /Needs attention today/);
+  assert.match(html, /Next action/);
   assert.match(html, /AI disabled in this environment/);
   assert.doesNotMatch(html, /Live regulatory monitoring/);
   assert.doesNotMatch(html, /Always up-to-date/);
+});
+
+test("primary workflows expose clear purpose and primary actions", () => {
+  Object.assign(state, {
+    user: { role: "admin", email: "pilot-admin@ergon.local", name: "Synthetic Pilot Administrator" },
+    facilities: [{ id: "facility-1", name: "Synthetic Plant", country: "US", region: "OH" }],
+    selectedFacilityId: "facility-1",
+    evidence: [],
+    aiStatus: { enabled: false, provider: "disabled", model: null },
+    reviewQueue: [],
+    processingJobs: [],
+    actionItems: [],
+    latestReview: null,
+    gapRows: [],
+    packets: [],
+    applicableRules: [],
+    rulesPack: null
+  });
+  assert.match(evidenceView(), /Add evidence/);
+  assert.match(evidenceView(), /Needs attention/);
+
+  state.reviewQueue = [{
+    id: "evidence-1",
+    evidenceTitle: "Training roster",
+    facilityName: "Synthetic Plant",
+    fileName: "training.pdf",
+    priorityImpact: "high",
+    confidence: 0.62,
+    processingStatus: "needs_review",
+    scanStatus: "scan_clean",
+    categories: ["low_confidence"],
+    detectedEvidenceType: "training_record",
+    suggestedObligationTitle: "Training records"
+  }];
+  assert.match(reviewView(), /What ERGON found/);
+  assert.match(reviewView(), /Human decision/);
+
+  state.latestReview = { id: "review-1", readinessScore: 42, summary: { totalApplicableObligations: 1, missingEvidenceCount: 1, criticalGapsCount: 1, acceptedEvidenceCount: 0, aiNeedsReviewCount: 1 } };
+  state.gapRows = [{
+    ruleId: "rule-1",
+    obligationTitle: "Maintain training records",
+    country: "US",
+    region: "OH",
+    authority: "Demo",
+    citation: "1",
+    status: "missing",
+    priority: "critical",
+    matchedEvidence: [],
+    requiredEvidence: ["training_record"],
+    dueDate: "2026-07-31",
+    recommendedAction: "Upload current training records.",
+    demoContent: true
+  }];
+  assert.match(matrixView(), /Priority gaps/);
+  assert.match(matrixView(), /Missing accepted evidence/);
+  assert.match(packetsView(), /Missing evidence/);
+  assert.match(packetsView(), /Generate a gap analysis before exporting|Export a traceable packet/);
+});
+
+test("app shell source includes mobile navigation and visible sign out controls", async () => {
+  const source = await readFile(path.resolve("apps/web/src/app.js"), "utf8");
+  assert.match(source, /mobile-menu-btn/);
+  assert.match(source, /open-mobile-nav/);
+  assert.match(source, /close-mobile-nav/);
+  assert.match(source, /Sign out/);
+});
+
+test("browser title and design CSS use the Phase 21 ERGON convention", async () => {
+  const index = await readFile(path.resolve("apps/web/index.html"), "utf8");
+  const css = await readFile(path.resolve("apps/web/src/styles.css"), "utf8");
+  assert.match(index, /<title>ERGON<\/title>/);
+  assert.match(css, /prefers-reduced-motion/);
+  assert.match(css, /mobile-nav-scrim/);
 });
 
 test("active web UI files no longer contain current former-brand text", async () => {

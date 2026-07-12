@@ -18,7 +18,7 @@ export function facilitiesView() {
     <div class="page-head">
       <div>
         <h1>Facilities</h1>
-        <p class="page-sub">Each facility's country, region, industry, and hazard profile determine which rules pack and obligations apply. Rules pack selection happens on the backend.</p>
+        <p class="page-sub">Choose the manufacturing sites ERGON should evaluate and keep the jurisdiction context current.</p>
       </div>
     </div>
 
@@ -63,7 +63,7 @@ export function facilitiesView() {
         <div class="card-head">
           <div>
             <h2>New facility</h2>
-            <p class="hint">Country and region select the rules pack; the hazard profile filters which obligations apply.</p>
+            <p class="hint">Jurisdiction and hazards determine applicable obligations.</p>
           </div>
         </div>
         <div class="card-body">
