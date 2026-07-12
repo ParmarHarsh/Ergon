@@ -6,7 +6,7 @@ export function matrixView() {
   const facility = currentFacility();
   if (!facility) {
     return `
-      <div class="page-head"><div><h1>Evidence Gap Matrix</h1></div></div>
+      <div class="page-head"><div><h1>Gaps & Actions</h1></div></div>
       <div class="card">${emptyFacilityPrompt()}</div>
     `;
   }
@@ -14,7 +14,7 @@ export function matrixView() {
   return `
     <div class="page-head">
       <div>
-        <h1>Evidence Gap Matrix</h1>
+        <h1>Gaps & Actions</h1>
         <p class="page-sub">Every applicable obligation for <strong>${html(facility.name)}</strong> with its evidence position: matched, partial, missing, expired, or rejected. Select a row for the full evidence lineage.</p>
       </div>
       <div class="page-actions">

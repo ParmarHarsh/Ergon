@@ -1,627 +1,152 @@
-# ComplianceIQ
+# Ergon
 
-Industrial Audit Readiness Platform for Manufacturers.
+Ergon is an AI-native manufacturing compliance workspace. It helps manufacturers organize the evidence they already have, map that evidence to jurisdiction-specific obligations, surface missing or weak proof, prioritize gaps, guide human review, and assemble audit-ready packets.
 
-ComplianceIQ helps manufacturers organize compliance evidence, use optional AI-assisted classification to structure uploaded documents, identify jurisdiction-specific audit gaps, assign corrective actions, and export professional audit-readiness packets. The product remains intentionally narrow: facility setup, evidence intelligence, evidence gap matrix, action plan, and audit packet export.
+The product thesis is simple: manufacturers should not need to manually rebuild their entire compliance system inside software before receiving value. Ergon should ingest messy real-world inputs, understand facility context, recommend what needs attention, draft useful outputs, and preserve accountable human review.
 
-This repository now contains only the ComplianceIQ application. Historical audit notes may mention earlier repository cleanup work, but no unrelated project is active in the current application scope.
+## Who Ergon serves
 
-## Product Scope
+Ergon is intended for SMEs, MSMEs, single-facility manufacturers, multi-site manufacturers, and larger manufacturing organizations. It should eventually work for companies using spreadsheets, PDFs, scans, shared drives, email attachments, legacy ERP exports, modern ERP/API systems, and supplier evidence.
 
-ComplianceIQ supports North America at the architecture level:
+## 80/20 AI principle
 
-- United States
-- Canada
-- Mexico
+Ergon targets an approximately 80% automated assistance / 20% accountable human effort model. This is a product direction, not a guaranteed measured metric.
 
-Starter rules are demo/unverified unless separately expert-reviewed. The system is audit-preparation and evidence organization support only. It is not legal advice and does not represent regulator certification or approval.
+Ergon should automate repetitive work such as ingestion, classification, metadata extraction, evidence summarization, obligation candidate matching, gap detection, risk prioritization, action-plan drafting, and audit packet assembly. Humans remain accountable for material legal applicability, evidence acceptance, high-risk decisions, risk acceptance, legal holds, destructive deletion, final certification, regulator-facing representations, exceptions, and AI overrides.
 
-## Repository Structure
+## Implemented now
 
-- `apps/api` - Node HTTP API, authentication, leased queue worker, verified file intake, scanning/storage adapters, structured operations logging, reviewer operations, and protected downloads
-- `apps/web` - zero-dependency routed workspace SPA (Packet Builder, Facilities, Evidence, Review Queue, Gap Matrix with detail drawer, Action Plan, Audit Packets, Expert Review, Admin, System status)
-- `packages/config` - environment validation
-- `packages/ai` - validated provider abstraction, bounded text/PDF extraction, OCR-ready interface, and AI evidence contracts
-- `packages/db` - tracked Postgres migrations plus production Postgres and development file repositories
-- `packages/rules` - jurisdiction-specific rules packs, applicability, gap matrix, scoring, action plan
-- `packages/pdf` - backend audit packet PDF generation
-- `packages/shared` - validation and shared domain helpers
-- `tests` - Node test coverage for rules, scoring, persistence, API auth/scoping, packet generation
+- password authentication, signed sessions, login throttling, tenant isolation, RBAC, account recovery, SMTP recovery adapter, TOTP MFA, and recovery codes;
+- facility setup and jurisdiction-aware starter rules-pack selection;
+- evidence records and verified upload intake for PDFs, text, CSV, and supported image formats;
+- local/private storage and S3-capable storage adapter;
+- malware-scanning adapter with local mock and ClamAV-capable provider;
+- optional backend AI evidence-analysis foundation with mock/OpenAI providers;
+- human review queue and evidence override decisions;
+- deterministic gap analysis and action-plan generation;
+- audit packet PDF generation and authenticated downloads;
+- legal holds, archive/restore, retention enforcement, and failed-deletion retry foundations;
+- health/readiness endpoints, local API-and-worker runtime, and system-status UI.
 
-The original Replit export was used as reference only. Replit artifacts, broad dashboards, frontend scoring engines, AI advisor modules, and demo-only enterprise clutter are not part of the new root app.
+Starter rules are demo/unverified unless expert-reviewed. Ergon is audit-preparation support only. It is not legal advice, does not certify compliance, and does not represent regulator approval.
 
-## Environment Variables
+## Planned or long-term
 
-Copy `.env.example` to `.env` for local work. Profile templates also live in `deploy/env/`.
+- richer Excel and Word ingestion;
+- OCR for scanned PDFs/images;
+- email, SharePoint, Google Drive, and OneDrive ingestion;
+- ERP/MES/QMS exports and APIs;
+- supplier evidence workflows;
+- source-backed regulatory intelligence with versioned official-source snapshots;
+- standards-based Google/Microsoft organizational sign-in;
+- stronger expert-reviewed rules content and provenance workflows;
+- production monitoring, backup/restore, and operational runbooks.
 
-Required for production:
+Ergon does not currently provide live regulatory monitoring, production OCR, ERP connectors, external SSO, or autonomous legal applicability determinations.
 
-- `NODE_ENV=production`
-- `DEPLOYMENT_PROFILE=staging` or `closed-pilot`
-- `PROCESS_ROLE=api` or `worker` (deploy both separately)
-- `PORT`
-- `APP_URL`
-- `ALLOWED_ORIGINS` without `*`
-- `WEB_API_ORIGIN` for production static frontend builds, including Vercel
-- `DATABASE_URL`
-- `REPOSITORY_BACKEND=postgres`
-- `SESSION_SECRET` with at least 32 characters
-- `STORAGE_BACKEND=s3`
-- `S3_BUCKET`
-- `S3_REGION`
-- `MAX_UPLOAD_MB`
-- Closed pilot additionally requires enabled, required, fail-closed ClamAV scanning.
+## Repository structure
 
-Optional:
+- `apps/api` - Node HTTP API, authentication/security foundations, file intake, storage/scanning adapters, worker queue, review APIs, lifecycle controls, and protected downloads.
+- `apps/web` - zero-dependency routed SPA with Home, Evidence, AI Review, Gaps & Actions, Action Plan, Audit Packs, Facilities, Team & Roles, Security, and System views.
+- `packages/config` - environment validation.
+- `packages/ai` - provider abstraction, bounded extraction, mock/OpenAI analysis contracts.
+- `packages/db` - Postgres migrations plus production Postgres and development file repositories.
+- `packages/rules` - starter rules packs, applicability, scoring, gap matrix, and action plan logic.
+- `packages/pdf` - audit packet PDF generation.
+- `packages/shared` - validation and shared domain helpers.
+- `tests` - self-contained Node tests plus Playwright pilot smoke coverage.
 
-- `API_HOST` (defaults to `0.0.0.0` in production)
-- `WEB_PORT`, `WEB_HOST` for the local static web server
-- `ENABLE_DEMO_DATA`
-- `ADMIN_EMAIL`
-- `ADMIN_PASSWORD`
-- `TEST_DATABASE_URL`
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `AI_ENABLED`
-- `AI_PROVIDER`
-- `AI_MAX_FILE_TEXT_CHARS`
-- `AI_CONFIDENCE_THRESHOLD`
-- `AI_REVIEW_REQUIRED_THRESHOLD`
-- `QUEUE_BACKEND`, `QUEUE_CONCURRENCY`, `QUEUE_MAX_RETRIES`, `QUEUE_LEASE_MS`, `QUEUE_HEARTBEAT_MS`, `QUEUE_POLL_MS`, `QUEUE_SHUTDOWN_TIMEOUT_MS`
-- `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`
-- `SIGNED_URL_EXPIRY_SECONDS`
-- `MALWARE_SCAN_ENABLED`, `MALWARE_SCAN_REQUIRED_IN_PRODUCTION`, `MALWARE_SCANNER_PROVIDER`, `MALWARE_SCAN_FAIL_POLICY`
-- `CLAMAV_HOST`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT_MS`
-- `LOG_LEVEL`, `WORKER_HEALTH_HOST`, `WORKER_HEALTH_PORT`
-- `TRUST_PROXY`, `SESSION_COOKIE_SAME_SITE`
-- `MFA_ENABLED` (`false` by default), `MFA_ENCRYPTION_KEY` (Base64-encoded 32-byte key), `MFA_TOTP_ISSUER`
-- `RECOVERY_DELIVERY_PROVIDER` (`disabled` or `smtp`)
-- `RECOVERY_EXPOSE_TEST_TOKEN` for local/test recovery inspection only; it is rejected for secure deployment profiles
-- SMTP variables: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USE_TLS`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`
+## Local setup
 
-OpenAI and SMTP are optional. The core audit packet workflow works without them.
-
-## AI Evidence Intelligence
-
-AI Evidence Intelligence is an optional backend-only evidence organization layer. For supported text files it:
-
-1. extracts bounded text and basic metadata;
-2. classifies into the centralized evidence taxonomy;
-3. extracts dates, names, equipment, chemicals, signatures, authority mentions, and issues when supported by the text;
-4. suggests at most one applicable facility obligation;
-5. stores confidence, provider/model lineage, processing status, and human-review state;
-6. leaves deterministic rules and human decisions as the final authority.
-
-AI does not provide legal advice, certify evidence, approve regulatory status, or decide that a facility is compliant. AI-only suggestions do not become accepted evidence. Manual selections and human overrides win; expired and rejected evidence never count as accepted.
-
-The implemented providers are:
-
-- `openai`: optional Responses API structured output, enabled only with explicit configuration.
-- `mock`: deterministic test/development provider; production configuration rejects it.
-- disabled mode: no key or AI dependency is required for the core workflow.
-
-Enable OpenAI-backed analysis only in the backend environment:
-
-```bash
-AI_ENABLED=true
-AI_PROVIDER=openai
-OPENAI_API_KEY=replace-with-secret
-OPENAI_MODEL=replace-with-approved-structured-output-model
-AI_MAX_FILE_TEXT_CHARS=12000
-AI_CONFIDENCE_THRESHOLD=0.8
-AI_REVIEW_REQUIRED_THRESHOLD=0.7
-```
-
-Do not expose `OPENAI_API_KEY` to the web app. Model output is validated against a strict application schema and applicable rule IDs before storage. Raw prompts, extracted document text, and raw model output are not stored.
-
-Supported upload types are verified PDFs, plain text (`.txt`, `.md`, `.log`), CSV, and signature-verified PNG, JPEG, GIF, WebP, TIFF, and BMP images. PDF extraction uses `pdf-parse`; extracted text is capped by `AI_MAX_FILE_TEXT_CHARS`, and corrupt, encrypted, or scanned PDFs fail into a visible review state. Images and scanned PDFs are marked `ocr_required`; an OCR provider interface and deterministic mock exist, but no production OCR engine is bundled.
-
-## File Intake Validation
-
-The API validates decoded size, filename extension, declared MIME type, and detected content signature before writing an upload to private storage. Generic browser MIME types are tolerated only when the content and supported extension can be verified. Executables, scripts, HTML, SVG, unknown binary files, Office ZIP containers, and every archive/compressed format are rejected with a clear error and a tenant-scoped audit event. Archives are never extracted, so decompression bombs, excessive archive entry counts, and ZIP path traversal never enter the extraction pipeline. Rejected files are not scanned, queued, or sent to AI.
-
-## Evidence Processing Lifecycle
-
-File intelligence is asynchronous:
-
-1. the authenticated API validates and privately stores the upload;
-2. the malware-scanning adapter records `scan_clean`, `scan_suspicious`, `scan_failed`, or `scan_unavailable`;
-3. permitted evidence receives one active processing job;
-4. the local worker atomically claims a queued job with a worker ID, opaque lease, expiry, and heartbeat, then extracts bounded text, calls the optional AI provider, validates output, and persists a new immutable analysis version;
-5. the worker regenerates the deterministic gap matrix/action plan and marks the job completed;
-6. failures retain a safe reason and retry with deterministic exponential delays up to `QUEUE_MAX_RETRIES`; an exhausted job enters `dead_letter` for operator review.
-
-`QUEUE_BACKEND=local` means the scheduler runs inside a process, while job state and leases live in the repository. Local development uses `PROCESS_ROLE=api-and-worker`. Staging and closed pilot require separate `api` and `worker` processes; the API enqueues without claiming, and workers poll PostgreSQL. PostgreSQL uses `FOR UPDATE SKIP LOCKED`, partial claim indexes, compare-and-set lease completion, heartbeats, stale-lease recovery, bounded retries, and dead-letter state. Multiple workers cannot successfully own the same lease. Graceful shutdown stops new claims and waits up to `QUEUE_SHUTDOWN_TIMEOUT_MS` for active work. The adapter boundary remains suitable for a future Redis, SQS, RabbitMQ, or BullMQ scheduler.
-
-## Malware Scanning
-
-Scanning is an adapter boundary rather than a fake antivirus claim. The development mock can produce clean/suspicious outcomes for tests. The production-capable `clamav` provider streams bounded file bytes to a ClamAV-compatible daemon using `INSTREAM`, maps clean/suspicious results, and enforces `CLAMAV_TIMEOUT_MS`. Disabled scanning records `scan_unavailable`. Suspicious evidence remains quarantined in private storage and is blocked from AI processing and authenticated download. Scan events are audit logged.
-
-`MALWARE_SCAN_FAIL_POLICY=closed` blocks processing when scanning fails or is unavailable; `open` is intended only for controlled non-production use. `MALWARE_SCAN_REQUIRED_IN_PRODUCTION=true` requires enabled `clamav` scanning and a closed failure policy at startup. ComplianceIQ does not label the development mock as production protection. Deployments must still validate their chosen daemon version, signatures, network policy, scaling, and alerting.
-
-## AI Analysis Versioning
-
-Every reprocessing job creates a new `analysisVersion` linked through `previousAnalysisId`. Earlier model/provider/prompt metadata, content/output hashes, results, and timestamps remain available through the protected history endpoint. One row is explicitly current; human decisions update review/override fields without deleting prior model output. Audit packets use the current final reviewed state.
-
-## Evidence Review Queue
-
-Reviewer/admin users receive a focused Evidence Review Queue inside the Audit Packet Builder. It groups and filters tenant-scoped work by facility, confidence, extraction/OCR failure, suspicious scan, expiry/rejection, unmatched evidence, processing failure, and obligation priority impact. Review actions reuse the protected human-review API and immediately regenerate deterministic gap/action results.
-
-## Local Setup
-
-This rebuild uses npm scripts and Node 20+. CI runs on Node 20; local development has also been verified on newer Node releases. Root scripts load `.env` when it exists.
+Use Node 20 or newer.
 
 ```bash
 npm ci
-cp .env.example .env
-# Edit .env. Use REPOSITORY_BACKEND=file for a quick local smoke test,
-# or configure Postgres before running migrations.
-REPOSITORY_BACKEND=postgres npm run db:migrate
-npm run typecheck
-npm test
-```
-
-For a quick development smoke test without Postgres:
-
-```bash
-DEPLOYMENT_PROFILE=local PROCESS_ROLE=api-and-worker REPOSITORY_BACKEND=file DATABASE_URL= NODE_ENV=development SESSION_SECRET=development-secret-change-me npm run dev
-```
-
-The file repository is only for local development and tests. Production must use Postgres.
-
-## Database Setup
-
-Provision Postgres, set `DATABASE_URL`, then run the tracked migration runner:
-
-```bash
-REPOSITORY_BACKEND=postgres npm run db:migrate
-```
-
-`schema_migrations` records each migration and an advisory lock prevents concurrent deploys from applying the same migration. `0001_initial` creates:
-
-- `organizations`
-- `users`
-- `user_sessions`
-- `rules_packs`
-- `compliance_rules`
-- `facilities`
-- `facility_applicable_rules`
-- `evidence`
-- `evidence_matches`
-- `audit_readiness_reviews`
-- `evidence_gap_rows`
-- `findings`
-- `action_items`
-- `audit_packets`
-- `expert_reviews`
-- `audit_logs`
-
-Customer-owned tables include `organization_id` and indexes for tenant-scoped access.
-Evidence matches are persisted when a backend review is generated, so the rule-to-evidence relationship survives API restarts along with gap rows, findings, action items, and packet metadata.
-
-`0002_persistence_hardening` persists `selected_rules_pack_id` on facilities, adds integrity constraints, and adds composite and foreign-key indexes for tenant-scoped access patterns. The API uses a bounded Postgres connection pool with connection, idle, and statement timeouts.
-
-`0003_ai_evidence_intelligence` adds tenant-scoped AI analysis and private file metadata. `0004_production_file_intelligence` adds scan state, bounded processing jobs, immutable analysis versions, lineage hashes, supersession links, queue claim indexes, and one-active-job/one-current-analysis constraints. `0005_pilot_readiness_hardening` adds detected file metadata, deletion/retention foundations, storage-deletion outcomes, worker ownership, leases, heartbeats, dead-letter state, and supporting partial/foreign-key indexes. `0006_data_lifecycle_hardening` adds legal-hold, restore, and storage-deletion retry metadata plus retention/deletion indexes for evidence and audit packets. PostgreSQL workers claim due jobs with `FOR UPDATE SKIP LOCKED`; external AI and file operations remain outside database transactions.
-
-## Development Seed
-
-Demo seed is explicit and disabled by default.
-
-```bash
-NODE_ENV=development \
-ENABLE_DEMO_DATA=true \
-REPOSITORY_BACKEND=postgres \
-ADMIN_EMAIL=admin@example.com \
-ADMIN_PASSWORD='set-a-real-development-password' \
-npm run seed:demo
-```
-
-Production refuses to run demo seed.
-The explicit development seed creates one clearly labeled demo organization with three users (admin, reviewer, compliance manager — all sharing `ADMIN_PASSWORD`), one US facility, sixteen synthetic evidence items across accepted/pending/needs-review/expired/rejected states, five seeded AI analyses (including a human-reviewed lineage entry and a low-confidence review-queue item), and a generated deterministic review. It is idempotent for that organization and never runs automatically. See `INVESTOR_DEMO.md` for the guided demo flow.
-
-## Initial Production Administrator
-
-After migrations, provision the first organization administrator with the dedicated one-time command. It is separate from demo seed logic, requires a password of at least 14 characters, refuses to overwrite an existing user, and records an audit event.
-
-Set these secrets in the deployment environment rather than committing them:
-
-```bash
-PROVISION_ORGANIZATION_NAME='Example Manufacturing' \
-PROVISION_ADMIN_NAME='Operations Admin' \
-PROVISION_ADMIN_EMAIL='admin@example.com' \
-PROVISION_ADMIN_PASSWORD='replace-with-a-strong-password' \
-NODE_ENV=production \
-REPOSITORY_BACKEND=postgres \
-DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/complianceiq' \
-npm run admin:provision
-```
-
-Remove the four `PROVISION_*` values from the deployment environment after the command succeeds. Additional users should be created through an authenticated administration workflow.
-
-## Running The App
-
-Local combined API, worker, and web UI:
-
-```bash
-npm run dev
-```
-
-Open the `Web UI` URL printed by the launcher, usually `http://localhost:5173`. If that port is busy, the launcher selects the next open port and prints the correct URL.
-
-Separate processes:
-
-```bash
-npm run start:api
-npm run start:worker
-npm run dev:web
-```
-
-The API serves `/health/live` and `/health/ready`. A worker-only process serves `/health/live`, `/health/ready`, and `/metrics` on `WORKER_HEALTH_PORT`; keep that port internal.
-
-Static web build:
-
-```bash
-WEB_API_ORIGIN=http://localhost:4000 npm run build:web
-```
-
-The frontend uses `WEB_API_ORIGIN` at build/runtime config generation time. Local development defaults to `http://localhost:4000`; production builds must use a deployed HTTPS API origin.
-
-## Running Tests
-
-The default suite is self-contained and uses the non-production file adapter:
-
-```bash
-npm test
-npm run typecheck
 npm run lint
+npm run typecheck
+npm test
 npm run build
 ```
 
-`npm run typecheck` is a custom JavaScript/module consistency check (`scripts/check-js.mjs`), not a TypeScript compiler run.
+## Quick local Ergon walkthrough
 
-To exercise the real Postgres repository adapter, provide a disposable test database URL:
+Use file-backed local data, local storage, mock scanner, AI disabled, recovery delivery disabled, and MFA disabled for the first walkthrough.
+
+Seed synthetic local-only data:
 
 ```bash
-TEST_DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/complianceiq_test npm run validate:postgres
+env NODE_ENV=development DEPLOYMENT_PROFILE=local PROCESS_ROLE=api-and-worker REPOSITORY_BACKEND=file DATABASE_URL= FILE_REPOSITORY_PATH=/private/tmp/ergon-phase20-dev-db.json STORAGE_BACKEND=local UPLOAD_DIR=/private/tmp/ergon-phase20-private-storage SESSION_SECRET=development-secret-change-me ENABLE_DEMO_DATA=true ADMIN_PASSWORD='SyntheticPassword#2026' AI_ENABLED=false RECOVERY_DELIVERY_PROVIDER=disabled RECOVERY_EXPOSE_TEST_TOKEN=false MFA_ENABLED=false MALWARE_SCAN_ENABLED=true MALWARE_SCANNER_PROVIDER=mock npm run seed:pilot
 ```
 
-The Postgres integration test creates an isolated schema in the supplied database, applies all tracked migrations, writes tenant/user/facility/evidence/job/AI/review/match/gap/action/packet/audit data, restarts the repository, verifies tenant isolation, then drops the schema. It is explicitly skipped unless `TEST_DATABASE_URL` points to disposable infrastructure and the test role can create/drop schemas.
-
-To exercise a real S3-compatible private bucket:
+Start the app:
 
 ```bash
-TEST_S3_BUCKET=complianceiq-test \
-TEST_S3_REGION=ca-central-1 \
-TEST_S3_ENDPOINT=http://127.0.0.1:9000 \
-TEST_S3_ACCESS_KEY_ID=replace-me \
-TEST_S3_SECRET_ACCESS_KEY=replace-me \
-TEST_S3_FORCE_PATH_STYLE=true \
+env NODE_ENV=development DEPLOYMENT_PROFILE=local PROCESS_ROLE=api-and-worker PORT=4500 WEB_PORT=5500 APP_URL=http://localhost:5500 ALLOWED_ORIGINS=http://localhost:5500,http://127.0.0.1:5500,http://localhost:4500,http://127.0.0.1:4500 WEB_API_ORIGIN=http://localhost:4500 REPOSITORY_BACKEND=file DATABASE_URL= FILE_REPOSITORY_PATH=/private/tmp/ergon-phase20-dev-db.json STORAGE_BACKEND=local UPLOAD_DIR=/private/tmp/ergon-phase20-private-storage SESSION_SECRET=development-secret-change-me ENABLE_DEMO_DATA=false AI_ENABLED=false RECOVERY_DELIVERY_PROVIDER=disabled RECOVERY_EXPOSE_TEST_TOKEN=false MFA_ENABLED=false MALWARE_SCAN_ENABLED=true MALWARE_SCANNER_PROVIDER=mock npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5500
+```
+
+Synthetic local credentials after the seed:
+
+```text
+Email: pilot-admin@ergon.local
+Password: SyntheticPassword#2026
+```
+
+These credentials are intentionally synthetic and local-only.
+
+## Environment
+
+Copy `.env.example` only when you need a local editable environment. Do not commit real `.env` files.
+
+Production or closed-pilot deployments require deliberate external infrastructure: Postgres, private S3-compatible storage, secure session secret, HTTPS origins, and production-appropriate malware scanning. Closed pilot additionally requires enabled, required, fail-closed ClamAV scanning.
+
+Optional integrations include OpenAI-backed evidence analysis and SMTP password recovery. Keep both disabled unless deliberately configured.
+
+## Verification
+
+Self-contained checks:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm audit
+npm audit --omit=dev
+npm run scan:claims
+npm run scan:random
+```
+
+Infrastructure-dependent validators skip unless disposable external test infrastructure is provided:
+
+```bash
+npm run validate:postgres
 npm run validate:storage
-```
-
-The conditional S3 integration uploads an opaque private key, retrieves the bytes through the adapter, creates a server-side bounded 120-second signed URL and verifies its expiry/content, deletes the object, and confirms it is unavailable. The product UI does not expose signed URLs; normal evidence and packet downloads remain authenticated, tenant-scoped backend routes. The test skips clearly unless the required `TEST_S3_*` variables exist.
-
-Closed-pilot QA is deterministic and does not use OpenAI:
-
-```bash
-npx playwright install chromium
-npm run qa:pilot
-```
-
-In environments with a preinstalled Chromium (CI images, sandboxes), skip the download and point Playwright at the existing binary:
-
-```bash
-PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium npm run qa:pilot
-```
-
-Playwright starts isolated file-backed API and web processes, logs in, creates a facility, uploads evidence, processes it with mock AI, exercises the review queue and human override, verifies matrix/action changes, exports/downloads a packet, archives evidence/packet data, and verifies health endpoints.
-
-Live scanner validation:
-
-```bash
-MALWARE_SCAN_ENABLED=true \
-MALWARE_SCANNER_PROVIDER=clamav \
-MALWARE_SCAN_FAIL_POLICY=closed \
-CLAMAV_HOST=scanner.internal \
 npm run validate:scanner
 ```
 
-Live EICAR scanning is opt-in with `SCANNER_VALIDATE_EICAR=true` and should be used only in an approved scanner test environment.
-
-## Synthetic Pilot Dataset
-
-The pilot seed is clearly synthetic, idempotent, and limited to the local profile. It creates one organization; US, Canada, and Mexico facilities; mock AI analyses; a deliberate reviewer-queue item; persisted gap/action data; and generated packet files.
+Browser smoke:
 
 ```bash
-DEPLOYMENT_PROFILE=local \
-ENABLE_DEMO_DATA=true \
-ADMIN_PASSWORD='SyntheticPassword#2026' \
-npm run seed:pilot
+npm run qa:pilot
 ```
 
-Do not use the synthetic seed in staging or closed-pilot production.
+If local Chromium is unavailable or blocked by the host sandbox, classify that as a local browser-runtime blocker rather than an Ergon product failure.
 
-## API Summary
+## Pilot status
 
-Auth:
+`NO_GO`
 
-- `POST /api/auth/login` (rate-limited per client IP + email)
-- `POST /api/auth/logout`
-- `POST /api/auth/recovery/request` (generic `202` response; rate-limited; never reveals whether an email exists)
-- `POST /api/auth/recovery/reset` (single-use hashed token; revokes active sessions on success)
-- `GET /api/auth/recovery/test-token` (local/test only with `RECOVERY_EXPOSE_TEST_TOKEN=true`)
-- `GET /api/auth/me`
+The codebase has strong local and CI foundations, but external staging readiness, production infrastructure, operational monitoring, backup/restore, live scanner deployment, and other closed-pilot gates remain unresolved.
 
-Users (admin only):
+## Strategy documents
 
-- `GET /api/users`
-- `POST /api/users` (create member with role and initial password)
-- `PATCH /api/users/:id` (name, role, isActive; self-deactivation and self-demotion are rejected)
-
-Facilities:
-
-- `GET /api/facilities`
-- `POST /api/facilities`
-- `GET /api/facilities/:id`
-- `PATCH /api/facilities/:id`
-- `DELETE /api/facilities/:id`
-- `GET /api/facilities/:id/applicable-rules`
-
-Rules:
-
-- `GET /api/rules-packs`
-- `GET /api/rules-packs/:id`
-- `GET /api/rules`
-
-Evidence:
-
-- `GET /api/evidence?facilityId=...&includeArchived=true` (`includeArchived` requires admin/reviewer)
-- `POST /api/evidence`
-- `POST /api/evidence/upload`
-- `GET /api/evidence/:id`
-- `PATCH /api/evidence/:id`
-- `DELETE /api/evidence/:id?reason=...` (admin/reviewer; archives metadata and deletes the private object)
-- `POST /api/evidence/:id/legal-hold` (admin/reviewer)
-- `DELETE /api/evidence/:id/legal-hold` (admin/reviewer)
-- `POST /api/evidence/:id/restore` (admin/reviewer; metadata restore only when the private object was not deleted)
-- `POST /api/evidence/:id/retry-storage-deletion` (admin/reviewer)
-- `GET /api/evidence/:id/download`
-- `POST /api/evidence/:id/process-ai`
-- `POST /api/evidence/:id/retry-processing` (admin/reviewer)
-- `GET /api/evidence/:id/ai-analysis`
-- `GET /api/evidence/:id/ai-analyses` (version history)
-- `PATCH /api/evidence/:id/ai-review` (admin/reviewer)
-- `GET /api/evidence-ai-analyses?facilityId=...`
-- `GET /api/evidence-processing-jobs?facilityId=...`
-- `GET /api/evidence-review-queue?facilityId=...&status=...&priority=...` (admin/reviewer)
-- `GET /api/evidence-taxonomy`
-- `GET /api/ai/status`
-
-Audit readiness:
-
-- `GET /api/audit-readiness/reviews`
-- `POST /api/audit-readiness/reviews`
-- `GET /api/audit-readiness/reviews/:id`
-- `GET /api/audit-readiness/reviews/:id/gap-matrix`
-- `GET /api/audit-readiness/reviews/:id/score`
-- `GET /api/audit-readiness/reviews/:id/action-plan`
-
-Audit packets:
-
-- `GET /api/audit-packets?facilityId=...&includeArchived=true` (`includeArchived` requires admin/reviewer)
-- `POST /api/audit-packets/export`
-- `GET /api/audit-packets/:id/download`
-- `DELETE /api/audit-packets/:id?reason=...` (admin/reviewer; archives metadata and deletes the private PDF)
-- `POST /api/audit-packets/:id/legal-hold` (admin/reviewer)
-- `DELETE /api/audit-packets/:id/legal-hold` (admin/reviewer)
-- `POST /api/audit-packets/:id/restore` (admin/reviewer; metadata restore only when the private PDF was not deleted)
-- `POST /api/audit-packets/:id/retry-storage-deletion` (admin/reviewer)
-
-Lifecycle:
-
-- `POST /api/lifecycle/retention/enforce` (admin/reviewer; enforces due retention dates and skips active legal holds)
-
-Expert review and logs:
-
-- `GET /api/expert-reviews`
-- `POST /api/expert-reviews`
-- `PATCH /api/expert-reviews/:id`
-- `GET /api/audit-logs`
-
-Health:
-
-- `GET /health/live` - process-only liveness; does not call dependencies
-- `GET /health/ready` - database, private storage, scanner, queue, and loaded-config readiness
-- `GET /health` and `GET /api/health` - readiness aliases for deployment compatibility
-
-## Security Notes
-
-- Passwords are hashed with Node `scrypt`.
-- Sessions are persisted in the repository and signed with `SESSION_SECRET`.
-- Session records are tenant-checked and survive API restart.
-- Login attempts are rate-limited per client IP + email pair (`LOGIN_RATE_LIMIT_MAX_ATTEMPTS` in `LOGIN_RATE_LIMIT_WINDOW_MS`; defaults 10 in 15 minutes) and return `429` when exceeded.
-- Password reset requests return the same generic `202` response for existing and missing accounts, persist only a SHA-256 reset-token hash, expire reset tokens after 30 minutes, invalidate prior outstanding tokens, and audit request/completion events without raw tokens.
-- Successful password reset consumes the token once, updates the scrypt password hash, invalidates sibling tokens, revokes all active sessions for that user, and clears the current session cookie.
-- Password reset delivery supports `RECOVERY_DELIVERY_PROVIDER=disabled` or `smtp`. SMTP uses `APP_URL` to build the existing `#/reset-password?token=...` frontend link, sends only to the stored account email, and records safe delivery sent/failed audit events. Failed delivery invalidates the undelivered token. Self-contained tests use fake transport; live external SMTP validation still requires approved staging credentials.
-- Local/test raw-token inspection requires `RECOVERY_EXPOSE_TEST_TOKEN=true` and is rejected for staging/closed-pilot profiles.
-- Optional TOTP MFA is available when `MFA_ENABLED=true` and `MFA_ENCRYPTION_KEY` is a Base64 encoding of exactly 32 random bytes. Authenticator-app TOTP uses SHA-1, six digits, 30-second periods, and a one-step skew window for broad app compatibility.
-- MFA enrollment requires the current password and a confirmation TOTP before activation. TOTP secrets are AES-256-GCM encrypted at rest using the external MFA key; plaintext secrets and `otpauth://` URIs are not persisted or logged.
-- MFA-enabled users complete password verification first, then a short-lived one-time MFA challenge. A normal signed session is created only after TOTP or recovery-code verification succeeds.
-- Recovery codes are generated in sets of 10, stored only as SHA-256 hashes, displayed only after enrollment or regeneration, and each code is one-time-use. SMS OTP, email OTP, WebAuthn/passkeys, mandatory org-wide MFA policy, and admin bypass are not implemented.
-- Password reset changes the password and revokes sessions, but does not disable MFA. Loss of both authenticator access and saved recovery codes still requires a future explicitly designed support/admin recovery process.
-- User management is admin-only, tenant-scoped, audit-logged, and blocks self-deactivation/self-demotion.
-- Core routes require authentication.
-- Customer-owned repository methods are scoped by `organizationId`.
-- Cross-organization resource access returns `403`.
-- Unsafe browser requests with an untrusted `Origin` are rejected.
-- JSON and upload bodies are size-limited before full buffering.
-- Upload content is signature-sniffed and checked against declared MIME and extension before storage; archives and active content are rejected.
-- Expert review requests validate referenced facilities and reviews against the caller's organization.
-- Evidence and packet files are private file references and download through authenticated API routes.
-- Suspicious files are blocked before AI processing and before download; scan results and queue transitions are audit logged without raw file content.
-- S3 objects are written without public ACLs, use opaque keys, and remain behind authenticated backend downloads.
-- Client-supplied private file references are ignored; only backend storage writes can attach files.
-- AI calls occur only on the backend, receive bounded extracted text, and never run inside database transactions.
-- AI analyses, immutable history, processing jobs, reviewer queue rows, and human overrides are tenant-scoped; override/retry actions require admin or reviewer role and create audit events.
-- Raw document text and raw model responses are not stored in AI rows or audit logs.
-- The frontend escapes persisted content before rendering and restores the current session and latest persisted review after reload.
-- `SESSION_SECRET`, `DATABASE_URL`, and production CORS are validated at startup.
-- API and static responses set CSP, nosniff, referrer, permissions, and frame protections; production API responses also set HSTS.
-- Production session cookies are `Secure`, `HttpOnly`, and configurable as `SameSite=Lax|Strict|None`. `TRUST_PROXY=true` should be set only behind a trusted proxy that overwrites forwarding headers.
-
-## Structured Operational Logging
-
-The API writes newline-delimited JSON operational logs with request IDs and safe correlation fields for HTTP requests, uploads, facility/evidence/job identifiers, processing state, status code, error code, and duration. Queue logs include worker and job correlation. A denylist redacts authorization/cookie/secret/password/token/prompt/raw-content/document-text/employee-name fields. Raw documents, prompts, model responses, and file bytes are never intentionally written to operational logs. Tenant audit logs remain separate persisted product records.
-
-## Compliance Data Lifecycle
-
-Evidence and packet records carry archive/deletion actor, time, reason, optional retention date, private-storage deletion status/error fields, legal-hold metadata, restore metadata, and storage-deletion retry counters. Admin/reviewer `DELETE` routes explicitly delete the private object, preserve the soft-deleted metadata and audit history, and log the outcome. A failed object deletion returns a visible `502`, records `storageDeletionStatus=failed`, and does not silently pretend deletion succeeded.
-
-Admin/reviewer users can set and release legal holds for evidence and audit packets. Active holds block direct archive/delete, retention enforcement, restore, and private-object deletion retry. Reviewers/admins can include archived evidence or packets in list views, retry failed private-object deletion, and restore archived metadata only when the private object was not deleted. Retention enforcement is an explicit admin/reviewer command that archives due evidence and packets, deletes private objects when present, skips active legal holds, records failures, and writes tenant audit logs.
-
-ComplianceIQ does not provide storage-provider WORM guarantees, bucket lifecycle policy, object-lock configuration, autonomous external scheduling, or backup orchestration. Those remain deployment and operational responsibilities.
-
-## Rules And Scoring
-
-Rules packs live in `packages/rules`.
-
-The deterministic readiness score is:
-
-```text
-100
-- 25 * criticalMissing
-- 15 * highMissing
-- 8 * mediumMissing
-- 10 * expiredEvidence
-- 5 * rejectedEvidence
-```
-
-The result is clamped between 0 and 100, and the score explanation is persisted with each review.
-
-## Storage
-
-Storage is selected through a private-storage adapter factory. The local adapter uses randomized references, traversal protection, restrictive filesystem permissions, size limits, and authenticated API downloads:
-
-- `STORAGE_BACKEND=local`
-- `UPLOAD_DIR=data/private-storage`
-
-The S3-compatible adapter uses the official AWS SDK and supports AWS S3, MinIO, R2-style endpoints, path-style addressing, explicit credentials, or the AWS credential chain. File references contain opaque private keys rather than public URLs. Downloads continue through tenant-authenticated API routes; direct signed URLs are not exposed by the current UI. A server-only helper can create URLs bounded by `SIGNED_URL_EXPIRY_SECONDS` (60–3600 seconds) for integration/deployment validation. Production configuration requires `STORAGE_BACKEND=s3`, bucket, and region. `S3_ENDPOINT` and path-style mode are optional for compatible providers.
-
-## CI
-
-`.github/workflows/ci.yml` runs `npm ci`, lint, typecheck, self-contained tests, build, prohibited-claim scanning, deterministic-random scanning, and Chromium pilot QA without external secrets. Separate PostgreSQL, S3, and scanner jobs run their validator only when the corresponding secrets are configured; otherwise each reports an explicit skip. CI does not require OpenAI.
-
-## Closed-Pilot Deployment
-
-Deployment profiles are validated at startup:
-
-| Profile | Database / storage | Runtime | Scanner | AI | Security / logging |
-| --- | --- | --- | --- | --- | --- |
-| `local` | File or Postgres; local or S3 | `api-and-worker` by default | Mock, unavailable, or ClamAV; open policy allowed | Disabled or mock/OpenAI | HTTP localhost, Lax cookie, debug/info logs |
-| `staging` | Real Postgres and private S3 required | Separate `api` and `worker` | ClamAV recommended; mock rejected; closed policy recommended | Disabled or OpenAI | HTTPS, strong secret, secure cookie, explicit proxy and info/warn logs |
-| `closed-pilot` | Real Postgres and private S3 required | Separate `api` and `worker` | ClamAV enabled, required, and fail-closed | Disabled or approved OpenAI configuration | HTTPS, strong secret, secure cookie, no demo seed, structured logs |
-
-Templates are available in `deploy/env/local.env.example`, `deploy/env/staging.env.example`, and `deploy/env/closed-pilot.env.example`. Use a secret manager rather than copying secrets into committed files.
-
-Recommended topology:
-
-1. Serve the built static web app from Vercel, managed HTTPS hosting, or a hardened static server/CDN.
-2. Run `npm run start:api` behind the trusted HTTPS ingress.
-3. Run `npm run start:worker` separately with access to PostgreSQL, private storage, scanner, and optional AI provider.
-4. Point both processes at the same migrated PostgreSQL database and private bucket.
-5. Expose API health through the load balancer; keep worker health/metrics internal.
-
-### Vercel frontend deployment
-
-The root `vercel.json` is intentionally configured for the static web frontend only:
-
-- install: `npm ci`
-- build: `npm run build:web`
-- output: `apps/web/dist`
-
-Set this Vercel environment variable before deploying:
-
-```bash
-WEB_API_ORIGIN=https://your-api.example.com
-```
-
-Vercel automatically sets `NODE_ENV=production`/`VERCEL=1`; the web build fails fast if `WEB_API_ORIGIN` is missing, not HTTPS, or points at localhost. Add the Vercel web origin to the API `ALLOWED_ORIGINS` value, for example:
-
-```bash
-APP_URL=https://your-vercel-app.vercel.app
-ALLOWED_ORIGINS=https://your-vercel-app.vercel.app
-```
-
-### API and worker deployment
-
-Do not assume the current backend is a complete all-Vercel serverless deployment. The API uses a long-running Node HTTP server, signed cookie sessions, private file streaming, readiness checks, and a database-backed local scheduler boundary. The worker requires a persistent process for polling, leases, heartbeats, stale recovery, retries, and dead-letter handling. A production scanner also requires network access to a ClamAV-compatible daemon. Recommended pilot topology is therefore:
-
-- web frontend on Vercel;
-- API on a persistent Node host or container platform;
-- worker on a separate persistent Node host/container using the same release;
-- managed PostgreSQL;
-- private S3-compatible storage;
-- private ClamAV-compatible scanner service.
-
-You may deploy the API to a Vercel-compatible serverless target only after adapting the API entrypoint and proving request duration, body size, private download streaming, cookie/CORS, scanner access, and queue behavior. The worker should remain outside Vercel serverless unless replaced by a supported background-job platform.
-
-Before handling pilot evidence, run `npm run validate:postgres`, `npm run validate:storage`, `npm run validate:scanner`, and `npm run qa:pilot` in staging. The validators skip clearly when their infrastructure is absent. `VALIDATION_TARGET=production` is refused unless `ALLOW_PRODUCTION_VALIDATION=true`; validators still use isolated data or test objects.
-
-The release-readiness report and Vercel guidance are in [DEPLOYMENT_READINESS.md](./DEPLOYMENT_READINESS.md). Operational go/no-go, backup/restore, scanner, incident-response, and security checks are in [PILOT_READINESS.md](./PILOT_READINESS.md). The staging setup, validator, restore-drill, monitoring, and rotation runbook is in [STAGING_INFRASTRUCTURE_RUNBOOK.md](./STAGING_INFRASTRUCTURE_RUNBOOK.md). Pilot-facing upload and AI limitations are in [PILOT_DATA_POLICY.md](./PILOT_DATA_POLICY.md).
-
-## Deployment Checklist
-
-- Run `npm ci`
-- Select and validate the staging or closed-pilot deployment profile
-- Deploy separate API and worker processes
-- Run `npm run db:migrate`
-- Provision the first administrator with `npm run admin:provision`, then remove its `PROVISION_*` secrets
-- Verify `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build`
-- Configure a private S3-compatible bucket for uploads and generated PDFs
-- Configure and validate the `clamav` scanner adapter with current signatures, a closed failure policy, timeout monitoring, and `MALWARE_SCAN_REQUIRED_IN_PRODUCTION=true`; the mock is rejected in production
-- Size queue concurrency, lease, heartbeat, retry, shutdown, database-pool, and AI-provider limits for the pilot workload
-- Run `npm run validate:postgres` against disposable/staging infrastructure
-- Run `npm run validate:storage` against the pilot-compatible test bucket
-- Run `npm run validate:scanner` from the deployment network
-- Run `npm run qa:pilot` after installing Chromium with Playwright
-- Confirm CORS allows only trusted web origins
-- Configure TLS termination and set `TRUST_PROXY=true` only when the trusted reverse proxy overwrites forwarding headers
-- Confirm demo data is disabled
-- Verify `/health/live` and `/health/ready` through the deployment load balancer
-- Verify the selected private object-storage adapter is durable and non-public
-- Configure log collection/retention without capturing document bodies or secrets
-- Define pilot retention, object lifecycle, backup/restore, incident response, legal-hold approval, and deletion-retry procedures
-
-## Known Limitations
-
-- Starter rules are demo/unverified unless expert-reviewed.
-- Digitally readable PDF extraction is implemented; encrypted, corrupt, and scanned PDFs fail safely into review.
-- OCR interfaces and test mocks exist, but no production OCR engine is bundled.
-- Queue jobs and leases are durable in PostgreSQL and scheduling can run in a separate worker process. A dedicated external queue service remains preferable for stronger back-pressure and independent scheduler operations.
-- The mock provider is for tests/development only and is rejected in production.
-- A ClamAV-compatible production transport is implemented, but scanner infrastructure, signature freshness, capacity, alerting, and operational approval remain deployment responsibilities.
-- S3-compatible storage is implemented, but bucket policies, customer-managed KMS requirements, object lock/WORM, provider lifecycle, and backup/restore procedures remain deployment responsibilities.
-- A real Postgres integration run still requires a disposable `TEST_DATABASE_URL`; the self-contained suite deliberately does not emulate Postgres.
-- A real S3 integration run still requires private `TEST_S3_*` infrastructure; the self-contained suite uses a mock client.
-- Archives and Office ZIP containers are intentionally unsupported. DOCX parsing may be added only with bounded entry/count/size controls and path-safe extraction.
-- Images and scanned PDFs still require a production OCR provider or human review.
-- Legal holds, explicit retention enforcement, failed-deletion retry, and safe metadata restore workflows are implemented for reviewer/admin users. Autonomous external scheduling and storage-provider WORM/object-lock policies are not implemented in application code.
-- Account recovery token lifecycle, SMTP delivery adapter, reset UI, generic request response, audit logging, and session revocation are implemented. Real external SMTP validation remains a staging responsibility before relying on live email delivery.
-- The static frontend is focused on the core workflow; future work can replace it with a richer React/Next app without moving compliance logic to the client.
-- Province/state-specific Canadian and Mexican rule depth needs expert legal/EHS review before commercial reliance.
-
-## Deployment Readiness Status
-
-The application includes pilot-oriented infrastructure validation paths, but this repository alone does not prove a deployment production-ready. Before handling pilot customer files, all environment-dependent gates must pass in the target environment:
-
-1. Run the isolated integration suite against real PostgreSQL via `TEST_DATABASE_URL`.
-2. Exercise the target private bucket via `TEST_S3_*`, including signed expiry and deletion.
-3. Validate the deployed ClamAV-compatible scanner with clean, suspicious, timeout, and unavailable cases under the chosen fail policy.
-4. Verify liveness/readiness, structured log delivery, graceful worker shutdown, backup/restore, retention/deletion procedures, and Playwright smoke tests in staging.
-
-## Next Recommended Sprint
-
-1. Run the four staging validators and complete the go/no-go checklist with named pilot owners.
-2. Conduct a controlled workflow session with 3–5 EHS/manufacturing users using agreed, minimized pilot data.
-3. Move scheduling to Redis/SQS/BullMQ while preserving the lease/idempotency repository contract.
-4. Add production OCR, external lifecycle scheduling, monitoring, secret rotation, and AI budget controls.
+- `ERGON_PRODUCT_STRATEGY.md`
+- `ERGON_UX_PRINCIPLES.md`
+- `ERGON_IDENTITY_STRATEGY.md`
+- `ERGON_CLEANUP_AUDIT.md`

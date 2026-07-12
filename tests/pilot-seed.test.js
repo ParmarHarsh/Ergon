@@ -19,7 +19,7 @@ test("synthetic pilot seed is local-only, idempotent, multi-jurisdictional, and 
     isProduction: false,
     deploymentProfile: "local",
     enableDemoData: true,
-    adminEmail: "admin@complianceiq.local",
+    adminEmail: "admin@ergon.local",
     adminPassword: "SyntheticPassword#2026",
     aiMaxFileTextChars: 12_000,
     maxUploadMb: 5,

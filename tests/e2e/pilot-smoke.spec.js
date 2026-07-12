@@ -12,17 +12,17 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
       networkErrors.push(`${response.status()} ${response.url()}`);
     }
   });
-  await page.addInitScript(() => window.localStorage.setItem("ciq_api_base", "http://127.0.0.1:4100"));
+  await page.addInitScript(() => window.localStorage.setItem("ergon_api_base", "http://127.0.0.1:4100"));
   await page.goto("/");
-  await expect(page).toHaveTitle(/ComplianceIQ/);
+  await expect(page).toHaveTitle(/Ergon/);
   await expect(page.locator("body")).not.toContainText("Internal Server Error");
 
   // Login
   await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
-  await page.getByLabel("Email").fill("pilot-admin@complianceiq.local");
+  await page.getByLabel("Email").fill("pilot-admin@ergon.local");
   await page.getByLabel("Password").fill("PilotPassword#2026");
   await page.getByRole("button", { name: "Log in" }).click();
-  await expect(page.getByRole("heading", { name: "Audit Packet Builder" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your AI compliance workspace for manufacturing." })).toBeVisible();
 
   // Create facility
   await page.locator(".sidebar").getByRole("button", { name: "Facilities" }).click();
@@ -52,11 +52,11 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
   await expect(evidenceCard).toContainText("AI evidence intelligence");
 
   // Review queue shows the item
-  await page.locator(".sidebar").getByRole("button", { name: "Review queue" }).click();
+  await page.locator(".sidebar").getByRole("button", { name: "AI Review" }).click();
   await expect(page.locator(".review-queue-list")).toContainText("Pilot LOTO procedure");
 
   // Generate the gap matrix
-  await page.locator(".sidebar").getByRole("button", { name: "Gap Matrix" }).click();
+  await page.locator(".sidebar").getByRole("button", { name: "Gaps & Actions" }).click();
   await page.getByRole("button", { name: /Generate analysis|Regenerate analysis/ }).click();
   await expect(page.locator("table")).toContainText("Lockout/Tagout written procedures");
 
@@ -68,7 +68,7 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
   await expect(page.locator(".drawer")).toHaveCount(0);
 
   // Action plan lists the open gap
-  await page.locator(".sidebar").getByRole("button", { name: "Action plan" }).click();
+  await page.locator(".sidebar").getByRole("button", { name: "Action Plan" }).click();
   await expect(page.locator(".bucket-grid")).toContainText("Close evidence gap: Lockout/Tagout written procedures");
 
   // Human review: override classification and accept the evidence
@@ -83,13 +83,13 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
   await expect(evidenceCard).toContainText("Evidence accepted");
 
   // Gap matrix reflects the accepted evidence; action plan gap is closed
-  await page.locator(".sidebar").getByRole("button", { name: "Gap Matrix" }).click();
+  await page.locator(".sidebar").getByRole("button", { name: "Gaps & Actions" }).click();
   await expect(page.locator("tr", { hasText: "Lockout/Tagout written procedures" })).toContainText("Accepted");
-  await page.locator(".sidebar").getByRole("button", { name: "Action plan" }).click();
+  await page.locator(".sidebar").getByRole("button", { name: "Action Plan" }).click();
   await expect(page.locator(".bucket-grid")).not.toContainText("Close evidence gap: Lockout/Tagout written procedures");
 
   // Export, download, and archive the audit packet
-  await page.locator(".sidebar").getByRole("button", { name: "Packet Builder" }).click();
+  await page.locator(".sidebar").getByRole("button", { name: "Packet Workflow" }).click();
   await page.getByRole("button", { name: "Export audit packet" }).click();
   await expect(page.getByRole("heading", { name: "Packet history" })).toBeVisible();
   await expect(page.locator("table")).toContainText("Industrial Audit Readiness Packet");
@@ -97,7 +97,7 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
   await page.locator("[data-action='download-packet']").click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/industrial-audit-readiness-packet/);
-  await page.screenshot({ path: "/tmp/complianceiq-pilot-smoke.png", fullPage: false });
+  await page.screenshot({ path: "/tmp/ergon-pilot-smoke.png", fullPage: false });
 
   page.once("dialog", (dialog) => dialog.accept());
   await page.locator("[data-action='archive-packet']").click();
@@ -117,13 +117,13 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
   await expect(archivedEvidenceCard).toContainText("archived");
 
   // Admin screen manages users
-  await page.locator(".sidebar").getByRole("button", { name: "Admin" }).click();
-  await expect(page.locator("table")).toContainText("pilot-admin@complianceiq.local");
+  await page.locator(".sidebar").getByRole("button", { name: "Team & Roles" }).click();
+  await expect(page.locator("table")).toContainText("pilot-admin@ergon.local");
   await page.locator('#user-form input[name="name"]').fill("Pilot Reviewer");
-  await page.locator('#user-form input[name="email"]').fill("pilot-reviewer@complianceiq.local");
+  await page.locator('#user-form input[name="email"]').fill("pilot-reviewer@ergon.local");
   await page.locator('#user-form input[name="password"]').fill("ReviewerPassword#2026");
   await page.getByRole("button", { name: "Create user" }).click();
-  await expect(page.locator("table")).toContainText("pilot-reviewer@complianceiq.local");
+  await expect(page.locator("table")).toContainText("pilot-reviewer@ergon.local");
 
   expect((await request.get("http://127.0.0.1:4100/health/live")).status()).toBe(200);
   expect((await request.get("http://127.0.0.1:4100/health/ready")).status()).toBe(200);

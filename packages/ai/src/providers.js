@@ -32,7 +32,7 @@ export class OpenAiEvidenceProvider {
           text: {
             format: {
               type: "json_schema",
-              name: "complianceiq_evidence_analysis",
+              name: "ergon_evidence_analysis",
               strict: true,
               schema: EVIDENCE_AI_JSON_SCHEMA
             }

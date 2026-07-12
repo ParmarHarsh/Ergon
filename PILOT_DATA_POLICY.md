@@ -1,6 +1,6 @@
-# ComplianceIQ Pilot Data Policy
+# Ergon Pilot Data Policy
 
-This practical policy is for the controlled ComplianceIQ pilot. It is not a formal services agreement or legal opinion.
+This practical policy is for the controlled Ergon pilot. It is not a formal services agreement or legal opinion.
 
 ## Data That May Be Uploaded
 
@@ -20,7 +20,7 @@ AI may classify evidence, extract bounded fields, and suggest a match to an appl
 
 ## Security And Access
 
-Evidence files are intended to remain in private object storage and download through authenticated organization-scoped routes. ComplianceIQ records security-relevant audit events and minimizes operational log content. Pilot customers remain responsible for controlling their user accounts, choosing authorized uploaders/reviewers, and promptly reporting suspected access issues.
+Evidence files are intended to remain in private object storage and download through authenticated organization-scoped routes. Ergon records security-relevant audit events and minimizes operational log content. Pilot customers remain responsible for controlling their user accounts, choosing authorized uploaders/reviewers, and promptly reporting suspected access issues.
 
 ## Retention And Deletion
 
@@ -28,7 +28,7 @@ The pilot supports explicit evidence and packet archive/deletion flows with audi
 
 ## Product Scope
 
-ComplianceIQ provides audit-preparation and evidence-organization support. It is not legal advice, does not guarantee compliance, and does not represent regulator certification or approval. Starter rules and demo content require qualified review. Customers remain responsible for their facilities, legal obligations, source-document accuracy, reviewer decisions, and use of exported packets.
+Ergon provides audit-preparation and evidence-organization support. It is not legal advice, does not guarantee compliance, and does not represent regulator certification or approval. Starter rules and demo content require qualified review. Customers remain responsible for their facilities, legal obligations, source-document accuracy, reviewer decisions, and use of exported packets.
 
 ## Support And Escalation
 

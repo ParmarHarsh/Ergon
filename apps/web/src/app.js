@@ -1,6 +1,7 @@
 import { API_BASE, api, bootstrap, canReview, currentFacility, fileToBase64, isAdmin, refreshAdminData, refreshExpertReviews, refreshFacilityData, refreshMfaStatus, refreshReviewQueue, refreshSystemData, resetSession, state } from "./store.js";
 import { ICONS, html } from "./ui.js";
 import { loginView } from "./views/login.js";
+import { homeView } from "./views/home.js";
 import { builderView } from "./views/builder.js";
 import { facilitiesView } from "./views/facilities.js";
 import { evidenceView } from "./views/evidence.js";
@@ -16,34 +17,38 @@ import { accountSecurityView } from "./views/account-security.js";
 const root = document.querySelector("#app");
 
 const ROUTES = {
-  builder: { title: "Audit Packet Builder", view: builderView },
+  home: { title: "Home", view: homeView },
+  builder: { title: "Audit Pack Workflow", view: builderView },
   facilities: { title: "Facilities", view: facilitiesView },
   evidence: { title: "Evidence", view: evidenceView },
-  review: { title: "Review queue", view: reviewView },
-  matrix: { title: "Evidence Gap Matrix", view: matrixView },
-  actions: { title: "Action plan", view: actionsView },
-  packets: { title: "Audit packets", view: packetsView },
+  review: { title: "AI Review", view: reviewView },
+  matrix: { title: "Gaps & Actions", view: matrixView },
+  actions: { title: "Action Plan", view: actionsView },
+  packets: { title: "Audit Packs", view: packetsView },
   experts: { title: "Expert review", view: expertsView },
-  admin: { title: "Admin", view: adminView },
-  security: { title: "Account security", view: accountSecurityView },
+  admin: { title: "Team & Roles", view: adminView },
+  security: { title: "Security", view: accountSecurityView },
   system: { title: "System status", view: systemView }
 };
 
 const NAV = [
-  ["Workspace", [
-    ["builder", "Packet Builder", "builder"],
+  ["Home", [
+    ["home", "Home", "builder"]
+  ]],
+  ["Work", [
+    ["evidence", "Evidence", "evidence"],
+    ["review", "AI Review", "review"],
+    ["matrix", "Gaps & Actions", "matrix"],
+    ["actions", "Action Plan", "actions"],
+    ["packets", "Audit Packs", "packet"]
+  ]],
+  ["Operations", [
     ["facilities", "Facilities", "facility"],
-    ["evidence", "Evidence", "evidence"]
+    ["builder", "Packet Workflow", "packet"]
   ]],
-  ["Analysis", [
-    ["review", "Review queue", "review"],
-    ["matrix", "Gap Matrix", "matrix"],
-    ["actions", "Action plan", "actions"],
-    ["packets", "Audit packets", "packet"]
-  ]],
-  ["Organization", [
+  ["Administration", [
     ["experts", "Expert review", "expert"],
-    ["admin", "Admin", "admin"],
+    ["admin", "Team & Roles", "admin"],
     ["security", "Security", "security"],
     ["system", "System", "system"]
   ]]
@@ -53,14 +58,17 @@ const NAV = [
 
 function render() {
   if (!state.booted) {
-    root.innerHTML = `<div class="login-form-col" style="min-height:100vh;display:grid;place-items:center"><div class="muted small">Loading ComplianceIQ…</div></div>`;
+    root.innerHTML = `<div class="login-form-col" style="min-height:100vh;display:grid;place-items:center"><div class="loading-panel"><strong>Loading Ergon…</strong><span>Connecting to the local workspace. If this does not resolve, Ergon will show a connection error.</span></div></div>`;
     return;
   }
   if (!state.user) {
     root.innerHTML = loginView();
     return;
   }
-  const route = ROUTES[state.route] ? state.route : "builder";
+  const route = ROUTES[state.route] ? state.route : "home";
+  if (isAuthHash(window.location.hash)) {
+    window.setTimeout(() => syncRouteHash(route), 0);
+  }
   root.innerHTML = `
     <div class="app-shell">
       ${sidebar(route)}
@@ -84,8 +92,8 @@ function sidebar(activeRoute) {
       <div class="brand">
         <div class="brand-mark">${ICONS.logo}</div>
         <div>
-          <div class="brand-name">ComplianceIQ</div>
-          <div class="brand-sub">Evidence Intelligence</div>
+          <div class="brand-name">Ergon</div>
+          <div class="brand-sub">Manufacturing Compliance</div>
         </div>
       </div>
       ${NAV.map(([groupLabel, items]) => {
@@ -182,10 +190,24 @@ async function run(work, { successMessage = "", rethrow = false } = {}) {
 
 function navigate(route) {
   state.drawerRuleId = null;
-  state.route = ROUTES[route] ? route : "builder";
-  window.location.hash = `#/${state.route}`;
+  state.route = ROUTES[route] ? route : "home";
+  syncRouteHash(state.route);
   render();
   void loadRouteData(state.route);
+}
+
+function syncRouteHash(route, { replace = false } = {}) {
+  const hash = `#/${ROUTES[route] ? route : "home"}`;
+  if (window.location.hash === hash) return;
+  if (replace) {
+    window.history.replaceState(null, "", hash);
+    return;
+  }
+  window.location.hash = hash;
+}
+
+function isAuthHash(hash) {
+  return hash.startsWith("#/login") || hash.startsWith("#/forgot-password") || hash.startsWith("#/reset-password");
 }
 
 async function loadRouteData(route) {
@@ -349,7 +371,7 @@ const clickActions = {
     await run(async () => {
       await api(`/api/evidence/${encodeURIComponent(dataset.evidenceId)}/process-ai`, { method: "POST", body: {} });
       await refreshFacilityData();
-    }, { successMessage: "Evidence queued for AI analysis." });
+    }, { successMessage: state.aiStatus.enabled ? "Evidence queued for AI analysis." : "AI is disabled in this environment; deterministic review remains available." });
   },
   "retry-processing": async (dataset) => {
     await run(async () => {
@@ -411,9 +433,7 @@ const formActions = {
       state.user = result.user;
       state.booted = true;
       await bootstrap();
-      state.route = "builder";
-      window.location.hash = "#/builder";
-      render();
+      navigate("home");
     } catch (error) {
       state.loginError = error.message;
       render();
@@ -429,9 +449,7 @@ const formActions = {
       state.user = result.user;
       state.booted = true;
       await bootstrap();
-      state.route = "builder";
-      window.location.hash = "#/builder";
-      render();
+      navigate("home");
     } catch (error) {
       state.loginError = error.message;
       render();
@@ -506,7 +524,7 @@ const formActions = {
       }
       form.reset();
       await refreshFacilityData();
-    }, { successMessage: file instanceof File && file.size > 0 ? "Evidence uploaded — scan and AI analysis queued." : "Evidence logged." });
+    }, { successMessage: file instanceof File && file.size > 0 ? (state.aiStatus.enabled ? "Evidence uploaded — scan and AI analysis queued." : "Evidence uploaded — scan recorded. AI analysis is disabled here.") : "Evidence logged." });
   },
   "ai-review": async (form, submitter) => {
     const data = new FormData(form);
@@ -681,7 +699,11 @@ async function initialize() {
     state.user = await api("/api/auth/me");
     await bootstrap();
     const route = window.location.hash.replace(/^#\//, "");
-    state.route = ROUTES[route] ? route : "builder";
+    state.route = ROUTES[route] ? route : "home";
+    if (!ROUTES[route] || isAuthHash(window.location.hash)) {
+      state.route = "home";
+      window.setTimeout(() => syncRouteHash("home"), 0);
+    }
   } catch (error) {
     state.user = null;
     if (error.status !== 401) state.loginError = error.message;

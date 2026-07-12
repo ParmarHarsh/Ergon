@@ -150,7 +150,7 @@ export function readConfig(env = process.env) {
   const loginRateLimitMaxAttempts = boundedInteger(env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || "10", "LOGIN_RATE_LIMIT_MAX_ATTEMPTS", 3, 1_000);
   const loginRateLimitWindowMs = boundedInteger(env.LOGIN_RATE_LIMIT_WINDOW_MS || "900000", "LOGIN_RATE_LIMIT_WINDOW_MS", 10_000, 86_400_000);
   const mfaEnabled = env.MFA_ENABLED === undefined || env.MFA_ENABLED === "" ? false : parseBoolean(env.MFA_ENABLED, "MFA_ENABLED");
-  const mfaTotpIssuer = stringWithoutHeaderBreaks(env.MFA_TOTP_ISSUER || "ComplianceIQ", "MFA_TOTP_ISSUER");
+  const mfaTotpIssuer = stringWithoutHeaderBreaks(env.MFA_TOTP_ISSUER || "Ergon", "MFA_TOTP_ISSUER");
   if (!mfaTotpIssuer || mfaTotpIssuer.length > 64) throw new Error("MFA_TOTP_ISSUER must be between 1 and 64 characters");
   const mfaEncryptionKey = mfaEnabled ? decodeMfaEncryptionKey(env.MFA_ENCRYPTION_KEY || "", isSecureDeployment) : null;
   const recoveryDeliveryProvider = env.RECOVERY_DELIVERY_PROVIDER || "disabled";
@@ -237,7 +237,7 @@ export function readConfig(env = process.env) {
     smtpFromEmail,
     sessionCookieSameSite: sessionCookieSameSite[0].toUpperCase() + sessionCookieSameSite.slice(1),
     enableDemoData: env.ENABLE_DEMO_DATA === "true",
-    adminEmail: env.ADMIN_EMAIL || "admin@complianceiq.local",
+    adminEmail: env.ADMIN_EMAIL || "admin@ergon.local",
     adminPassword: env.ADMIN_PASSWORD || "",
     aiEnabled,
     aiProvider,

@@ -11,7 +11,7 @@ export async function runMigrations(pool, migrations) {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      await client.query("SELECT pg_advisory_xact_lock(hashtext('complianceiq_schema_migrations'))");
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('ergon_schema_migrations'))");
       const existing = await client.query("SELECT id FROM schema_migrations WHERE id = $1 FOR UPDATE", [migration.id]);
       if (existing.rowCount === 0) {
         await client.query(migration.sql);

@@ -1,10 +1,10 @@
-# ComplianceIQ Product-Gap Audit
+# Ergon Product-Gap Audit
 
 ## Audit scope
 
-Phase 13 audited ComplianceIQ after the Phase 12 merge to compare normalized documentation claims with actual API, web UI, persistence, migrations, security controls, tests, CI, deployment validators, and pilot-readiness requirements.
+Phase 13 audited Ergon after the Phase 12 merge to compare normalized documentation claims with actual API, web UI, persistence, migrations, security controls, tests, CI, deployment validators, and pilot-readiness requirements.
 
-Phase 14 implementation update: the lifecycle rows in the original Phase 13 baseline have now been acted on in source. ComplianceIQ includes additive legal-hold, explicit retention enforcement, failed private-object deletion retry, and safe metadata restore workflows for evidence and audit packets. Storage-provider WORM/object-lock policy, autonomous external lifecycle scheduling, target backup/restore execution, and production OCR remain outside this implementation.
+Phase 14 implementation update: the lifecycle rows in the original Phase 13 baseline have now been acted on in source. Ergon includes additive legal-hold, explicit retention enforcement, failed private-object deletion retry, and safe metadata restore workflows for evidence and audit packets. Storage-provider WORM/object-lock policy, autonomous external lifecycle scheduling, target backup/restore execution, and production OCR remain outside this implementation.
 
 The Phase 13 audit was audit-only. Phase 14 changed runtime behavior, added an additive migration, and added tests/docs without changing dependencies or provisioning external infrastructure.
 
@@ -12,7 +12,7 @@ Evidence reviewed included `README.md`, `DEPLOYMENT_READINESS.md`, `PILOT_READIN
 
 ## Current verified baseline
 
-- `origin` is `git@github.com:ParmarHarsh/ComplianceIQ.git`.
+- `origin` remains `git@github.com:ParmarHarsh/ComplianceIQ.git` until the manual post-merge repository rename is completed.
 - `PROJECT_AUDIT.md` contains `## Phase 12 documentation and configuration normalization note`.
 - Normalized Phase 12 files are present: `README.md`, `DEPLOYMENT_READINESS.md`, `PILOT_READINESS.md`, `deploy/env/local.env.example`, `deploy/env/staging.env.example`, and `deploy/env/closed-pilot.env.example`.
 - CI is defined in `.github/workflows/ci.yml` for Node 20 validation, browser smoke QA, and conditional Postgres/S3/scanner validation jobs.
@@ -113,13 +113,13 @@ Items rejected as stale or false source gaps:
 
 | View | UI present | API present | Persistence present | Test evidence | Pilot result |
 | --- | --- | --- | --- | --- | --- |
-| Packet Builder | Yes | Yes | Yes | Playwright pilot smoke | Complete enough. |
+| Packet Workflow | Yes | Yes | Yes | Playwright pilot smoke | Complete enough. |
 | Facilities | Yes | Yes | Yes | API/repository/e2e tests | Complete enough. |
 | Evidence | Yes | Yes | Yes | API/file/storage/e2e tests | Complete for supported file types. |
-| Review Queue | Yes | Yes | Yes | Processing/e2e tests | Complete enough for reviewer/admin users. |
-| Gap Matrix | Yes | Yes | Yes | Rules/repository/API/e2e tests | Complete enough. |
+| AI Review | Yes | Yes | Yes | Processing/e2e tests | Complete enough for reviewer/admin users. |
+| Gaps & Actions | Yes | Yes | Yes | Rules/repository/API/e2e tests | Complete enough. |
 | Action Plan | Yes | Yes | Yes | Rules/repository/e2e tests | Complete enough. |
-| Audit Packets | Yes | Yes | Yes | PDF/API/e2e tests | Complete enough. |
+| Audit Packs | Yes | Yes | Yes | PDF/API/e2e tests | Complete enough. |
 | Expert Review | Yes | Yes | Yes | Lighter coverage | Usable, should gain deeper tests. |
 | Admin | Yes | Yes | Yes | Admin tests | Complete except MFA and approved recovery delivery. |
 | System status | Yes | Yes | Partly operational | Process-role/API tests | Good local visibility; external monitoring required. |
@@ -151,7 +151,7 @@ No destructive migration is required for the recommended next phase as scoped, b
 
 `packages/rules/src/index.js` contains 3 starter packs and 28 rules across US, Canada, and Mexico. All packs/rules are marked `demoContent: true`; 0 packs and 0 rules are marked expert-reviewed.
 
-The software mechanics for selection, scoring, matrix generation, action plans, and packet generation are implemented and tested. The gap is regulatory content depth and qualified legal/EHS review. ComplianceIQ should not represent starter rules as legally authoritative. Controlled pilot use can proceed only with demo/unverified disclaimers and named human review; commercial reliance requires expert content review.
+The software mechanics for selection, scoring, matrix generation, action plans, and packet generation are implemented and tested. The gap is regulatory content depth and qualified legal/EHS review. Ergon should not represent starter rules as legally authoritative. Controlled pilot use can proceed only with demo/unverified disclaimers and named human review; commercial reliance requires expert content review.
 
 ## Confirmed gap categories
 

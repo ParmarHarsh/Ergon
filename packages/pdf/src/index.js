@@ -177,7 +177,7 @@ function buildCoverPage({ facility, review, rulesPack, aiAnalyses = [] }) {
   // Brand mark
   ops.push(`${ACCENT} rg`, `${MARGIN_LEFT} 742 30 30 re f`);
   ops.push("BT", "1 1 1 rg", "/F2 13 Tf", `1 0 0 1 ${MARGIN_LEFT + 5.5} 751.5 Tm`, `(CQ) Tj`, "ET");
-  ops.push("BT", `${INK} rg`, "/F2 15 Tf", `1 0 0 1 ${MARGIN_LEFT + 40} 757 Tm`, `(${esc("ComplianceIQ")}) Tj`, "ET");
+  ops.push("BT", `${INK} rg`, "/F2 15 Tf", `1 0 0 1 ${MARGIN_LEFT + 40} 757 Tm`, `(${esc("Ergon")}) Tj`, "ET");
   ops.push("BT", `${MUTED} rg`, "/F1 8.5 Tf", `1 0 0 1 ${MARGIN_LEFT + 40} 745 Tm`, `(${esc("INDUSTRIAL EVIDENCE INTELLIGENCE")}) Tj`, "ET");
   ops.push(`${RULE} RG`, "0.8 w", `${MARGIN_LEFT} 728 m ${PAGE_WIDTH - MARGIN_RIGHT} 728 l S`);
 
@@ -259,7 +259,7 @@ function layoutPages(blocks) {
 function contentPageOps(rows, pageIndex, totalPages) {
   const ops = [];
   // Running header
-  ops.push("BT", `${MUTED} rg`, "/F2 7.5 Tf", `1 0 0 1 ${MARGIN_LEFT} 810 Tm`, `(${esc("ComplianceIQ - Industrial Audit Readiness Packet")}) Tj`, "ET");
+  ops.push("BT", `${MUTED} rg`, "/F2 7.5 Tf", `1 0 0 1 ${MARGIN_LEFT} 810 Tm`, `(${esc("Ergon - Industrial Audit Readiness Packet")}) Tj`, "ET");
   ops.push(`${RULE} RG`, "0.6 w", `${MARGIN_LEFT} 802 m ${PAGE_WIDTH - MARGIN_RIGHT} 802 l S`);
   for (const row of rows) {
     if (row.rule) {

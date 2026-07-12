@@ -1,4 +1,4 @@
-# ComplianceIQ — Investor Demo Script
+# Ergon — Investor Demo Script
 
 A 10-minute guided walkthrough of the end-to-end product: messy facility files in, audit-ready packet out, with AI assistance and human control at every decision point.
 
@@ -35,9 +35,9 @@ Open http://localhost:5173 and sign in:
 
 | Role | Email | Password |
 |---|---|---|
-| Admin | `admin@complianceiq.local` | the `ADMIN_PASSWORD` you seeded |
-| Reviewer | `reviewer@complianceiq.local` | same |
-| Manager | `manager@complianceiq.local` | same |
+| Admin | `admin@ergon.local` | the `ADMIN_PASSWORD` you seeded |
+| Reviewer | `reviewer@ergon.local` | same |
+| Manager | `manager@ergon.local` | same |
 
 ## The demo story (what the seed already contains)
 
@@ -50,17 +50,17 @@ The **Demo Metal Components Plant** (US / Ohio, metal fabrication, 86 employees)
 
 ## Walkthrough (~10 minutes)
 
-1. **Packet Builder (landing screen, 1 min).** Point at the status strip: facility, jurisdiction, backend-selected rules pack, readiness score, critical gaps, review queue. The workflow card shows exactly where this facility stands in the six-step path to an exportable packet.
+1. **Packet Workflow (landing screen, 1 min).** Point at the status strip: facility, jurisdiction, backend-selected rules pack, readiness score, critical gaps, review queue. The workflow card shows exactly where this facility stands in the six-step path to an exportable packet.
 
 2. **Upload a messy file (2 min).** Go to *Evidence*, upload any text file containing the words "lockout tagout" (or "forklift", "SDS", …). Narrate what happens automatically: file signature validation → malware scan → queued processing job → AI classification with confidence and a suggested obligation match. Refresh happens live; the AI panel shows extracted fields, the match reason, and the disclaimer that deterministic rules and reviewers stay authoritative.
 
 3. **Review queue (2 min).** Switch to *Review queue* — four items need a human decision. The scanned forklift evaluations sit at 62% confidence — AI flagged its own uncertainty instead of guessing. As the reviewer: override the evidence type to `forklift training records`, select the powered-industrial-truck obligation, add a note, then **Mark evidence accepted**. Then accept the AI-matched hazardous chemical inventory to close the critical gap. Every action persists to the audit trail.
 
-4. **Gap Matrix (2 min).** Open *Gap Matrix*. The forklift and hazard-communication rows just flipped to accepted and the readiness score jumped. Click any row: the drawer shows the plain-English obligation, authority and citation, required vs. matched evidence, the full AI lineage (versions, confidence, reviewer notes), and the recommended action. This is the heart of the product.
+4. **Gaps & Actions (2 min).** Open *Gaps & Actions*. The forklift and hazard-communication rows just flipped to accepted and the readiness score jumped. Click any row: the drawer shows the plain-English obligation, authority and citation, required vs. matched evidence, the full AI lineage (versions, confidence, reviewer notes), and the recommended action. This is the heart of the product.
 
 5. **Action plan (1 min).** *Action plan* shows the remaining work bucketed 7/30/90 days with owners and due dates — corrective actions close automatically as evidence is accepted and the analysis regenerates.
 
-6. **Export the packet (2 min).** Back on *Packet Builder*, hit **Export audit packet**, then download the PDF from packet history. Flip through: cover page, readiness score with explanation, gap matrix, AI evidence lineage with reviewer sign-offs, action plan, and the disclaimers on every page footer. Emphasize: full source-to-packet lineage, and the packet never claims compliance or certification.
+6. **Export the packet (2 min).** Back on *Packet Workflow*, hit **Export audit packet**, then download the PDF from packet history. Flip through: cover page, readiness score with explanation, gap matrix, AI evidence lineage with reviewer sign-offs, action plan, and the disclaimers on every page footer. Emphasize: full source-to-packet lineage, and the packet never claims compliance or certification.
 
 7. **Close (30 sec).** Admin screen (user/role management), System screen (dependency health, AI provider status, audit trail). Mention the production posture: separate API/worker deployment, Postgres, private S3 storage, ClamAV fail-closed scanning, tenant scoping on every query.
 

@@ -22,10 +22,10 @@ async function startRecoveryApi({ label, sendMail }) {
   process.env.SMTP_USE_TLS = "true";
   process.env.SMTP_USERNAME = "smtp-test-user";
   process.env.SMTP_PASSWORD = "smtp-test-password";
-  process.env.SMTP_FROM_EMAIL = "security@complianceiq.local";
+  process.env.SMTP_FROM_EMAIL = "security@ergon.local";
   const sent = [];
   const transportConfigs = [];
-  globalThis.__COMPLIANCEIQ_RECOVERY_DELIVERY_DEPS__ = {
+  globalThis.__ERGON_RECOVERY_DELIVERY_DEPS__ = {
     transportFactory: (transportConfig) => {
       transportConfigs.push(transportConfig);
       return {
@@ -57,7 +57,7 @@ async function startRecoveryApi({ label, sendMail }) {
     async close() {
       await new Promise((resolve) => server.close(resolve));
       process.stderr.write = originalWrite;
-      delete globalThis.__COMPLIANCEIQ_RECOVERY_DELIVERY_DEPS__;
+      delete globalThis.__ERGON_RECOVERY_DELIVERY_DEPS__;
     }
   };
 }
@@ -105,7 +105,7 @@ test("SMTP recovery request preserves generic responses and sends only to stored
     assert.equal(existingBody.token, undefined);
     assert.equal(api.sent.length, 1);
     assert.equal(api.sent[0].to, user.email);
-    assert.equal(api.sent[0].subject, "Reset your ComplianceIQ password");
+    assert.equal(api.sent[0].subject, "Reset your Ergon password");
     assert.match(api.sent[0].text, /can be used only once/);
     assert.match(api.sent[0].html, /Reset your password/);
     assert.equal(api.transportConfigs[0].auth.pass, "smtp-test-password");

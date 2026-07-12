@@ -6,6 +6,8 @@ const port = Number.parseInt(process.env.WEB_PORT || "5173", 10);
 const host = process.env.WEB_HOST || "127.0.0.1";
 const root = path.resolve("apps/web");
 const apiOrigin = process.env.WEB_API_ORIGIN || "http://localhost:4000";
+const recoveryAvailable = process.env.RECOVERY_EXPOSE_TEST_TOKEN === "true" || process.env.RECOVERY_DELIVERY_PROVIDER === "smtp";
+const mfaAvailable = process.env.MFA_ENABLED === "true";
 
 const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
 
@@ -15,7 +17,7 @@ http.createServer(async (req, res) => {
   const requested = pathname === "/" ? "/index.html" : pathname;
   if (requested === "/config.js") {
     res.writeHead(200, { "Content-Type": "text/javascript" });
-    res.end(`window.COMPLIANCEIQ_CONFIG = ${JSON.stringify({ apiBase: apiOrigin })};\n`);
+    res.end(`window.ERGON_CONFIG = ${JSON.stringify({ apiBase: apiOrigin, recoveryAvailable, mfaAvailable })};\n`);
     return;
   }
   const filePath = path.resolve(root, `.${requested}`);
@@ -33,7 +35,7 @@ http.createServer(async (req, res) => {
     res.end("Not found");
   }
 }).listen(port, host, () => {
-  process.stderr.write(`ComplianceIQ web listening on http://${host}:${port}\n`);
+  process.stderr.write(`Ergon web listening on http://${host}:${port}\n`);
 });
 
 function applySecurityHeaders(res) {

@@ -1192,3 +1192,76 @@ Safe next action:
   - `npm run scan:random` - passed; 1 deterministic-safety test passed.
 - Recommended next phase:
   - Phase 20 - Operational Monitoring and Secret Rotation.
+
+## Phase 20 Ergon product reset and local acceptance note
+
+- Pulled latest `main` and confirmed Phase 19C merge ancestry before branching.
+- Created:
+  - `phase-20-ergon-product-reset`.
+- Product decision:
+  - Active product identity is now **Ergon**.
+  - Historical audit notes, historical remote references, and the current misspelled local folder path remain preserved for traceability.
+  - GitHub repository rename and local root folder rename are deferred to explicit manual post-merge actions.
+- Product strategy documents added:
+  - `ERGON_PRODUCT_STRATEGY.md`.
+  - `ERGON_UX_PRINCIPLES.md`.
+  - `ERGON_IDENTITY_STRATEGY.md`.
+  - `ERGON_CLEANUP_AUDIT.md`.
+- UX reset:
+  - Added authenticated Home as the default workspace route.
+  - Reorganized navigation into Home, Work, Operations, and Administration groups.
+  - Renamed user-facing workflow surfaces to Evidence, AI Review, Gaps & Actions, Action Plan, Audit Packs, Packet Workflow, Team & Roles, Security, and System.
+  - Added truthful AI-disabled messaging for local runs.
+  - Added recovery-unavailable state so disabled account recovery does not spin indefinitely.
+  - Added a 10-second API timeout so failed local/API connections return actionable errors instead of indefinite loading.
+- Identity strategy:
+  - Existing local password auth, account recovery backend, SMTP adapter, sessions, TOTP MFA, recovery codes, RBAC, tenancy, and audit logging were preserved.
+  - Future external identity providers such as Google, Microsoft, OIDC, and SSO are documented as strategy, not implemented in this phase.
+  - No auth, MFA, recovery, RBAC, tenancy, or audit capability was deleted.
+- Dependency and migration policy:
+  - No new npm dependencies were added.
+  - No database migration was added or edited.
+  - No infrastructure, deployment, DNS, bucket, database, scanner service, or secrets were provisioned.
+- Pilot decision:
+  - `NO_GO` remains.
+- Local manual acceptance:
+  - Seeded local synthetic pilot data with file repository and local private storage under `/private/tmp/ergon-phase20-*`.
+  - Started local API on `localhost:4500` and web on `localhost:5500`.
+  - Verified `/health/ready` returned `ok: true` with file persistence, local storage, mock scanner, and running queue worker.
+  - Verified disabled recovery route `#/forgot-password` renders "Password recovery is unavailable here" and does not expose account existence.
+  - Verified login with `pilot-admin@ergon.local` reaches `#/home`.
+  - Verified Home shows 3 seeded facilities, active evidence, review/gap attention counts, and AI-disabled status.
+  - Verified main routes render with Ergon branding and no former-brand text in rendered snapshots: Home, Evidence, AI Review, Gaps & Actions, Action Plan, Audit Packs, Packet Workflow, Facilities, Team & Roles, Security, and System.
+  - Verified mobile `390x844` and desktop `1280x900` responsive snapshots expose Home, facility switch, navigation, quick actions, and no former-brand text.
+  - Browser note: use `localhost` for local walkthroughs because `127.0.0.1` web with `localhost` API can split cookie behavior in browsers.
+- Verification:
+  - `node --version` - `v24.4.0`.
+  - `npm --version` - `11.4.2`.
+  - Pre-change `npm run lint` - passed; linted 78 files.
+  - Pre-change `npm run typecheck` - passed; checked 86 JavaScript files.
+  - Pre-change `npm test` - passed; 66 tests total, 64 passed, 2 skipped, 0 failed.
+  - Pre-change `npm run build` - passed.
+  - Pre-change `npm audit` - passed; found 0 vulnerabilities.
+  - Pre-change `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+  - Pre-change `npm run scan:claims` - passed; linted 78 files.
+  - Pre-change `npm run scan:random` - passed; 1 deterministic-safety test passed.
+  - `node --check` changed JavaScript files - passed.
+  - `node --test tests/frontend-ux.test.js` - passed; 4 tests.
+  - Focused auth/API/repository regression suite - passed with localhost server permission; 35 tests.
+  - `npm run lint` - passed; linted 80 files.
+  - `npm run typecheck` - passed; checked 88 JavaScript files.
+  - `npm test` - passed with localhost server permission; 70 tests total, 68 passed, 2 skipped, 0 failed.
+  - `npm run build` - passed.
+  - `npm audit` - passed; found 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+  - `npm run scan:claims` - passed; linted 80 files.
+  - `npm run scan:random` - passed; 1 deterministic-safety test passed.
+  - `npm run qa:pilot` - passed after installing the Playwright Chromium browser cache; 1 Chromium smoke test passed.
+  - Safety filename scan for `.env`, private keys, cert bundles, SQLite, and database files - no matches.
+  - Generated artifact status scan for `node_modules`, `apps/web/dist`, `coverage`, `playwright-report`, and `test-results` - no tracked changes.
+  - Migration diff scan - no changes.
+  - Dependency diff scan - package and lockfile changes are workspace/package metadata renames only; no new dependency entries.
+  - Former-brand scan - remaining matches are historical audit entries, current remote/path deferrals, and cleanup audit rename candidates.
+  - Claim scan - live regulatory monitoring and certification matches are negative/disclaimer contexts or banned-phrase lint configuration.
+- Recommended next phase:
+  - Phase 21 - explicit post-merge repository/local-folder rename planning, or next product capability slice from `ERGON_PRODUCT_STRATEGY.md`.

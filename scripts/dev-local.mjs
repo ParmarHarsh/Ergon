@@ -30,7 +30,7 @@ const children = [
   start("web", ["apps/web/src/static-server.js"], commonEnv)
 ];
 
-process.stderr.write("\nComplianceIQ local dev is starting:\n");
+process.stderr.write("\nErgon local dev is starting:\n");
 if (apiPort !== String(requestedApiPort)) {
   process.stderr.write(`  Note: API port ${requestedApiPort} was busy, using ${apiPort} instead.\n`);
 }
@@ -49,7 +49,7 @@ for (const child of children) {
     if (shuttingDown) return;
     shuttingDown = true;
     exitCode = code ?? (signal ? 1 : 0);
-    process.stderr.write(`\n${child.spawnargs.at(-1)} stopped; shutting down ComplianceIQ local dev.\n`);
+    process.stderr.write(`\n${child.spawnargs.at(-1)} stopped; shutting down Ergon local dev.\n`);
     stopChildren();
   });
 }

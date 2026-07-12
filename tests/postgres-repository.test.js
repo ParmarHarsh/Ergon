@@ -15,7 +15,7 @@ import { createEvidenceAiService } from "../apps/api/src/evidence-ai-service.js"
 import { createPrivateStorage } from "../apps/api/src/storage.js";
 
 test("postgres repository persists facilities, evidence, reviews, matches, and packets", { skip: !process.env.TEST_DATABASE_URL }, async () => {
-  const schema = `ciq_test_${randomUUID().replaceAll("-", "")}`;
+  const schema = `ergon_test_${randomUUID().replaceAll("-", "")}`;
   const adminPool = await createPostgresPool(process.env.TEST_DATABASE_URL);
   await adminPool.query(`CREATE SCHEMA "${schema}"`);
   const scopedUrl = new URL(process.env.TEST_DATABASE_URL);

@@ -1,8 +1,8 @@
-# ComplianceIQ Pilot Infrastructure Audit
+# Ergon Pilot Infrastructure Audit
 
 ## Scope
 
-Phase 15 validates the current ComplianceIQ pilot-infrastructure readiness after Phase 14 data-lifecycle hardening. This audit inspected existing source, documentation, validator design, local environment readiness, CI evidence, and local verification results.
+Phase 15 validates the current Ergon pilot-infrastructure readiness after Phase 14 data-lifecycle hardening. This audit inspected existing source, documentation, validator design, local environment readiness, CI evidence, and local verification results.
 
 No cloud infrastructure was provisioned. No databases, buckets, scanner services, deployments, billing settings, real `.env` files, secrets, or production customer data were created or used.
 
@@ -11,7 +11,7 @@ No cloud infrastructure was provisioned. No databases, buckets, scanner services
 | Item | Evidence |
 | ---- | -------- |
 | Repository path | `/Users/harshparmar/Desktop/Projects/ComplainceIQ` |
-| Remote | `git@github.com:ParmarHarsh/ComplianceIQ.git` |
+| Remote | `git@github.com:ParmarHarsh/ComplianceIQ.git` at the time of this historical audit; Phase 20 defers repository rename to a manual post-merge action. |
 | Starting branch | `main` after `git pull --ff-only origin main` |
 | Phase 15 branch | `phase-15-pilot-infrastructure-validation` |
 | Phase 14 merge commit on `main` | `d27adc0ccbe7b883eba0039a7d37f9f85cb8ec74` |
@@ -201,7 +201,7 @@ Current evidence:
 
 - Documentation requires managed PostgreSQL backups/PITR or scheduled encrypted backups.
 - Documentation requires object-storage versioning/replication or equivalent backup behavior.
-- Documentation states ComplianceIQ does not automate backup orchestration.
+- Documentation states Ergon does not automate backup orchestration.
 - No provider backup evidence, PITR evidence, object-versioning evidence, or completed restore-drill record exists in the repository or local environment.
 
 ## Recovery exercise result

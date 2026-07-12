@@ -17,7 +17,7 @@ test("TOTP MFA enrollment, login challenge, replay protection, recovery codes, a
   process.env.AI_ENABLED = "false";
   process.env.MFA_ENABLED = "true";
   process.env.MFA_ENCRYPTION_KEY = randomBytes(32).toString("base64");
-  process.env.MFA_TOTP_ISSUER = "ComplianceIQ Test";
+  process.env.MFA_TOTP_ISSUER = "Ergon Test";
   process.env.RECOVERY_EXPOSE_TEST_TOKEN = "true";
 
   const { server, repo } = await import("../apps/api/src/server.js");

@@ -39,7 +39,7 @@ import { validateUploadedFile } from "./file-validation.js";
 import { createOperationalLogger } from "./operational-logger.js";
 
 const config = readConfig(process.env);
-const logger = createOperationalLogger({ service: `complianceiq-${config.processRole}`, level: config.logLevel });
+const logger = createOperationalLogger({ service: `ergon-${config.processRole}`, level: config.logLevel });
 const repo = await createRepository(config);
 const storage = createPrivateStorage(config);
 const aiProvider = createEvidenceAiProvider(config);
@@ -50,7 +50,7 @@ const loginRateLimiter = createLoginRateLimiter({ maxAttempts: config.loginRateL
 const recoveryRequestIpLimiter = createLoginRateLimiter({ maxAttempts: 8, windowMs: 15 * 60 * 1000 });
 const recoveryRequestEmailLimiter = createLoginRateLimiter({ maxAttempts: 3, windowMs: 15 * 60 * 1000 });
 const recoveryResetLimiter = createLoginRateLimiter({ maxAttempts: 10, windowMs: 15 * 60 * 1000 });
-const recoveryDelivery = createRecoveryDelivery(config, config.nodeEnv === "test" ? globalThis.__COMPLIANCEIQ_RECOVERY_DELIVERY_DEPS__ || {} : {});
+const recoveryDelivery = createRecoveryDelivery(config, config.nodeEnv === "test" ? globalThis.__ERGON_RECOVERY_DELIVERY_DEPS__ || {} : {});
 const processingQueue = createEvidenceProcessingQueue(config, {
   repo,
   logger,
@@ -126,11 +126,11 @@ const server = http.createServer(async (req, res) => {
 const workerHealthServer = http.createServer(async (req, res) => {
   applySecurityHeaders(res);
   const path = new URL(req.url || "/", "http://localhost").pathname.replace(/\/$/, "") || "/";
-  if (req.method === "GET" && path === "/health/live") return sendJson(res, { status: 200, body: { ok: true, service: "ComplianceIQ Worker", processRole: config.processRole } });
-  if (req.method === "GET" && ["/health", "/health/ready"].includes(path)) return readiness(res, { service: "ComplianceIQ Worker", requireWorker: true });
+  if (req.method === "GET" && path === "/health/live") return sendJson(res, { status: 200, body: { ok: true, service: "Ergon Worker", processRole: config.processRole } });
+  if (req.method === "GET" && ["/health", "/health/ready"].includes(path)) return readiness(res, { service: "Ergon Worker", requireWorker: true });
   if (req.method === "GET" && path === "/metrics") {
     const queue = await processingQueue.healthCheck({ requireWorker: true });
-    return sendJson(res, { status: queue.ok ? 200 : 503, body: { service: "ComplianceIQ Worker", processRole: config.processRole, queue } });
+    return sendJson(res, { status: queue.ok ? 200 : 503, body: { service: "Ergon Worker", processRole: config.processRole, queue } });
   }
   return sendJson(res, { status: 404, body: { error: "Route not found", code: "NOT_FOUND" } });
 });
@@ -150,8 +150,8 @@ async function handleRequest(req, res) {
   const method = req.method || "GET";
   req.context.route = path;
 
-  if (method === "GET" && path === "/health/live") return sendJson(res, { status: 200, body: { ok: true, service: "ComplianceIQ API", processRole: config.processRole } });
-  if (method === "GET" && ["/health", "/health/ready", "/api/health"].includes(path)) return readiness(res, { service: "ComplianceIQ API", requireWorker: config.runsWorker });
+  if (method === "GET" && path === "/health/live") return sendJson(res, { status: 200, body: { ok: true, service: "Ergon API", processRole: config.processRole } });
+  if (method === "GET" && ["/health", "/health/ready", "/api/health"].includes(path)) return readiness(res, { service: "Ergon API", requireWorker: config.runsWorker });
 
   if (method === "POST" && path === "/api/auth/login") return login(req, res);
   if (method === "POST" && path === "/api/auth/mfa/login/verify") return verifyMfaLogin(req, res);

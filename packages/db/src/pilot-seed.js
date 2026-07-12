@@ -7,7 +7,7 @@ import { generateAuditPacketPdf } from "../../pdf/src/index.js";
 import { parseEvidenceInput, parseFacilityInput } from "../../shared/src/index.js";
 import { generateReview, getApplicableRules } from "../../rules/src/index.js";
 
-const ORGANIZATION_NAME = "ComplianceIQ Synthetic Pilot Organization";
+const ORGANIZATION_NAME = "Ergon Synthetic Pilot Organization";
 const FACILITIES = [
   {
     name: "Synthetic Ohio Fabrication Plant",
@@ -169,6 +169,6 @@ export async function seedSyntheticPilot({ config, repo: providedRepo = null, st
 export { FACILITIES as SYNTHETIC_PILOT_FACILITIES, ORGANIZATION_NAME as SYNTHETIC_PILOT_ORGANIZATION_NAME };
 
 function syntheticAdminEmail(configuredEmail) {
-  const [local, domain = "complianceiq.local"] = String(configuredEmail || "admin@complianceiq.local").toLowerCase().split("@");
+  const [local, domain = "ergon.local"] = String(configuredEmail || "admin@ergon.local").toLowerCase().split("@");
   return `pilot-${local}@${domain}`;
 }
