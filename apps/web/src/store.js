@@ -1,11 +1,13 @@
 // Central state, API client, and data-loading orchestration.
 
-export const API_BASE = window.localStorage.getItem("ciq_api_base") || window.COMPLIANCEIQ_CONFIG?.apiBase || "http://localhost:4000";
+const runtimeConfig = window.ERGON_CONFIG || {};
+export const API_BASE = window.localStorage.getItem("ergon_api_base") || window.localStorage.getItem("ciq_api_base") || runtimeConfig.apiBase || "http://localhost:4000";
+const DEFAULT_TIMEOUT_MS = 10_000;
 
 export const state = {
   booted: false,
   loading: false,
-  route: "builder",
+  route: "home",
   user: null,
   organization: null,
   facilities: [],
@@ -41,24 +43,38 @@ export const state = {
   recoveryError: "",
   resetToken: "",
   resetMessage: "",
-  resetError: ""
+  resetError: "",
+  authFeatures: {
+    recoveryAvailable: Boolean(runtimeConfig.recoveryAvailable),
+    mfaAvailable: Boolean(runtimeConfig.mfaAvailable)
+  }
 };
 
 export async function api(path, options = {}) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), options.timeoutMs || DEFAULT_TIMEOUT_MS);
   const response = await fetch(`${API_BASE}${path}`, {
     method: options.method || "GET",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(data.error || `Request failed with status ${response.status}`);
-    error.status = response.status;
-    error.code = data.code;
+    body: options.body ? JSON.stringify(options.body) : undefined,
+    signal: controller.signal
+  }).catch((error) => {
+    if (error.name === "AbortError") throw new Error(`Ergon API did not respond within ${options.timeoutMs || DEFAULT_TIMEOUT_MS}ms.`);
     throw error;
+  }).finally(() => window.clearTimeout(timeout));
+  try {
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.error || `Request failed with status ${response.status}`);
+      error.status = response.status;
+      error.code = data.code;
+      throw error;
+    }
+    return data;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return data;
 }
 
 export function canReview() {
@@ -169,7 +185,7 @@ export function resetSession() {
     health: null, mfaStatus: null, mfaEnrollment: null, mfaRecoveryCodes: [],
     mfaMessage: "", mfaError: "", mfaChallengeToken: "", mfaChallengeExpiresAt: "",
     drawerRuleId: null, error: "", loginError: "", recoveryMessage: "",
-    recoveryError: "", resetToken: "", resetMessage: "", resetError: "", route: "builder"
+    recoveryError: "", resetToken: "", resetMessage: "", resetError: "", route: "home"
   });
 }
 

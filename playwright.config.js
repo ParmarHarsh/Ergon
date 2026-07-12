@@ -6,7 +6,7 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   reporter: "line",
-  outputDir: "/tmp/complianceiq-playwright-results",
+  outputDir: "/tmp/ergon-playwright-results",
   use: {
     baseURL: "http://127.0.0.1:5174",
     trace: "retain-on-failure",

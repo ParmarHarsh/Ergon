@@ -7,7 +7,7 @@ export function builderView() {
     return `
       <div class="page-head">
         <div>
-          <h1>Audit Packet Builder</h1>
+          <h1>Audit Pack Workflow</h1>
           <p class="page-sub">Assemble jurisdiction-specific, evidence-backed audit readiness packets for your facilities.</p>
         </div>
       </div>
@@ -26,7 +26,7 @@ export function builderView() {
   return `
     <div class="page-head">
       <div>
-        <h1>Audit Packet Builder</h1>
+        <h1>Audit Pack Workflow</h1>
         <p class="page-sub">From messy facility files to an evidence-backed readiness packet: upload evidence, let AI classify and suggest matches, review, close gaps, export.</p>
       </div>
       <div class="page-actions">
@@ -62,7 +62,7 @@ export function builderView() {
         <span class="stat-sub">${summary ? `${summary.missingEvidenceCount} obligations missing evidence` : "No analysis yet"}</span>
       </div>
       <div class="stat">
-        <span class="stat-label">Review queue</span>
+        <span class="stat-label">Review</span>
         <span class="stat-value ${needsReviewCount ? "warn" : "ok"}">${canReview() ? needsReviewCount : "—"}</span>
         <span class="stat-sub">${canReview() ? "items awaiting a human decision" : "reviewer role required"}</span>
       </div>
@@ -86,7 +86,7 @@ export function builderView() {
             ${workflowStep(1, "Facility profile and jurisdiction", `${html(facility.name)} · ${html(facility.country)}/${html(facility.stateProvince)} — rules pack ${state.rulesPack ? "selected by backend" : "pending"}.`, state.rulesPack ? "done" : "attention", "facilities", "Manage facilities")}
             ${workflowStep(2, "Upload or log evidence", state.evidence.length ? `${state.evidence.length} evidence item${state.evidence.length === 1 ? "" : "s"} on file. Files are validated and malware-screened before processing.` : "No evidence yet. Upload facility files or log manual evidence records.", state.evidence.length ? "done" : "attention", "evidence", "Add evidence")}
             ${workflowStep(3, "AI evidence intelligence", aiStepCopy(activeJobs, failedJobs), aiStepState(activeJobs, failedJobs), "evidence", state.aiStatus.enabled ? "View analyses" : "View evidence")}
-            ${workflowStep(4, "Human review", canReview() ? (needsReviewCount ? `${needsReviewCount} item${needsReviewCount === 1 ? "" : "s"} need a reviewer decision before they strengthen the packet.` : "Review queue is clear.") : "A reviewer or admin approves, overrides, or rejects AI-classified evidence.", needsReviewCount ? "attention" : "done", "review", canReview() ? "Open review queue" : null)}
+            ${workflowStep(4, "Human review", canReview() ? (needsReviewCount ? `${needsReviewCount} item${needsReviewCount === 1 ? "" : "s"} need a reviewer decision before they strengthen the packet.` : "Review queue is clear.") : "A reviewer or admin approves, overrides, or rejects AI-classified evidence.", needsReviewCount ? "attention" : "done", "review", canReview() ? "Open AI review" : null)}
             ${workflowStep(5, "Evidence gap matrix", state.latestReview ? `${summary.totalApplicableObligations} obligations analyzed · ${summary.missingEvidenceCount} missing · ${summary.criticalGapsCount} critical.` : "Generate the deterministic gap analysis for this facility.", state.latestReview ? (summary.criticalGapsCount ? "attention" : "done") : "attention", "matrix", state.latestReview ? "Open gap matrix" : null)}
             ${workflowStep(6, "Export audit packet", state.packets.length ? `${state.packets.length} packet${state.packets.length === 1 ? "" : "s"} generated with evidence lineage, AI confidence, and disclaimers.` : "Export a PDF packet with gap matrix, action plan, lineage, and disclaimers.", state.packets.length ? "done" : "", "packets", "Packet history")}
           </div>

@@ -16,7 +16,7 @@ const scanner = new ClamAvMalwareScanner({
   timeoutMs: integer(process.env.CLAMAV_TIMEOUT_MS || process.env.MALWARE_SCAN_TIMEOUT_MS || "10000", "CLAMAV_TIMEOUT_MS")
 });
 
-const clean = await scanner.scanBuffer({ buffer: Buffer.from("ComplianceIQ closed-pilot scanner validation sample.\n") });
+const clean = await scanner.scanBuffer({ buffer: Buffer.from("Ergon closed-pilot scanner validation sample.\n") });
 assert.equal(clean.status, "scan_clean", "Live scanner did not classify the clean sample as clean");
 
 if (process.env.SCANNER_VALIDATE_EICAR === "true") {

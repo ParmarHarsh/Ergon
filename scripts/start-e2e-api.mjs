@@ -1,7 +1,7 @@
 import { rm } from "node:fs/promises";
 
-const databasePath = "/tmp/complianceiq-e2e-db.json";
-const storagePath = "/tmp/complianceiq-e2e-storage";
+const databasePath = "/tmp/ergon-e2e-db.json";
+const storagePath = "/tmp/ergon-e2e-storage";
 await rm(databasePath, { force: true });
 await rm(storagePath, { recursive: true, force: true });
 
@@ -33,7 +33,7 @@ const [{ server, repo }, { hashPassword }] = await Promise.all([
 const organization = await repo.createOrganization({ name: "Playwright Pilot Organization" });
 await repo.createUser({
   organizationId: organization.id,
-  email: "pilot-admin@complianceiq.local",
+  email: "pilot-admin@ergon.local",
   passwordHash: await hashPassword("PilotPassword#2026"),
   name: "Pilot Admin",
   role: "admin",

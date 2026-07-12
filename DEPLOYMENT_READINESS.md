@@ -1,10 +1,10 @@
-# ComplianceIQ Deployment Readiness
+# Ergon Deployment Readiness
 
 Status date: 2026-07-10
 
 ## 1. Current readiness status
 
-ComplianceIQ is ready for local and CI pilot-workflow testing and is structurally ready for a split staging deployment. The repository is now ComplianceIQ-only after the Phase 11 cleanup. It is not yet a one-click all-Vercel production app.
+Ergon is ready for local and CI pilot-workflow testing and is structurally ready for a split staging deployment. The repository is now Ergon-only after the Phase 11 cleanup. It is not yet a one-click all-Vercel production app.
 
 Go for Vercel frontend testing: yes, once `WEB_API_ORIGIN` points to a deployed HTTPS API.
 
@@ -20,7 +20,7 @@ The current API is not packaged as a Vercel serverless function. Deploying it to
 
 ## 3. Frontend status
 
-The frontend is a zero-dependency routed workspace SPA under `apps/web` (Packet Builder, Facilities, Evidence, Review Queue, Gap Matrix with detail drawer, Action Plan, Audit Packets, Expert Review, Admin, System status). It deploys as static files on Vercel using the root `vercel.json`, which builds `apps/web/dist`.
+The frontend is a zero-dependency routed workspace SPA under `apps/web` (Packet Workflow, Facilities, Evidence, AI Review, Gaps & Actions with detail drawer, Action Plan, Audit Packs, Expert Review, Admin, System status). It deploys as static files on Vercel using the root `vercel.json`, which builds `apps/web/dist`.
 
 Production web builds require:
 

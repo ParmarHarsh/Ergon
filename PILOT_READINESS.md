@@ -1,4 +1,4 @@
-# ComplianceIQ Closed-Pilot Readiness Checklist
+# Ergon Closed-Pilot Readiness Checklist
 
 This checklist supports a controlled pilot with a small group of manufacturing or EHS users. It is not evidence of broad public-launch or enterprise readiness.
 
@@ -84,7 +84,7 @@ PostgreSQL backups must include all customer-owned rows, AI analysis lineage, re
 - [ ] Define S3 versioning/replication or equivalent provider backup behavior.
 - [ ] Test restore into an isolated environment before pilot launch and on a documented schedule.
 - [ ] Verify restored object references match restored database rows.
-- [ ] Record recovery-point and recovery-time expectations; ComplianceIQ does not automate backup orchestration.
+- [ ] Record recovery-point and recovery-time expectations; Ergon does not automate backup orchestration.
 
 ## Incident Response Basics
 

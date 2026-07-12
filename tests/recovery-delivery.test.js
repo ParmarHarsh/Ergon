@@ -10,7 +10,7 @@ const smtpConfig = {
   smtpUseTls: true,
   smtpUsername: "smtp-user",
   smtpPassword: "smtp-secret",
-  smtpFromEmail: "security@complianceiq.example"
+  smtpFromEmail: "security@ergon.example"
 };
 
 test("SMTP recovery delivery sends safe password reset message through injected transport", async () => {
@@ -52,8 +52,8 @@ test("SMTP recovery delivery sends safe password reset message through injected 
     auth: { user: "smtp-user", pass: "smtp-secret" }
   });
   assert.equal(sent[0].to, "Stored.User@Example.com");
-  assert.equal(sent[0].from, "security@complianceiq.example");
-  assert.equal(sent[0].subject, "Reset your ComplianceIQ password");
+  assert.equal(sent[0].from, "security@ergon.example");
+  assert.equal(sent[0].subject, "Reset your Ergon password");
   assert.match(sent[0].text, /A password reset was requested/);
   assert.match(sent[0].html, /Reset your password/);
   assert.match(sent[0].text, /token%20with%20symbols/);
@@ -104,7 +104,7 @@ test("SMTP reset message escapes HTML dynamic values", () => {
     user: { email: "stored@example.com" },
     resetUrl: "https://app.example.com/#/reset-password?token=<script>",
     expiresAt: "2026-07-10T19:00:00.000Z",
-    from: "security@complianceiq.example"
+    from: "security@ergon.example"
   });
   assert.match(message.html, /&lt;script&gt;/);
   assert.equal(message.html.includes("<script>"), false);

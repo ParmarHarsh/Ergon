@@ -30,7 +30,7 @@ for (const file of files) {
   const source = await readFile(file, "utf8");
   const lower = source.toLowerCase();
   if (source.includes(["Math", "random"].join("."))) {
-    throw new Error(`${file}: Math.random is forbidden in ComplianceIQ scoring/product logic`);
+    throw new Error(`${file}: Math.random is forbidden in Ergon scoring/product logic`);
   }
   for (const claim of forbiddenProductClaims) {
     if (lower.includes(claim.toLowerCase())) {

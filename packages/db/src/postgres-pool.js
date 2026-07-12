@@ -3,7 +3,7 @@ export async function createPostgresPool(databaseUrl, overrides = {}) {
   const Pool = pg.default?.Pool || pg.Pool;
   return new Pool({
     connectionString: databaseUrl,
-    application_name: "complianceiq",
+    application_name: "ergon",
     max: 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,

@@ -10,17 +10,17 @@ export function loginView() {
         <div class="brand">
           <div class="brand-mark">${ICONS.logo}</div>
           <div>
-            <div class="brand-name">ComplianceIQ</div>
+            <div class="brand-name">Ergon</div>
             <div class="brand-sub">Industrial Evidence Intelligence</div>
           </div>
         </div>
         <div class="login-hero">
           <h1>Turn scattered facility files into audit-ready evidence.</h1>
-          <p>ComplianceIQ classifies uploaded compliance evidence, maps it to jurisdiction-specific obligations, flags gaps, and assembles export-ready audit packets — with human review at every decision point.</p>
+          <p>Ergon classifies uploaded compliance evidence, maps it to jurisdiction-specific obligations, flags gaps, and assembles export-ready audit packets — with human review at every decision point.</p>
           <ul class="login-points">
-            <li>${ICONS.check} AI-assisted document classification with confidence scoring and reviewer sign-off</li>
+            <li>${ICONS.check} Optional AI-assisted document classification with confidence scoring and reviewer sign-off</li>
             <li>${ICONS.check} Deterministic rules packs for US, Canada, and Mexico industrial manufacturing</li>
-            <li>${ICONS.check} Evidence Gap Matrix, prioritized action plan, and full source-to-packet lineage</li>
+            <li>${ICONS.check} Evidence gap analysis, prioritized action plan, and full source-to-packet lineage</li>
             <li>${ICONS.check} Tenant-scoped access, malware-screened uploads, and private evidence storage</li>
           </ul>
         </div>
@@ -40,7 +40,7 @@ function mfaChallengePanel() {
         <div class="brand">
           <div class="brand-mark">${ICONS.logo}</div>
           <div>
-            <div class="brand-name">ComplianceIQ</div>
+            <div class="brand-name">Ergon</div>
             <div class="brand-sub">Industrial Evidence Intelligence</div>
           </div>
         </div>
@@ -88,15 +88,14 @@ function loginPanel() {
         </label>
         <button type="submit" class="btn btn-primary btn-lg">Log in</button>
       </form>
-      <div class="auth-links">
-        <a href="#/forgot-password">Forgot password?</a>
-      </div>
+      ${state.authFeatures.recoveryAvailable ? `<div class="auth-links"><a href="#/forgot-password">Forgot password?</a></div>` : ""}
       <p class="field-hint">Sessions expire after 8 hours. Login attempts are rate-limited.</p>
     </div>
   `;
 }
 
 function forgotPasswordPanel() {
+  if (!state.authFeatures.recoveryAvailable) return recoveryUnavailablePanel();
   return `
     <div class="login-panel">
       <div>
@@ -120,6 +119,7 @@ function forgotPasswordPanel() {
 }
 
 function resetPasswordPanel() {
+  if (!state.authFeatures.recoveryAvailable) return recoveryUnavailablePanel();
   return `
     <div class="login-panel">
       <div>
@@ -139,6 +139,21 @@ function resetPasswordPanel() {
         </label>
         <button type="submit" class="btn btn-primary btn-lg">Save password</button>
       </form>
+      <div class="auth-links">
+        <a href="#/login">Back to sign in</a>
+      </div>
+    </div>
+  `;
+}
+
+function recoveryUnavailablePanel() {
+  return `
+    <div class="login-panel">
+      <div>
+        <h2>Password recovery is unavailable here</h2>
+        <p class="hint">This local Ergon environment has password recovery delivery turned off. No email will be sent, and account existence is not exposed.</p>
+      </div>
+      <div class="alert alert-info">Use the synthetic local credentials provided for this walkthrough, or ask an administrator to reset the account in a configured environment.</div>
       <div class="auth-links">
         <a href="#/login">Back to sign in</a>
       </div>

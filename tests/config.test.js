@@ -7,13 +7,13 @@ const productionEnv = {
   DEPLOYMENT_PROFILE: "staging",
   PROCESS_ROLE: "api",
   PORT: "4000",
-  APP_URL: "https://app.complianceiq.example",
-  ALLOWED_ORIGINS: "https://app.complianceiq.example",
-  DATABASE_URL: "postgresql://user:password@db.example.com:5432/complianceiq",
+  APP_URL: "https://app.ergon.example",
+  ALLOWED_ORIGINS: "https://app.ergon.example",
+  DATABASE_URL: "postgresql://user:password@db.example.com:5432/ergon",
   REPOSITORY_BACKEND: "postgres",
   SESSION_SECRET: "replace-with-at-least-thirty-two-characters",
   STORAGE_BACKEND: "s3",
-  S3_BUCKET: "complianceiq-private",
+  S3_BUCKET: "ergon-private",
   S3_REGION: "ca-central-1",
   MAX_UPLOAD_MB: "25"
 };
@@ -32,7 +32,7 @@ test("production config rejects wildcard CORS and weak session secrets", () => {
 test("production config rejects invalid ports and origins", () => {
   assert.throws(() => readConfig({ ...productionEnv, PORT: "70000" }), /PORT/);
   assert.throws(() => readConfig({ ...productionEnv, ALLOWED_ORIGINS: "not-a-url" }), /valid absolute HTTPS URLs/);
-  assert.throws(() => readConfig({ ...productionEnv, APP_URL: "http://app.complianceiq.example" }), /HTTPS/);
+  assert.throws(() => readConfig({ ...productionEnv, APP_URL: "http://app.ergon.example" }), /HTTPS/);
 });
 
 test("production config accepts optional integrations as absent", () => {
@@ -54,14 +54,14 @@ test("SMTP recovery delivery config validates required safe settings", () => {
     SMTP_HOST: "smtp.example.com",
     SMTP_PORT: "465",
     SMTP_USE_TLS: "true",
-    SMTP_FROM_EMAIL: "security@complianceiq.example"
+    SMTP_FROM_EMAIL: "security@ergon.example"
   };
   const config = readConfig(smtpEnv);
   assert.equal(config.recoveryDeliveryProvider, "smtp");
   assert.equal(config.smtpHost, "smtp.example.com");
   assert.equal(config.smtpPort, 465);
   assert.equal(config.smtpUseTls, true);
-  assert.equal(config.smtpFromEmail, "security@complianceiq.example");
+  assert.equal(config.smtpFromEmail, "security@ergon.example");
 
   assert.throws(() => readConfig({ ...smtpEnv, SMTP_HOST: "" }), /SMTP_HOST/);
   assert.throws(() => readConfig({ ...smtpEnv, SMTP_PORT: "70000" }), /SMTP_PORT/);
@@ -92,18 +92,18 @@ test("MFA configuration validates feature flag, encryption key, and issuer safel
   const localDisabled = readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_ENABLED: "false" });
   assert.equal(localDisabled.mfaEnabled, false);
   assert.equal(localDisabled.mfaEncryptionKey, null);
-  assert.equal(localDisabled.mfaTotpIssuer, "ComplianceIQ");
+  assert.equal(localDisabled.mfaTotpIssuer, "Ergon");
 
   assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_ENABLED: "true" }), /MFA_ENCRYPTION_KEY/);
   assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_ENABLED: "true", MFA_ENCRYPTION_KEY: "not-base64" }), /MFA_ENCRYPTION_KEY/);
   assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_ENABLED: "true", MFA_ENCRYPTION_KEY: Buffer.alloc(31, 1).toString("base64") }), /32 bytes/);
-  assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_TOTP_ISSUER: "ComplianceIQ\nBcc: attacker@example.com" }), /MFA_TOTP_ISSUER/);
+  assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_TOTP_ISSUER: "Ergon\nBcc: attacker@example.com" }), /MFA_TOTP_ISSUER/);
   assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_TOTP_ISSUER: "x".repeat(65) }), /MFA_TOTP_ISSUER/);
 
-  const localEnabled = readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_ENABLED: "true", MFA_ENCRYPTION_KEY: key, MFA_TOTP_ISSUER: "ComplianceIQ Test" });
+  const localEnabled = readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", MFA_ENABLED: "true", MFA_ENCRYPTION_KEY: key, MFA_TOTP_ISSUER: "Ergon Test" });
   assert.equal(localEnabled.mfaEnabled, true);
   assert.equal(localEnabled.mfaEncryptionKey.length, 32);
-  assert.equal(localEnabled.mfaTotpIssuer, "ComplianceIQ Test");
+  assert.equal(localEnabled.mfaTotpIssuer, "Ergon Test");
 
   assert.throws(
     () => readConfig({ ...productionEnv, MFA_ENABLED: "true", MFA_ENCRYPTION_KEY: "super-secret-mfa-key" }),

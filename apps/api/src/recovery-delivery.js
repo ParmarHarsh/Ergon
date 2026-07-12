@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 
-const RESET_SUBJECT = "Reset your ComplianceIQ password";
+const RESET_SUBJECT = "Reset your Ergon password";
 const SMTP_TIMEOUT_MS = 10_000;
 
 export function createRecoveryDelivery(config, dependencies = {}) {
@@ -75,7 +75,7 @@ export function buildPasswordResetMessage({ user, resetUrl, expiresAt, from }) {
     to: user.email,
     subject: RESET_SUBJECT,
     text: [
-      "A password reset was requested for your ComplianceIQ account.",
+      "A password reset was requested for your Ergon account.",
       "",
       `Reset your password using this link: ${resetUrl}`,
       "",
@@ -83,15 +83,15 @@ export function buildPasswordResetMessage({ user, resetUrl, expiresAt, from }) {
       "After a successful reset, existing sessions for your account will be revoked.",
       "",
       "If you did not request this reset, ignore this message.",
-      "ComplianceIQ support will never ask for your password or raw reset token."
+      "Ergon support will never ask for your password or raw reset token."
     ].join("\n"),
     html: [
-      "<p>A password reset was requested for your ComplianceIQ account.</p>",
+      "<p>A password reset was requested for your Ergon account.</p>",
       `<p><a href="${escapedUrl}">Reset your password</a></p>`,
       `<p>This link expires at ${escapeHtml(expiryText)} and can be used only once.</p>`,
       "<p>After a successful reset, existing sessions for your account will be revoked.</p>",
       "<p>If you did not request this reset, ignore this message.</p>",
-      "<p>ComplianceIQ support will never ask for your password or raw reset token.</p>"
+      "<p>Ergon support will never ask for your password or raw reset token.</p>"
     ].join("")
   };
 }

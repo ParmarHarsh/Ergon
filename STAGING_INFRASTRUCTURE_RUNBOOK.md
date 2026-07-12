@@ -1,4 +1,4 @@
-# ComplianceIQ Staging Infrastructure Runbook
+# Ergon Staging Infrastructure Runbook
 
 ## Purpose
 
@@ -14,7 +14,7 @@ Use this runbook before any controlled pilot with real customer evidence. Until 
 - It does not include or request real secrets.
 - It does not authorize production validation.
 - It does not prove backup/restore. It defines the drill that must later be executed.
-- It does not change ComplianceIQ runtime behavior, source code, dependencies, migrations, CI, tests, or deploy environment templates.
+- It does not change Ergon runtime behavior, source code, dependencies, migrations, CI, tests, or deploy environment templates.
 
 ## Required staging topology
 
@@ -84,7 +84,7 @@ Variables marked validator-only should be configured only for validator jobs or 
 | `APP_URL` | API CORS/cookies | `https://staging-web.example.com` | No | Infrastructure owner | CORS/browser smoke |
 | `ALLOWED_ORIGINS` | API CORS | `https://staging-web.example.com` | No | Infrastructure owner | CORS/browser smoke |
 | `WEB_API_ORIGIN` | Static frontend build | `https://staging-api.example.com` | No | Infrastructure owner | `npm run build:web`, browser smoke |
-| `DATABASE_URL` | API, worker, migrations | `postgresql://REDACTED@staging-db.example.com:5432/complianceiq_staging` | Yes | Database owner | `npm run db:migrate`, `/health/ready` |
+| `DATABASE_URL` | API, worker, migrations | `postgresql://REDACTED@staging-db.example.com:5432/ergon_staging` | Yes | Database owner | `npm run db:migrate`, `/health/ready` |
 | `REPOSITORY_BACKEND` | API, worker | `postgres` | No | App release owner | Startup and `/health/ready` |
 | `SESSION_SECRET` | API sessions | `replace-from-secret-manager` | Yes | Security owner | Login/logout smoke |
 | `RECOVERY_DELIVERY_PROVIDER` | API account recovery | `smtp` | No | Security owner | Startup and recovery smoke |
@@ -96,7 +96,7 @@ Variables marked validator-only should be configured only for validator jobs or 
 | `SMTP_PASSWORD` | API account recovery | `replace-from-secret-manager` or blank with no username | Yes if set | Security owner | Approved SMTP validation |
 | `SMTP_FROM_EMAIL` | API account recovery | `security@staging.example.com` | No | Security owner | Approved SMTP validation |
 | `STORAGE_BACKEND` | API, worker | `s3` | No | Storage owner | `/health/ready`, storage validator |
-| `S3_BUCKET` | API, worker | `complianceiq-staging-private` | No | Storage owner | `/health/ready`, storage validator |
+| `S3_BUCKET` | API, worker | `ergon-staging-private` | No | Storage owner | `/health/ready`, storage validator |
 | `S3_REGION` | API, worker | `ca-central-1` | No | Storage owner | `/health/ready`, storage validator |
 | `S3_ENDPOINT` | API, worker | `https://s3-compatible.example.com` or blank for AWS-style endpoint | No | Storage owner | Storage validator |
 | `S3_ACCESS_KEY_ID` | API, worker | `REDACTED_ACCESS_KEY_ID` | Yes | Storage/security owner | Storage validator |
@@ -123,9 +123,9 @@ Variables marked validator-only should be configured only for validator jobs or 
 | `LOG_LEVEL` | API, worker | `info` | No | Monitoring owner | Log collection |
 | `VALIDATION_TARGET` | Validator-only safety gate | `staging` | No | Validation owner | All live validators |
 | `ALLOW_PRODUCTION_VALIDATION` | Validator-only safety gate | `false` | No | Security owner | All live validators |
-| `TEST_DATABASE_URL` | Validator-only Postgres | `postgresql://REDACTED@staging-db.example.com:5432/complianceiq_validation` | Yes | Database owner | `npm run validate:postgres` |
-| `STAGING_DATABASE_URL` | Validator-only Postgres fallback | `postgresql://REDACTED@staging-db.example.com:5432/complianceiq_validation` | Yes | Database owner | `npm run validate:postgres` |
-| `TEST_S3_BUCKET` | Validator-only storage | `complianceiq-staging-validation` | No | Storage owner | `npm run validate:storage` |
+| `TEST_DATABASE_URL` | Validator-only Postgres | `postgresql://REDACTED@staging-db.example.com:5432/ergon_validation` | Yes | Database owner | `npm run validate:postgres` |
+| `STAGING_DATABASE_URL` | Validator-only Postgres fallback | `postgresql://REDACTED@staging-db.example.com:5432/ergon_validation` | Yes | Database owner | `npm run validate:postgres` |
+| `TEST_S3_BUCKET` | Validator-only storage | `ergon-staging-validation` | No | Storage owner | `npm run validate:storage` |
 | `TEST_S3_REGION` | Validator-only storage | `ca-central-1` | No | Storage owner | `npm run validate:storage` |
 | `TEST_S3_ENDPOINT` | Validator-only storage | `https://s3-compatible.example.com` | No | Storage owner | `npm run validate:storage` |
 | `TEST_S3_ACCESS_KEY_ID` | Validator-only storage | `REDACTED_TEST_ACCESS_KEY_ID` | Yes | Storage/security owner | `npm run validate:storage` |
@@ -153,13 +153,13 @@ Command examples with placeholders only:
 
 ```bash
 REPOSITORY_BACKEND=postgres \
-DATABASE_URL='postgresql://REDACTED@staging-db.example.com:5432/complianceiq_staging' \
+DATABASE_URL='postgresql://REDACTED@staging-db.example.com:5432/ergon_staging' \
 npm run db:migrate
 ```
 
 ```bash
 VALIDATION_TARGET=staging \
-TEST_DATABASE_URL='postgresql://REDACTED@staging-db.example.com:5432/complianceiq_validation' \
+TEST_DATABASE_URL='postgresql://REDACTED@staging-db.example.com:5432/ergon_validation' \
 npm run validate:postgres
 ```
 
@@ -193,7 +193,7 @@ Command example with placeholders only:
 
 ```bash
 VALIDATION_TARGET=staging \
-TEST_S3_BUCKET='complianceiq-staging-validation' \
+TEST_S3_BUCKET='ergon-staging-validation' \
 TEST_S3_REGION='ca-central-1' \
 TEST_S3_ENDPOINT='https://s3-compatible.example.com' \
 TEST_S3_ACCESS_KEY_ID='REDACTED_TEST_ACCESS_KEY_ID' \

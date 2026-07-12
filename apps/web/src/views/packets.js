@@ -6,7 +6,7 @@ export function packetsView() {
   const facility = currentFacility();
   if (!facility) {
     return `
-      <div class="page-head"><div><h1>Audit packets</h1></div></div>
+      <div class="page-head"><div><h1>Audit Packs</h1></div></div>
       <div class="card">${emptyFacilityPrompt()}</div>
     `;
   }
@@ -15,7 +15,7 @@ export function packetsView() {
   return `
     <div class="page-head">
       <div>
-        <h1>Audit packets</h1>
+        <h1>Audit Packs</h1>
         <p class="page-sub">Exported readiness packets for <strong>${html(facility.name)}</strong>. Each PDF includes the facility profile, readiness score, gap matrix, action plan, AI evidence lineage, reviewer decisions, and disclaimers.</p>
       </div>
       <div class="page-actions">

@@ -6,8 +6,8 @@ export function accountSecurityView() {
   return `
     <div class="page-head">
       <div>
-        <h1>Account security</h1>
-        <p class="page-sub">Manage authenticator-app multi-factor authentication and one-time recovery codes.</p>
+        <h1>Security</h1>
+        <p class="page-sub">Manage account protection settings when this environment enables them. Core sessions, roles, tenancy, and audit logging remain active.</p>
       </div>
     </div>
 

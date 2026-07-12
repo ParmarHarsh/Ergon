@@ -38,8 +38,8 @@ async function ensureUser(email, name, role) {
 }
 
 const admin = await ensureUser(config.adminEmail, "Demo Admin", "admin");
-const reviewer = await ensureUser("reviewer@complianceiq.local", "Demo Reviewer", "reviewer");
-await ensureUser("manager@complianceiq.local", "Demo Manager", "compliance_manager");
+const reviewer = await ensureUser("reviewer@ergon.local", "Demo Reviewer", "reviewer");
+await ensureUser("manager@ergon.local", "Demo Manager", "compliance_manager");
 
 let [facility] = await repo.listFacilities(org.id);
 if (!facility) {
@@ -358,7 +358,7 @@ if (existingReviews.length === 0) {
 
 console.error(`Seed complete for ${org.name}.`);
 console.error(`  Admin:    ${admin.email}`);
-console.error("  Reviewer: reviewer@complianceiq.local");
-console.error("  Manager:  manager@complianceiq.local");
+console.error("  Reviewer: reviewer@ergon.local");
+console.error("  Manager:  manager@ergon.local");
 console.error("  All demo users share the ADMIN_PASSWORD value. Development use only.");
 await repo.close?.();

@@ -12,7 +12,7 @@ export function actionsView() {
   const facility = currentFacility();
   if (!facility) {
     return `
-      <div class="page-head"><div><h1>Action plan</h1></div></div>
+      <div class="page-head"><div><h1>Action Plan</h1></div></div>
       <div class="card">${emptyFacilityPrompt()}</div>
     `;
   }
@@ -20,7 +20,7 @@ export function actionsView() {
     return `
       <div class="page-head">
         <div>
-          <h1>Action plan</h1>
+          <h1>Action Plan</h1>
           <p class="page-sub">Prioritized corrective actions derived from the latest gap analysis for ${html(facility.name)}.</p>
         </div>
       </div>
@@ -35,7 +35,7 @@ export function actionsView() {
   return `
     <div class="page-head">
       <div>
-        <h1>Action plan</h1>
+        <h1>Action Plan</h1>
         <p class="page-sub">${state.actionItems.length} open action${state.actionItems.length === 1 ? "" : "s"} for <strong>${html(facility.name)}</strong>, bucketed by urgency. Actions close automatically when evidence is accepted and the analysis is regenerated.</p>
       </div>
       <div class="page-actions">

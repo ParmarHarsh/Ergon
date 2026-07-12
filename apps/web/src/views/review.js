@@ -9,21 +9,21 @@ const PRIORITY_FILTERS = ["", "critical", "high", "medium", "low"];
 export function reviewView() {
   if (!canReview()) {
     return `
-      <div class="page-head"><div><h1>Review queue</h1></div></div>
+      <div class="page-head"><div><h1>AI Review</h1></div></div>
       <div class="card">${emptyState({ icon: "review", title: "Reviewer role required", copy: "Ask an organization administrator for the reviewer or admin role to make evidence decisions." })}</div>
     `;
   }
   const facility = currentFacility();
   if (!facility) {
     return `
-      <div class="page-head"><div><h1>Review queue</h1></div></div>
+      <div class="page-head"><div><h1>AI Review</h1></div></div>
       <div class="card">${emptyFacilityPrompt()}</div>
     `;
   }
   return `
     <div class="page-head">
       <div>
-        <h1>Review queue</h1>
+        <h1>AI Review</h1>
         <p class="page-sub">Evidence requiring a human decision: low-confidence AI classifications, extraction failures, suspicious scans, expirations, and unmatched items. Every decision is persisted to the audit trail.</p>
       </div>
     </div>
