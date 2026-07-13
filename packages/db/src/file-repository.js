@@ -85,6 +85,12 @@ export class FileRepository {
         analysis.previousAnalysisId ??= index > 0 ? analyses[index - 1].id : null;
         analysis.createdByType ||= "system";
         analysis.isCurrent = index === analyses.length - 1;
+        analysis.structuredContent ||= {};
+        analysis.provenanceAnchors ||= [];
+        analysis.documentMetadata ||= {};
+        analysis.deterministicProfile ||= {};
+        analysis.aiProfile ||= {};
+        analysis.processingWarnings ||= [];
       });
     }
   }

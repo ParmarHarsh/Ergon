@@ -61,7 +61,7 @@ export function evidenceView() {
         <div class="card-head">
           <div>
             <h2>Add evidence</h2>
-            <p class="hint">Attach a private file for AI analysis, or log a manual record.</p>
+            <p class="hint">Attach a private file for secure evidence understanding, or log a manual record.</p>
           </div>
         </div>
         <div class="card-body">
@@ -75,7 +75,7 @@ export function evidenceView() {
               <select name="evidenceType" required>
                 ${state.evidenceTypes.map((type) => `<option value="${html(type)}" ${type === "other" ? "selected" : ""}>${html(label(type))}</option>`).join("")}
               </select>
-              <span class="field-hint">Not sure? Choose “other” — AI classification will suggest a type for review.</span>
+              <span class="field-hint">${state.aiStatus.enabled ? "Not sure? Choose “other” — AI can suggest a candidate type for review." : "Not sure? Choose “other” — deterministic extraction and human review remain available."}</span>
             </label>
             <div class="form-grid cols-2">
               <label class="field">
@@ -95,8 +95,8 @@ export function evidenceView() {
               <span class="field-label">Private file <span class="muted">(optional)</span></span>
               <span class="drop-zone">
                 <strong>${ICONS.upload} Select a file</strong>
-                <span class="field-hint">PDF, text, CSV, or supported image. Files are screened before processing.</span>
-                <input name="file" type="file" />
+                <span class="field-hint">PDF, TXT, Markdown, CSV, DOCX, XLSX, or supported image. Files are screened before processing.</span>
+                <input name="file" type="file" accept=".pdf,.txt,.md,.log,.csv,.docx,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.tif,.tiff,.bmp" />
               </span>
             </label>
             <label class="field">
@@ -136,7 +136,7 @@ function evidenceItem(item) {
         <div class="evidence-actions">
           ${pill(status.code, { text: status.text })}
           ${item.fileReference && item.scanStatus !== "scan_suspicious" && !item.archived ? `<button class="btn btn-ghost btn-sm" data-action="download-evidence" data-evidence-id="${html(item.id)}">${ICONS.download} File</button>` : ""}
-          <button class="btn btn-secondary btn-sm" data-action="process-ai" data-evidence-id="${html(item.id)}" ${state.aiStatus.enabled && !active && !blocked && item.fileReference && !item.archived ? "" : "disabled"}>${ICONS.spark} ${active ? "Processing…" : analysis ? "Reprocess" : "Analyze"}</button>
+          <button class="btn btn-secondary btn-sm" data-action="process-ai" data-evidence-id="${html(item.id)}" ${!active && !blocked && item.fileReference && !item.archived ? "" : "disabled"}>${ICONS.spark} ${active ? "Processing…" : analysis ? "Reprocess" : "Process"}</button>
           ${canReview() && !item.archived ? (item.legalHoldActive
             ? `<button class="btn btn-secondary btn-sm" data-action="release-evidence-hold" data-evidence-id="${html(item.id)}">Release hold</button>`
             : `<button class="btn btn-secondary btn-sm" data-action="hold-evidence" data-evidence-id="${html(item.id)}">Hold</button>`) : ""}
@@ -148,7 +148,7 @@ function evidenceItem(item) {
       ${item.legalHoldActive ? `<div class="alert-info small">Legal hold active${item.legalHoldReason ? `: ${html(item.legalHoldReason)}` : ""}</div>` : ""}
       ${item.storageDeletionStatus === "failed" ? `<div class="alert small">Private-object deletion failed${item.storageDeletionError ? `: ${html(item.storageDeletionError)}` : ""}</div>` : ""}
       ${processingBadges(item, job)}
-      ${analysis ? aiAnalysisPanel(analysis) : `<p class="small muted">${state.aiStatus.enabled ? (item.fileReference ? "Waiting for a clean scan before analysis." : "Manual record — no file to analyze.") : "AI is disabled; deterministic matching and manual review still apply."}</p>`}
+      ${analysis ? aiAnalysisPanel(analysis) : `<p class="small muted">${item.fileReference ? "Waiting for a clean scan before evidence processing." : "Manual record — no file to process."}</p>`}
       ${item.archived ? "" : reviewForm(item, analysis)}
     </article>
   `;

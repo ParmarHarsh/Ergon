@@ -7,6 +7,7 @@ const maxBytes = 1024 * 1024;
 test("file validation accepts verified PDF, text, CSV, and image signatures", () => {
   assert.equal(validateUploadedFile({ buffer: Buffer.from("%PDF-1.4\n%%EOF"), fileName: "record.pdf", declaredContentType: "application/pdf", maxBytes }).detectedContentType, "application/pdf");
   assert.equal(validateUploadedFile({ buffer: Buffer.from("Lockout procedure"), fileName: "record.txt", declaredContentType: "text/plain", maxBytes }).detectedContentType, "text/plain");
+  assert.equal(validateUploadedFile({ buffer: Buffer.from("# Lockout procedure"), fileName: "record.md", declaredContentType: "text/markdown", maxBytes }).detectedContentType, "text/plain");
   assert.equal(validateUploadedFile({ buffer: Buffer.from("employee,course\nA,LOTO"), fileName: "training.csv", declaredContentType: "text/csv", maxBytes }).detectedContentType, "text/csv");
   assert.equal(validateUploadedFile({ buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), fileName: "scan.png", declaredContentType: "image/png", maxBytes }).detectedContentType, "image/png");
 });

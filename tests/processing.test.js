@@ -139,6 +139,8 @@ test("PDF extraction succeeds, truncates safely, and corrupt or scanned files fa
   assert.equal(extracted.textExtractionStatus, "extracted");
   assert.equal(extracted.text.length, 180);
   assert.equal(extracted.truncated, true);
+  assert.equal(extracted.provenanceAnchors[0].type, "page");
+  assert.ok(extracted.documentMetadata.pageCount >= 1);
 
   const corrupt = await extractEvidenceText({ buffer: Buffer.from("%PDF-corrupt"), fileName: "broken.pdf", evidence: { title: "Broken" }, maxChars: 500, maxBytes: 1_000_000 });
   assert.equal(corrupt.textExtractionStatus, "extraction_failed");

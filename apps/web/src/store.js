@@ -8,6 +8,7 @@ export const state = {
   booted: false,
   loading: false,
   route: "home",
+  routeTransitioning: false,
   user: null,
   organization: null,
   facilities: [],

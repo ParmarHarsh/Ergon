@@ -64,7 +64,7 @@ export function homeView() {
       </section>
     </details>
 
-    <p class="footer-note">${html(DISCLAIMER_SHORT)} Ergon does not provide legal advice or certify compliance. Starter rules are demo/unverified unless qualified experts review them.</p>
+    <p class="footer-note">${html(DISCLAIMER_SHORT)} Starter rules remain demo/unverified pending qualified expert review.</p>
   `;
 }
 

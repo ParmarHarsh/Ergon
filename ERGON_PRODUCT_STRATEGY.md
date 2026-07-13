@@ -66,7 +66,9 @@ The long-term workflow is:
 INGEST -> UNDERSTAND -> MAP -> DETECT -> PRIORITIZE -> RECOMMEND -> DRAFT -> REVIEW -> ACT -> PROVE -> MONITOR -> RE-EVALUATE
 ```
 
-Current implementation supports a narrower version: facilities, evidence, verified uploads for PDF/text/CSV/supported images, mock or optional AI analysis foundations, review queue, deterministic gap analysis, action plan, audit packets, lifecycle controls, and system health. Planned and long-term phases expand ingestion, regulatory intelligence, integrations, and monitoring.
+Current implementation supports a narrower version: facilities, evidence, verified multi-format uploads and provenance-backed extraction, mock or optional AI analysis foundations, review queue, deterministic gap analysis, action plan, audit packets, lifecycle controls, and system health. Planned and long-term phases expand OCR, regulatory intelligence, integrations, and monitoring.
+
+Phase 24 is the first concrete `INGEST → UNDERSTAND` implementation: it turns supported private documents into bounded normalized content, format-specific source anchors, deterministic profiles, optional AI candidates, and reviewable version history. `MAP → DETECT → PRIORITIZE → RECOMMEND → DRAFT` remain limited to the existing starter-rule and audit-readiness foundations; `MONITOR → RE-EVALUATE` remains future source-backed regulatory work.
 
 ## The Ergon compliance graph
 
@@ -113,14 +115,14 @@ IMPLEMENTED_NOW:
 - PDF uploads;
 - plain text, Markdown/log-style text;
 - CSV;
+- Word DOCX documents;
+- Excel XLSX workbooks;
 - supported images with signature verification;
 - manual evidence records;
 - synthetic local pilot data.
 
 PLANNED:
 
-- Word documents;
-- richer Excel ingestion;
 - scanned PDFs and OCR;
 - email attachments;
 - SharePoint, Google Drive, and OneDrive ingestion;
@@ -141,7 +143,7 @@ Ergon should understand each facility's jurisdiction, industry, processes, equip
 
 ## Evidence intelligence
 
-Evidence intelligence should classify documents, extract metadata, identify entities, summarize content, detect stale or weak evidence, map evidence to candidate obligations, preserve versions, and route uncertain items to humans. Current support includes verified upload intake, local/private storage, scan state, optional mock/OpenAI-backed analysis foundations, review queue, immutable analysis versions, and human override.
+Evidence intelligence should classify documents, extract metadata, identify entities, summarize content, detect stale or weak evidence, map evidence to candidate obligations, preserve versions, and route uncertain items to humans. Current support includes verified upload intake; local/private storage; scan-gated processing; bounded TXT, Markdown, CSV, text-layer PDF, DOCX, and XLSX extraction; deterministic profiles; page/line/row/paragraph/sheet-cell provenance; optional mock/OpenAI-backed candidate analysis; review queues; immutable analysis versions; and human overrides that remain authoritative across reprocessing. Images and textless PDFs are honestly marked `OCR_REQUIRED`; production OCR is not yet implemented.
 
 ## Obligation and applicability intelligence
 
@@ -202,7 +204,7 @@ Ergon should answer quickly:
 
 ## Near-term product focus
 
-Near-term focus should be evidence ingestion, review ergonomics, gap/action clarity, audit packet quality, manual UX confidence, and truthful AI-disabled states. Phase 20 intentionally does not implement new SSO, regulatory scraping, OCR, ERP connectors, cloud infrastructure, monitoring vendors, or backup infrastructure.
+Near-term focus should be manufacturer validation of multi-format evidence understanding, review ergonomics, gap/action clarity, audit packet quality, manual UX confidence, and truthful AI-disabled states. Current work intentionally does not implement new SSO, regulatory scraping, simulated OCR, ERP connectors, cloud infrastructure, monitoring vendors, or backup infrastructure.
 
 ## Two-year vision
 

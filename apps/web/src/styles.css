@@ -348,6 +348,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
   margin: 0 auto;
 }
 
+.workspace.route-enter { animation: route-enter 140ms var(--ease) both; }
+
+@keyframes route-enter {
+  from { opacity: 0.72; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .loading-panel {
   display: grid;
   gap: 6px;
@@ -373,6 +380,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-top: 1px solid var(--line-2);
   padding-top: 14px;
   max-width: 90ch;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 
 /* ---------- Cards / panels ---------- */
@@ -659,12 +668,15 @@ tr[data-row-link]:hover { background: #f7fafb; }
 .form-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .form-span { grid-column: 1 / -1; }
 
-.field { display: grid; gap: 5px; }
+.field { display: grid; gap: 5px; min-width: 0; }
+.form-grid > *, .review-form-controls > * { min-width: 0; }
 .field-label { color: var(--ink-2); font-size: 0.8rem; font-weight: 600; }
 .field-hint { color: var(--faint); font-size: 0.74rem; line-height: 1.4; }
 
 input, select, textarea {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 8px 11px;
@@ -696,6 +708,9 @@ input[type="file"] { padding: 7px; font-size: 0.8rem; color: var(--muted); }
 
 .drop-zone:hover { border-color: var(--brand); background: #f1faf9; }
 .drop-zone input { background: var(--surface); }
+
+.source-reference-list li { display: grid; gap: 3px; }
+.source-reference-list span { overflow-wrap: anywhere; }
 
 .check-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; }
 .check-item { display: flex; align-items: center; gap: 8px; font-size: 0.84rem; color: var(--ink-2); cursor: pointer; }

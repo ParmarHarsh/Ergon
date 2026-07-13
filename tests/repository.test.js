@@ -35,6 +35,26 @@ test("file repository persists facilities, evidence, and reviews after reinitial
     evidenceType: "loto_procedures",
     status: "accepted"
   }, org.id, user.id));
+  await repo.upsertAiAnalysis({
+    organizationId: org.id,
+    facilityId: facility.id,
+    evidenceId: evidence.id,
+    processingStatus: "needs_review",
+    textExtractionStatus: "extracted",
+    detectedFormat: "text",
+    extractionStatus: "extracted",
+    extractionMethod: "utf8_text",
+    normalizedText: "Synthetic procedure",
+    provenanceAnchors: [{ id: "text-lines-1-1", type: "line_range", lineStart: 1, lineEnd: 1 }],
+    structuredContent: { kind: "text" },
+    documentMetadata: { lineCount: 1 },
+    deterministicProfile: { wordCount: 2 },
+    aiProfile: { status: "disabled" },
+    processingWarnings: [],
+    provider: "disabled",
+    promptVersion: "evidence-intelligence-v1",
+    needsHumanReview: true
+  });
   const generated = generateReview({ facility, evidence: [evidence], now: new Date("2026-06-18T12:00:00Z") });
   await repo.saveApplicableRules(org.id, facility.id, generated.rulesPack.rulesPackId, generated.applicableRules);
   const review = await repo.createReview({
@@ -69,6 +89,10 @@ test("file repository persists facilities, evidence, and reviews after reinitial
   assert.equal((await restarted.listFacilities(org.id))[0].id, facility.id);
   assert.equal((await restarted.getFacility(org.id, facility.id)).selectedRulesPackId, generated.rulesPack.rulesPackId);
   assert.equal((await restarted.listEvidence(org.id, facility.id))[0].id, evidence.id);
+  const persistedIntelligence = await restarted.getAiAnalysis(org.id, evidence.id);
+  assert.equal(persistedIntelligence.extractionStatus, "extracted");
+  assert.equal(persistedIntelligence.provenanceAnchors[0].lineStart, 1);
+  assert.equal(persistedIntelligence.aiProfile.status, "disabled");
   assert.equal((await restarted.getReview(org.id, review.id)).readinessScore, generated.readinessScore);
   assert.equal((await restarted.getGapRows(org.id, review.id)).length, generated.gapRows.length);
   assert.ok((await restarted.getActionItems(org.id, review.id)).length > 0);
@@ -137,6 +161,7 @@ test("repository blocks cross-organization access", async () => {
   const repo = await repoAt(path.join(dir, "db.json"));
   const orgA = await repo.createOrganization({ name: "Tenant A" });
   const orgB = await repo.createOrganization({ name: "Tenant B" });
+  const user = await repo.createUser({ organizationId: orgA.id, email: "scope@example.com", passwordHash: "hash", name: "Scope", role: "admin", isActive: true });
   const facility = await repo.createFacility(parseFacilityInput({
     name: "Plant A",
     country: "US",
@@ -147,8 +172,11 @@ test("repository blocks cross-organization access", async () => {
     employeeCount: 20,
     hazardProfile: { machinery: true }
   }, orgA.id));
+  const evidence = await repo.createEvidence(parseEvidenceInput({ facilityId: facility.id, title: "Scoped evidence", evidenceType: "other" }, orgA.id, user.id));
+  await repo.upsertAiAnalysis({ organizationId: orgA.id, facilityId: facility.id, evidenceId: evidence.id, processingStatus: "needs_review", textExtractionStatus: "extracted", extractionStatus: "extracted", provenanceAnchors: [{ id: "line-1", lineStart: 1, lineEnd: 1 }], aiProfile: { status: "disabled" }, provider: "disabled", promptVersion: "evidence-intelligence-v1", needsHumanReview: true });
 
   await assert.rejects(() => repo.getFacility(orgB.id, facility.id), /another organization/);
+  await assert.rejects(() => repo.getAiAnalysis(orgB.id, evidence.id), /another organization/);
 });
 
 test("file repository enforces lifecycle legal holds, retention candidates, retry guards, and restore rules", async () => {
