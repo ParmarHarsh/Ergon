@@ -1443,3 +1443,84 @@ Safe next action:
   - `NO_GO`.
 - Recommended next phase:
   - Analyze the user's Phase 22 manual UX ratings and select one targeted acceptance-driven refinement phase.
+
+## Phase 23 precision UX fit-and-finish note
+
+- Phase 22 merged:
+  - Yes. Commit `4a4cd22d1b2d05cd2f359ecfab41caadecd02ba6` is reachable from `main`.
+- Manual feedback:
+  - Duplicate Sign out controls, sidebar Sign out overflow, awkward sentence wrapping, and additional small visual consistency defects were reported and reproduced.
+- Browser inspection:
+  - `FULL_BROWSER_VISUAL_REVIEW_COMPLETED` using the Codex in-app browser against fresh synthetic local data.
+  - Reviewed all primary authenticated routes at desktop and representative mobile widths, plus the mobile drawer, Escape/scrim/route-close behavior, sign-out/login, disabled controls, and long-content fixtures.
+  - Ran 156 route/viewport page-overflow checks across 12 routes and 13 widths from 390 through 1920 px; no page-level horizontal overflow remained.
+- Screens reviewed:
+  - Sign in, Home, Facilities, Evidence, AI Review, Gaps & Actions, Action Plan, Audit Packs, Packet Workflow, Expert review, Team & Roles, Security, System, and mobile navigation.
+- Baseline screenshots:
+  - 56 before screenshots captured in `/private/tmp/ergon-phase23-visual-review`.
+- After screenshots:
+  - 30 after screenshots captured in `/private/tmp/ergon-phase23-visual-review`.
+  - Screenshots are temporary review artifacts and were not committed.
+- Initial issue inventory:
+  - P0: 0.
+  - P1: 3: duplicate visible Sign out paths, overflowing sidebar Sign out, and a compressed four-line Home heading at the 1024 px intermediate breakpoint.
+  - P2: 3: orphaned subtitle words, one-word action-title wraps, and mobile tables compressed below readable column widths.
+  - P3: 1: narrow-card wrapping that remained acceptable and intentionally natural.
+- Issues fixed:
+  - P0: 0.
+  - P1: 3.
+  - P2: 3.
+  - P3: 0; the remaining narrow-card behavior was not a defect.
+- Duplicate Sign out resolution:
+  - Source inspection found exactly two intentional render sources: topbar and drawer/sidebar footer.
+  - Desktop exposes the topbar action only; tablet/mobile expose the drawer action only when the drawer intersects the viewport.
+  - Automated and browser checks found exactly one user-visible Sign out action in each active navigation context.
+- Containment and layout changes:
+  - Rebuilt the drawer account footer so identity and the full-width Sign out action stay inside the sidebar at 390 px and desktop widths.
+  - Balanced headings, widened readable supporting-copy measures, and used pretty wrapping for secondary prose.
+  - Collapsed the Home hero at 1100 px and the Facilities two-column layout at 1500 px to avoid compressed content.
+  - Gave dense tables explicit readable minimum widths inside local scroll wrappers, with a wider Facilities table and protected facility-name column.
+  - Kept page sections, cards, controls, and existing information architecture consistent with the established ERGON UI.
+- Alignment and rhythm:
+  - Page gutters, heading/card edges, buttons, badges, table wrappers, drawer edges, and section spacing remained aligned to the existing token system across routes.
+- Long-content resilience:
+  - Verified a long evidence filename, long administrator name/email/role, long facility names, and long workflow titles at mobile and desktop widths.
+  - Long content wrapped or scrolled locally without causing page overflow or control displacement.
+- Zoom robustness:
+  - Browser zoom shortcuts were attempted at the available test surface but did not change zoom metrics; the in-app browser does not expose a separate zoom capability.
+  - Required responsive widths and intermediate widths were therefore used as the available layout-pressure proxy; all passed.
+- Responsive result:
+  - 390, 480, and 768 px: drawer navigation; zero Sign out actions intersect the viewport when closed and exactly one when open.
+  - 1024, 1280, 1440, and 1920 px: persistent sidebar plus exactly one topbar Sign out action.
+  - No tested width had page-level horizontal overflow, clipped Sign out content, or unreadable table compression.
+- Tests updated:
+  - Frontend UX source assertions cover canonical account-action visibility, responsive Home/Facilities behavior, readable tables, and text wrapping.
+  - Pilot Playwright smoke covers viewport-visible Sign out counts, drawer/action containment, page overflow, Escape close, and desktop restoration.
+- Verification:
+  - `node --version` - `v24.4.0`.
+  - `npm --version` - `11.4.2`.
+  - `node --check` changed JavaScript files - passed.
+  - `node --test tests/frontend-ux.test.js` - passed; 8 tests.
+  - Requested auth/security/API/repository/migration regression set - passed; 31 tests.
+  - `npm test` - passed; 74 total, 72 passed, 2 expected infrastructure skips, 0 failed.
+  - `npm run lint` - passed; linted 80 files.
+  - `npm run typecheck` - passed; checked 88 JavaScript files.
+  - `npm run build` - passed.
+  - `npm audit` - passed; 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; 0 vulnerabilities.
+  - `npm run scan:claims` - passed; linted 80 files.
+  - `npm run scan:random` - passed; 1 deterministic-safety test passed.
+  - `npm run qa:pilot` - passed; 1 Chromium smoke test passed.
+  - Migration diff - none.
+  - Dependency manifest/lockfile diff - none.
+  - Security posture - unchanged; no security controls weakened.
+  - Brand scan - active UI remains ERGON; no former-brand regression.
+  - `git diff --check` - passed.
+- Browser smoke result:
+  - `PASSED_LOCAL`.
+- Manual user acceptance:
+  - Required.
+- Pilot status:
+  - `NO_GO` pending manufacturer walkthrough and recorded acceptance feedback.
+- Recommended next phase:
+  - Phase 24 - manufacturer acceptance walkthrough and evidence-intelligence prioritization based on observed user friction.

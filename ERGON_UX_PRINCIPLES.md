@@ -82,7 +82,11 @@ The app should remain usable around 390px mobile, 768px tablet, and desktop widt
 
 Mobile uses a drawer navigation pattern with visible close control, Escape-to-close behavior, single-column content, reachable sign out, and no page-level horizontal overflow. Desktop uses grouped persistent navigation and a visible account/sign-out area. Tablet reduces columns before content becomes cramped.
 
+Show exactly one obvious Sign out path in an active viewport state: the topbar account area on desktop and the contained account footer inside the open navigation drawer on mobile and tablet. Account actions must fit their surface without clipping, escape, or duplicate equivalents.
+
 Tables may remain tables when relationships matter, but they must sit inside controlled scroll containers. Priority summaries should be card/list based before dense tables.
+
+Preserve natural responsive wrapping. Use available content width and browser-native balanced or pretty wrapping for important headings and descriptions; do not force global nowrap rules or hardcoded line breaks. Dense tables should preserve readable columns inside local scrolling rather than compressing labels into word fragments.
 
 Responsive quality is judged in the browser. A page can pass overflow checks and still fail if text, buttons, or status pills are visually clipped or squeezed into unreadable fragments.
 

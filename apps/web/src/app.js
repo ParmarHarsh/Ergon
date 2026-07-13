@@ -118,12 +118,12 @@ function sidebar(activeRoute) {
       <div class="sidebar-footer">
         <div class="sidebar-user">
           <div class="avatar">${html(initials(state.user.name || state.user.email))}</div>
-          <div style="min-width:0">
+          <div class="sidebar-user-copy">
             <div class="sidebar-user-name">${html(state.user.name || state.user.email)}</div>
             <div class="sidebar-user-role">${html(String(state.user.role || "").replaceAll("_", " "))}</div>
           </div>
-          <button class="logout-btn" data-action="logout">${ICONS.logout}<span>Sign out</span></button>
         </div>
+        <button class="logout-btn" data-action="logout">${ICONS.logout}<span>Sign out</span></button>
       </div>
     </aside>
   `;
@@ -149,7 +149,7 @@ function topbar(route) {
           <strong>${html(state.user.name || state.user.email)}</strong>
           <span>${html(String(state.user.role || "").replaceAll("_", " "))}</span>
         </span>
-        <button class="btn btn-secondary btn-sm" data-action="logout">${ICONS.logout} Sign out</button>
+        <button class="btn btn-secondary btn-sm topbar-logout" data-action="logout">${ICONS.logout} Sign out</button>
       </div>
     </header>
   `;

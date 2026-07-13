@@ -121,7 +121,9 @@ test("app shell source includes mobile navigation and visible sign out controls"
   assert.match(source, /mobile-menu-btn/);
   assert.match(source, /open-mobile-nav/);
   assert.match(source, /close-mobile-nav/);
-  assert.match(source, /Sign out/);
+  assert.equal(source.match(/data-action="logout"/g)?.length, 2);
+  assert.match(source, /class="logout-btn" data-action="logout"/);
+  assert.match(source, /class="btn btn-secondary btn-sm topbar-logout" data-action="logout"/);
 });
 
 test("browser title and design CSS use the Phase 21 ERGON convention", async () => {
@@ -136,10 +138,21 @@ test("responsive layout CSS protects mobile hierarchy and wide workflow content"
   const css = await readFile(path.resolve("apps/web/src/styles.css"), "utf8");
   assert.match(css, /\.mobile-nav-close\.drawer-close\s*\{\s*display:\s*none;\s*\}/);
   assert.match(css, /@media \(max-width: 860px\)[\s\S]*\.mobile-nav-close\.drawer-close\s*\{\s*display:\s*grid;\s*\}/);
+  assert.match(css, /@media \(max-width: 1100px\)[\s\S]*\.home-hero\s*\{[^}]*grid-template-columns:\s*1fr;/);
   assert.match(css, /@media \(max-width: 860px\)[\s\S]*\.home-hero\s*\{[^}]*grid-template-columns:\s*1fr;/);
   assert.match(css, /\.card\s*\{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;/);
   assert.match(css, /\.table-wrap\s*\{[^}]*overflow-x:\s*auto;[^}]*max-width:\s*100%;/);
+  assert.match(css, /\.table-wrap\s*>\s*table\s*\{\s*min-width:\s*680px;\s*\}/);
+  assert.match(css, /\.facilities-table\s*\{\s*min-width:\s*760px;\s*\}/);
+  assert.match(css, /\.facilities-table th:first-child,\s*\.facilities-table td:first-child\s*\{\s*min-width:\s*190px;\s*\}/);
   assert.match(css, /\.kv-grid\s*\{[^}]*minmax\(min\(200px,\s*100%\),\s*1fr\)/);
+  assert.match(css, /\.sidebar-footer\s*\{[^}]*display:\s*none;[^}]*min-width:\s*0;/);
+  assert.match(css, /\.logout-btn\s*\{[^}]*width:\s*100%;[^}]*justify-content:\s*center;/);
+  assert.match(css, /@media \(max-width: 860px\)[\s\S]*\.sidebar-footer\s*\{\s*display:\s*grid;\s*\}/);
+  assert.match(css, /@media \(max-width: 860px\)[\s\S]*\.topbar-user\s*\{\s*display:\s*none;\s*\}/);
+  assert.match(css, /\.page-sub\s*\{[^}]*max-width:\s*84ch;[^}]*text-wrap:\s*pretty;/);
+  assert.match(css, /\.facilities-layout\s*\{\s*grid-template-columns:\s*minmax\(0,\s*3fr\)\s*minmax\(380px,\s*2fr\);\s*\}/);
+  assert.match(css, /@media \(max-width: 1500px\)\s*\{\s*\.facilities-layout\s*\{\s*grid-template-columns:\s*1fr;\s*\}/);
 });
 
 test("active web UI files no longer contain current former-brand text", async () => {
