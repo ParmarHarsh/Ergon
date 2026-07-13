@@ -30,6 +30,8 @@ Each screen should make the next useful action obvious. Secondary actions should
 
 Home answers "What needs my attention today?" Evidence prioritizes "Add evidence." AI Review prioritizes "What decision does a human need to make?" Gaps & Actions prioritizes "What is missing and what should happen next?"
 
+Every primary screen should have one dominant purpose, one clearly dominant first action, and no more than three first-attention elements competing above the fold.
+
 ## Show what needs attention
 
 Home and work screens should prioritize review items, high-risk gaps, overdue actions, processing failures, and missing evidence.
@@ -81,6 +83,8 @@ The app should remain usable around 390px mobile, 768px tablet, and desktop widt
 Mobile uses a drawer navigation pattern with visible close control, Escape-to-close behavior, single-column content, reachable sign out, and no page-level horizontal overflow. Desktop uses grouped persistent navigation and a visible account/sign-out area. Tablet reduces columns before content becomes cramped.
 
 Tables may remain tables when relationships matter, but they must sit inside controlled scroll containers. Priority summaries should be card/list based before dense tables.
+
+Responsive quality is judged in the browser. A page can pass overflow checks and still fail if text, buttons, or status pills are visually clipped or squeezed into unreadable fragments.
 
 Motion should clarify state changes, stay fast, and respect `prefers-reduced-motion`.
 

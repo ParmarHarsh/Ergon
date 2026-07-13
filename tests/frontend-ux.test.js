@@ -132,6 +132,16 @@ test("browser title and design CSS use the Phase 21 ERGON convention", async () 
   assert.match(css, /mobile-nav-scrim/);
 });
 
+test("responsive layout CSS protects mobile hierarchy and wide workflow content", async () => {
+  const css = await readFile(path.resolve("apps/web/src/styles.css"), "utf8");
+  assert.match(css, /\.mobile-nav-close\.drawer-close\s*\{\s*display:\s*none;\s*\}/);
+  assert.match(css, /@media \(max-width: 860px\)[\s\S]*\.mobile-nav-close\.drawer-close\s*\{\s*display:\s*grid;\s*\}/);
+  assert.match(css, /@media \(max-width: 860px\)[\s\S]*\.home-hero\s*\{[^}]*grid-template-columns:\s*1fr;/);
+  assert.match(css, /\.card\s*\{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;/);
+  assert.match(css, /\.table-wrap\s*\{[^}]*overflow-x:\s*auto;[^}]*max-width:\s*100%;/);
+  assert.match(css, /\.kv-grid\s*\{[^}]*minmax\(min\(200px,\s*100%\),\s*1fr\)/);
+});
+
 test("active web UI files no longer contain current former-brand text", async () => {
   const files = await listFiles(path.resolve("apps/web/src"));
   files.push(path.resolve("apps/web/index.html"));

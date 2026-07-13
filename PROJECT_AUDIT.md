@@ -1342,3 +1342,104 @@ Safe next action:
   - `git diff --check` - passed.
 - Recommended next phase:
   - Phase 22 - manufacturer acceptance retest and targeted workflow refinements based on new user ratings.
+
+## Phase 22 browser-led visual and UX quality note
+
+- Phase 21 merged:
+  - Yes.
+- Browser inspection:
+  - Completed with the Codex in-app browser for navigation, DOM inspection, baseline screenshots, interaction checks, and overflow metrics.
+  - Local Playwright was used as a screenshot fallback for the after set when the in-app browser screenshot command timed out after the first post-fix image.
+- Baseline screenshots:
+  - 46 before screenshots captured.
+  - Temporary location: `/private/tmp/ergon-phase22-visual-review`.
+  - Screenshots were not committed.
+- After screenshots:
+  - 19 after screenshots captured for modified high-priority surfaces.
+  - Temporary location: `/private/tmp/ergon-phase22-visual-review`.
+  - Screenshots were not committed.
+- Design review methods:
+  - Visual hierarchy.
+  - Layout/composition.
+  - Heuristic UX.
+  - Information architecture.
+  - Responsive strategy.
+  - Persona-based synthetic feedback.
+- Screens reviewed:
+  - Sign in.
+  - Forgot password unavailable.
+  - Home.
+  - Facilities.
+  - Evidence.
+  - AI Review.
+  - Gaps & Actions.
+  - Action Plan.
+  - Audit Packs.
+  - Packet Workflow.
+  - Expert review.
+  - Team & Roles.
+  - Security.
+  - System.
+  - Mobile navigation open.
+  - Evidence upload/detail state.
+  - Gap detail drawer.
+  - Audit pack readiness/history state.
+- P0 issues found:
+  - 0.
+- P1 issues found:
+  - 4.
+- P2 issues found:
+  - 3.
+- P0 issues fixed:
+  - 0.
+- P1 issues fixed:
+  - 4.
+- P2 issues fixed:
+  - 2.
+- Major visual hierarchy improvements:
+  - Home mobile now keeps the hero purpose, supporting copy, and environment status readable instead of compressing the paragraph into a word column.
+  - Evidence and AI Review mobile cards now preserve readable actions, status pills, and AI/reviewer context.
+  - Gaps & Actions keeps priority gap cards as the first usable layer while dense matrix content is contained.
+- Major UX improvements:
+  - Primary actions no longer clip on narrow screens.
+  - Mobile drawer reliably appears with scrim, close control, route list, account context, and readable Sign out.
+  - Wide workflow content is contained inside cards/tables instead of creating page-level horizontal overflow.
+- IA changes:
+  - None. Browser review supported keeping the existing route labels and grouping; the fix was responsive containment and cross-workflow readability, not navigation restructuring.
+- Responsive changes:
+  - Home hero collapses to one column on mobile.
+  - Cards and table wrappers contain wide internal content.
+  - Buttons wrap only where needed on narrow screens.
+  - Page-level overflow rechecked at 390, 480, 768, 1024, 1280, 1440, and 1920 px.
+- Dependency changes:
+  - Expected none.
+- Database migration:
+  - None.
+- Existing migrations changed:
+  - No.
+- Security weakening:
+  - No.
+- Browser after-review:
+  - Modified screens were reopened and captured after the changes.
+  - Post-fix browser metrics showed no page-level horizontal overflow and no clipped button labels on Home, Evidence, AI Review, Gaps & Actions, Action Plan, and Audit Packs across 390, 480, 768, 1024, 1280, 1440, and 1920 px.
+- Automated verification:
+  - `node --version` - `v24.4.0`.
+  - `npm --version` - `11.4.2`.
+  - `npm run lint` - passed; linted 80 files.
+  - `npm run typecheck` - passed; checked 88 JavaScript files.
+  - `node --test tests/frontend-ux.test.js` - passed; 8 tests.
+  - Requested security regression set - passed with localhost binding permission; 31 tests.
+  - `npm test` - passed; 74 tests total, 72 passed, 2 skipped.
+  - `npm run build` - passed.
+  - `npm audit` - passed; found 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; found 0 vulnerabilities.
+  - `npm run scan:claims` - passed; linted 80 files.
+  - `npm run scan:random` - passed; 1 deterministic-safety test passed.
+  - `npm run qa:pilot` - passed with localhost binding permission; 1 Chromium smoke test passed.
+  - Final browser review - passed; 42 overflow checks plus mobile drawer, keyboard basic, and reduced-motion smoke.
+- Manual user acceptance:
+  - Required.
+- Pilot status:
+  - `NO_GO`.
+- Recommended next phase:
+  - Analyze the user's Phase 22 manual UX ratings and select one targeted acceptance-driven refinement phase.
