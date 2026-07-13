@@ -1,4 +1,5 @@
 import path from "node:path";
+import { inspectOoxmlContainer, OOXML_MIME } from "../../../packages/ai/src/ooxml.js";
 
 const ALLOWED_EXTENSIONS = new Map([
   [".pdf", "application/pdf"],
@@ -6,6 +7,8 @@ const ALLOWED_EXTENSIONS = new Map([
   [".md", "text/plain"],
   [".log", "text/plain"],
   [".csv", "text/csv"],
+  [".docx", OOXML_MIME.docx],
+  [".xlsx", OOXML_MIME.xlsx],
   [".png", "image/png"],
   [".jpg", "image/jpeg"],
   [".jpeg", "image/jpeg"],
@@ -22,7 +25,7 @@ const DANGEROUS_EXTENSIONS = new Set([
   ".scr", ".sh", ".svg", ".vbs", ".wsf"
 ]);
 
-const ARCHIVE_EXTENSIONS = new Set([".7z", ".bz2", ".docx", ".gz", ".rar", ".tar", ".tgz", ".xlsx", ".zip"]);
+const ARCHIVE_EXTENSIONS = new Set([".7z", ".bz2", ".gz", ".rar", ".tar", ".tgz", ".zip"]);
 const GENERIC_DECLARED_TYPES = new Set(["", "application/octet-stream", "binary/octet-stream"]);
 
 export function validateUploadedFile({ buffer, fileName, declaredContentType, maxBytes }) {
@@ -31,9 +34,17 @@ export function validateUploadedFile({ buffer, fileName, declaredContentType, ma
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) throw fileError("EMPTY_FILE", "The selected file is empty.", { extension, declaredContentType: declared });
   if (buffer.length > maxBytes) throw fileError("FILE_TOO_LARGE", `File exceeds the configured ${Math.round(maxBytes / 1024 / 1024)} MB limit.`, { extension, declaredContentType: declared }, 413);
 
-  const archiveType = detectArchive(buffer, extension);
+  let archiveType;
+  try {
+    archiveType = detectArchive(buffer, extension);
+  } catch (error) {
+    throw fileError(error.code || "INVALID_OFFICE_DOCUMENT", error.message || "The Office document could not be validated safely.", {
+      extension,
+      declaredContentType: declared
+    });
+  }
   if (archiveType) {
-    throw fileError("ARCHIVE_NOT_ALLOWED", "Archive and compressed files are not accepted. Upload the individual PDF, text, CSV, or image evidence file.", {
+    throw fileError("ARCHIVE_NOT_ALLOWED", "Archive and compressed files are not accepted. Upload an individual supported evidence file.", {
       extension,
       declaredContentType: declared,
       detectedContentType: archiveType
@@ -45,7 +56,7 @@ export function validateUploadedFile({ buffer, fileName, declaredContentType, ma
 
   const detected = detectContentType(buffer, extension);
   if (!detected) {
-    throw fileError("UNSUPPORTED_FILE_TYPE", "The file type could not be verified. Upload a PDF, plain-text, CSV, or supported image file.", { extension, declaredContentType: declared });
+    throw fileError("UNSUPPORTED_FILE_TYPE", "The file type could not be verified. Upload a PDF, TXT, Markdown, CSV, DOCX, XLSX, or supported image file.", { extension, declaredContentType: declared });
   }
   if (detected.dangerous) {
     throw fileError("ACTIVE_CONTENT_NOT_ALLOWED", detected.reason, { extension, declaredContentType: declared, detectedContentType: detected.mime });
@@ -72,6 +83,10 @@ export function validateUploadedFile({ buffer, fileName, declaredContentType, ma
 }
 
 export function detectContentType(buffer, extension = "") {
+  if (isZip(buffer)) {
+    const office = inspectOoxmlContainer(buffer);
+    return office?.kind ? { mime: office.mime } : null;
+  }
   if (startsWith(buffer, "%PDF-")) return { mime: "application/pdf" };
   if (matchesBytes(buffer, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return { mime: "image/png" };
   if (matchesBytes(buffer, [0xff, 0xd8, 0xff])) return { mime: "image/jpeg" };
@@ -100,7 +115,11 @@ export function detectContentType(buffer, extension = "") {
 
 export function detectArchive(buffer, extension = "") {
   if (ARCHIVE_EXTENSIONS.has(extension.toLowerCase())) return archiveMimeFromExtension(extension);
-  if (matchesBytes(buffer, [0x50, 0x4b, 0x03, 0x04]) || matchesBytes(buffer, [0x50, 0x4b, 0x05, 0x06]) || matchesBytes(buffer, [0x50, 0x4b, 0x07, 0x08])) return "application/zip";
+  if (isZip(buffer)) {
+    const office = inspectOoxmlContainer(buffer);
+    if (office?.kind && [".docx", ".xlsx"].includes(extension.toLowerCase())) return null;
+    return "application/zip";
+  }
   if (matchesBytes(buffer, [0x1f, 0x8b])) return "application/gzip";
   if (matchesBytes(buffer, [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c])) return "application/x-7z-compressed";
   if (startsWith(buffer, "Rar!\u001a\u0007")) return "application/vnd.rar";
@@ -126,6 +145,7 @@ function mimeMatches(expected, detected) {
   if (expected === detected) return true;
   if (expected === "text/plain" && detected === "text/csv") return true;
   if (expected === "text/csv" && detected === "text/plain") return true;
+  if ([expected, detected].every((mime) => ["text/plain", "text/markdown"].includes(mime))) return true;
   if (["image/jpg", "image/pjpeg"].includes(expected) && detected === "image/jpeg") return true;
   return false;
 }
@@ -156,9 +176,13 @@ function isMachO(buffer) {
   return signatures.some((signature) => matchesBytes(buffer, signature));
 }
 
+function isZip(buffer) {
+  return matchesBytes(buffer, [0x50, 0x4b, 0x03, 0x04]) || matchesBytes(buffer, [0x50, 0x4b, 0x05, 0x06]) || matchesBytes(buffer, [0x50, 0x4b, 0x07, 0x08]);
+}
+
 function archiveMimeFromExtension(extension) {
   const ext = extension.toLowerCase();
-  if ([".zip", ".docx", ".xlsx"].includes(ext)) return "application/zip";
+  if (ext === ".zip") return "application/zip";
   if ([".gz", ".tgz"].includes(ext)) return "application/gzip";
   if (ext === ".7z") return "application/x-7z-compressed";
   if (ext === ".rar") return "application/vnd.rar";

@@ -57,6 +57,7 @@ test("home view explains Ergon without fake AI-enabled claims", () => {
   assert.match(html, /AI disabled in this environment/);
   assert.doesNotMatch(html, /Live regulatory monitoring/);
   assert.doesNotMatch(html, /Always up-to-date/);
+  assert.equal((html.match(/Not legal advice/gi) || []).length, 1);
 });
 
 test("primary workflows expose clear purpose and primary actions", () => {
@@ -77,6 +78,7 @@ test("primary workflows expose clear purpose and primary actions", () => {
   });
   assert.match(evidenceView(), /Add evidence/);
   assert.match(evidenceView(), /Needs attention/);
+  assert.match(evidenceView(), /\.docx,\.xlsx/);
 
   state.reviewQueue = [{
     id: "evidence-1",
@@ -132,6 +134,7 @@ test("browser title and design CSS use the Phase 21 ERGON convention", async () 
   assert.match(index, /<title>ERGON<\/title>/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /mobile-nav-scrim/);
+  assert.match(css, /\.workspace\.route-enter\s*\{\s*animation:\s*route-enter 140ms/);
 });
 
 test("responsive layout CSS protects mobile hierarchy and wide workflow content", async () => {
@@ -152,6 +155,8 @@ test("responsive layout CSS protects mobile hierarchy and wide workflow content"
   assert.match(css, /@media \(max-width: 860px\)[\s\S]*\.topbar-user\s*\{\s*display:\s*none;\s*\}/);
   assert.match(css, /\.page-sub\s*\{[^}]*max-width:\s*84ch;[^}]*text-wrap:\s*pretty;/);
   assert.match(css, /\.facilities-layout\s*\{\s*grid-template-columns:\s*minmax\(0,\s*3fr\)\s*minmax\(380px,\s*2fr\);\s*\}/);
+  assert.match(css, /\.field\s*\{[^}]*min-width:\s*0;/);
+  assert.match(css, /input, select, textarea\s*\{[^}]*min-width:\s*0;[^}]*max-width:\s*100%;/);
   assert.match(css, /@media \(max-width: 1500px\)\s*\{\s*\.facilities-layout\s*\{\s*grid-template-columns:\s*1fr;\s*\}/);
 });
 

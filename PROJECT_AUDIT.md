@@ -1524,3 +1524,72 @@ Safe next action:
   - `NO_GO` pending manufacturer walkthrough and recorded acceptance feedback.
 - Recommended next phase:
   - Phase 24 - manufacturer acceptance walkthrough and evidence-intelligence prioritization based on observed user friction.
+
+## Phase 24 evidence intelligence foundation note
+
+- Phase 23 merged:
+  - Yes. Commit `d2db4a010f62868874735e113a1fd8add8d33858` is reachable from `main`.
+- UX feedback addressed:
+  - Kept one primary action per page, removed repeated disclaimer copy, tightened the Home disclaimer without losing safety meaning, and preserved the Phase 23 navigation and containment fixes.
+  - Added a progressive Evidence understanding panel that reveals extraction status, deterministic metadata, AI state, warnings, and provenance without showing raw normalized text by default.
+- Evidence pipeline:
+  - `INGEST -> VALIDATE -> EXTRACT -> NORMALIZE -> PROFILE -> OPTIONAL_AI_ENRICH -> HUMAN_REVIEW -> AUDIT` is implemented behind the existing asynchronous evidence-processing flow.
+  - Extraction and deterministic profiling remain useful with `AI_ENABLED=false`; AI failure does not discard extracted evidence intelligence.
+- Format support:
+  - TXT: `SUPPORTED_NOW` with bounded UTF-8 extraction and line provenance.
+  - Markdown: `SUPPORTED_NOW` with bounded UTF-8 extraction and line provenance.
+  - CSV: `SUPPORTED_NOW` with quoted-field parsing, row/cell limits, headers, preview rows, and row provenance.
+  - PDF with a text layer: `SUPPORTED_NOW` with the first 200 pages and page provenance.
+  - PDF without an extractable text layer: `OCR_REQUIRED`; OCR is not implemented.
+  - DOCX: `SUPPORTED_NOW` through bounded OOXML paragraph/table extraction and paragraph provenance.
+  - XLSX: `SUPPORTED_NOW` through bounded OOXML worksheet/cached-value extraction and sheet/row/cell provenance; formulas are never evaluated.
+  - PNG/JPEG and other image-only evidence: `OCR_REQUIRED`; OCR is not implemented.
+  - Other formats: `UNSUPPORTED` with an explicit user-facing status.
+- Provenance:
+  - Source anchors carry format-appropriate labels, bounded excerpts, and structured page, line, paragraph, row, sheet, or cell coordinates.
+  - AI candidates are labelled `source_supported` only when normalized source evidence supports them; unsupported candidates remain explicit and require human review.
+- Deterministic profiling:
+  - Captures source filename, byte size, SHA-256 content hash, detected format, extraction method/status, word/line/page/row/table/sheet/formula counts, dates, identifiers, warnings, and extraction quality.
+- Optional AI enrichment:
+  - Produces a structured profile containing summary, document type, categories, key facts, dates, organizations, facilities, jurisdictions, products, processes, equipment, materials, permits, standards, source candidates, confidence, provenance, and support state.
+  - AI is optional, disabled truthfully when off, and failure-safe when provider calls fail.
+- Human review:
+  - Existing review, correction, approval, and rejection fields are preserved across reprocessing; regenerated output returns to review instead of overwriting human decisions silently.
+  - Audit events cover extraction completion/failure, OCR-required outcomes, intelligence generation, review, and correction without storing raw document contents in audit metadata.
+- Persistence:
+  - File repository: passed persistence, legacy-default, reanalysis, and tenant-isolation tests.
+  - PostgreSQL repository: mappings and tenant-scoped queries updated; the live PostgreSQL integration test remains an expected skip when `TEST_DATABASE_URL` is absent.
+- Migration:
+  - Added `0009_evidence_intelligence_foundation.sql` only.
+  - The migration is additive: new evidence-analysis columns, one status constraint, and one current-status index; migrations `0001` through `0008` are unchanged and there is no destructive DDL.
+- Dependencies:
+  - Added exactly two runtime dependencies: `fflate@0.8.3` for bounded OOXML ZIP handling and `fast-xml-parser@5.10.0` for non-executing XML parsing.
+- Security posture:
+  - Generic archives remain rejected; DOCX/XLSX require matching extension, MIME, ZIP signature, and expected OOXML container parts.
+  - Archive traversal, encrypted parts, macro-enabled content, oversized/decompression-bomb payloads, DTD/entity XML, formula execution, external resource fetching, and content execution are rejected or avoided.
+  - No security control was weakened, no raw evidence contents are logged, and storage/repository tenant isolation remains enforced.
+- Infrastructure decisions:
+  - External queue required: no.
+  - OCR service required for this foundation: no; OCR is an explicit future capability and current image-only evidence remains `OCR_REQUIRED`.
+  - Monitoring/backup/scanner production infrastructure added: no.
+  - AI required for core usefulness: no.
+- Verification:
+  - `npm run lint` - passed; linted 82 files.
+  - `npm run typecheck` - passed; checked 90 JavaScript files.
+  - Requested auth/security/API/repository/migration regression set - passed; 26 tests, 0 failed.
+  - Evidence intelligence and focused regression tests - passed.
+  - `npm test` - passed; 80 total, 78 passed, 2 expected infrastructure skips, 0 failed.
+  - `npm run build` - passed.
+  - `npm audit` - passed; 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; 0 vulnerabilities.
+  - `npm run scan:claims` - passed; linted 82 files.
+  - `npm run scan:random` - passed; 1 deterministic-safety test.
+  - `npm run qa:pilot` - passed; 1 Chromium smoke test.
+  - Browser review - passed at 390, 480, 768, 1024, 1280, 1440, and 1920 px with no page-level horizontal overflow; expiry input, Evidence details, source references, primary actions, route transition, reduced-motion behavior, and disclaimer wrapping were checked.
+  - `git diff --check` - passed.
+- Manual user acceptance:
+  - Required, including the complete manufacturer walkthrough and recorded scoring requested for Phase 24.
+- Pilot status:
+  - `NO_GO` pending manufacturer acceptance plus production infrastructure, monitoring, backups, malware scanning, and operational readiness work.
+- Recommended next phase:
+  - Manufacturer evidence-intelligence acceptance validation and production-readiness gap review.

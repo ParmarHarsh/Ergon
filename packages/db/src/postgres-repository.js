@@ -1203,7 +1203,11 @@ async function persistAiAnalysis(client, input) {
     input.humanReviewed ?? false, input.humanAcceptedAiResult ?? false, input.humanReviewerId,
     input.humanReviewedAt, input.humanOverrideEvidenceType, input.humanOverrideRuleId, input.humanReviewNotes,
     input.analysisVersion, input.previousAnalysisId, input.processingJobId, input.createdByType || "system",
-    input.contentHash, input.outputHash, input.isCurrent ?? true, input.supersededAt, input.supersededById
+    input.contentHash, input.outputHash, input.isCurrent ?? true, input.supersededAt, input.supersededById,
+    input.detectedFormat, input.extractionStatus, input.extractionMethod, input.normalizedText,
+    JSON.stringify(input.structuredContent || {}), JSON.stringify(input.provenanceAnchors || []),
+    JSON.stringify(input.documentMetadata || {}), JSON.stringify(input.deterministicProfile || {}),
+    JSON.stringify(input.aiProfile || {}), JSON.stringify(input.processingWarnings || [])
   ];
   const result = await client.query(
     `INSERT INTO evidence_ai_analyses (
@@ -1215,7 +1219,9 @@ async function persistAiAnalysis(client, input) {
        needs_human_review, provider, model, prompt_version, raw_model_output_reference, error, human_reviewed,
        human_accepted_ai_result, human_reviewer_id, human_reviewed_at, human_override_evidence_type,
        human_override_rule_id, human_review_notes, analysis_version, previous_analysis_id, processing_job_id,
-       created_by_type, content_hash, output_hash, is_current, superseded_at, superseded_by_id
+       created_by_type, content_hash, output_hash, is_current, superseded_at, superseded_by_id,
+       detected_format, extraction_status, extraction_method, normalized_text, structured_content,
+       provenance_anchors, document_metadata, deterministic_profile, ai_profile, processing_warnings
      ) VALUES (${values.map((_, index) => `$${index + 1}`).join(",")})
      ON CONFLICT (id) DO UPDATE SET
        review_id=EXCLUDED.review_id, processing_status=EXCLUDED.processing_status,
@@ -1235,7 +1241,12 @@ async function persistAiAnalysis(client, input) {
        human_reviewed_at=EXCLUDED.human_reviewed_at, human_override_evidence_type=EXCLUDED.human_override_evidence_type,
        human_override_rule_id=EXCLUDED.human_override_rule_id, human_review_notes=EXCLUDED.human_review_notes,
        content_hash=EXCLUDED.content_hash, output_hash=EXCLUDED.output_hash, is_current=EXCLUDED.is_current,
-       superseded_at=EXCLUDED.superseded_at, superseded_by_id=EXCLUDED.superseded_by_id, updated_at=now()
+       superseded_at=EXCLUDED.superseded_at, superseded_by_id=EXCLUDED.superseded_by_id,
+       detected_format=EXCLUDED.detected_format, extraction_status=EXCLUDED.extraction_status,
+       extraction_method=EXCLUDED.extraction_method, normalized_text=EXCLUDED.normalized_text,
+       structured_content=EXCLUDED.structured_content, provenance_anchors=EXCLUDED.provenance_anchors,
+       document_metadata=EXCLUDED.document_metadata, deterministic_profile=EXCLUDED.deterministic_profile,
+       ai_profile=EXCLUDED.ai_profile, processing_warnings=EXCLUDED.processing_warnings, updated_at=now()
      RETURNING *`,
     values
   );
@@ -1360,6 +1371,11 @@ function camelAiAnalysis(row) {
     processingJobId: row.processing_job_id, createdByType: row.created_by_type,
     contentHash: row.content_hash, outputHash: row.output_hash, isCurrent: row.is_current,
     supersededAt: row.superseded_at, supersededById: row.superseded_by_id,
+    detectedFormat: row.detected_format, extractionStatus: row.extraction_status,
+    extractionMethod: row.extraction_method, normalizedText: row.normalized_text,
+    structuredContent: row.structured_content || {}, provenanceAnchors: row.provenance_anchors || [],
+    documentMetadata: row.document_metadata || {}, deterministicProfile: row.deterministic_profile || {},
+    aiProfile: row.ai_profile || {}, processingWarnings: row.processing_warnings || [],
     createdAt: row.created_at, updatedAt: row.updated_at
   };
 }

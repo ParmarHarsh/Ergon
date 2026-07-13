@@ -81,6 +81,12 @@ test("AI processing is auditable and human override wins over AI and determinist
   assert.equal(analysis.processingStatus, "processed");
   assert.equal(analysis.detectedEvidenceType, "loto_procedures");
   assert.equal(analysis.needsHumanReview, false);
+  assert.equal(analysis.contentHash, saved.sha256);
+  assert.equal(analysis.deterministicProfile.contentHash, saved.sha256);
+  assert.equal(analysis.deterministicProfile.fileSizeBytes, 40);
+  assert.equal(analysis.aiProfile.status, "candidate");
+  assert.ok(Array.isArray(analysis.aiProfile.keyFacts));
+  assert.ok(analysis.aiProfile.keyFacts.every((item) => ["source_supported", "unsupported_candidate"].includes(item.supportStatus)));
   assert.equal((await service.processEvidence({ organizationId: org.id, evidenceId: evidence.id, userId: reviewer.id, processingJobId: job.id })).id, analysis.id);
   assert.equal((await repo.getAiAnalysisHistory(org.id, evidence.id)).length, 1);
 
@@ -111,6 +117,15 @@ test("AI processing is auditable and human override wins over AI and determinist
   await service.reviewEvidence({ organizationId: org.id, evidenceId: evidence.id, reviewer, reviewInput: { action: "request_more_evidence", evidenceType: null, ruleId: null, notes: "Provide the signed roster." } });
   assert.equal((await repo.getEvidence(org.id, evidence.id)).status, "needs_review");
 
+  const reprocessed = await service.processEvidence({ organizationId: org.id, evidenceId: evidence.id, userId: reviewer.id, createdByType: "user" });
+  assert.equal(reprocessed.analysisVersion, 2);
+  assert.equal(reprocessed.humanReviewed, true);
+  assert.equal(reprocessed.humanOverrideEvidenceType, "ppe_training_records");
+  assert.equal(reprocessed.humanOverrideRuleId, "us-ppe-training");
+  assert.equal(reprocessed.needsHumanReview, true);
+  assert.equal(reprocessed.aiProfile.preservedHumanReview, true);
+  assert.equal((await repo.getEvidence(org.id, evidence.id)).evidenceType, "ppe_training_records");
+
   const logs = await repo.listAuditLogs(org.id, facility.id);
   assert.ok(logs.some((entry) => entry.action === "evidence_processing_started"));
   assert.ok(logs.some((entry) => entry.action === "ai_match_suggested"));
@@ -118,6 +133,8 @@ test("AI processing is auditable and human override wins over AI and determinist
   assert.ok(logs.some((entry) => entry.action === "human_overrode_evidence_type"));
   assert.ok(logs.some((entry) => entry.action === "human_overrode_rule_match" && entry.metadata.overrideRuleId === "us-ppe-training"));
   assert.ok(logs.some((entry) => entry.action === "human_requested_more_evidence"));
+  assert.ok(logs.some((entry) => entry.action === "evidence_extraction_completed"));
+  assert.equal(logs.some((entry) => JSON.stringify(entry.metadata).includes("Lockout Tagout procedure")), false);
 
   const otherOrg = await repo.createOrganization({ name: "Other Tenant" });
   await assert.rejects(() => repo.getAiAnalysis(otherOrg.id, evidence.id), /another organization/);
@@ -150,15 +167,23 @@ test("medium confidence requires review and invalid provider output is persisted
   const disabledAnalysis = await disabledService.processEvidence({ organizationId: org.id, evidenceId: evidence.id, userId: user.id });
   assert.equal(disabledAnalysis.processingStatus, "needs_review");
   assert.match(disabledAnalysis.error, /disabled/i);
+  assert.equal(disabledAnalysis.extractionStatus, "extracted");
+  assert.equal(disabledAnalysis.aiProfile.status, "disabled");
+  assert.ok(disabledAnalysis.provenanceAnchors.length > 0);
 
   const mediumProvider = new MockEvidenceAiProvider(aiConfig, () => output({ detectedEvidenceType: "loto_procedures", confidence: 0.75, suggestedRuleId: lotoRule.id, suggestedObligationTitle: lotoRule.title }));
   const mediumService = createEvidenceAiService({ config: aiConfig, repo, storage, provider: mediumProvider });
-  assert.equal((await mediumService.processEvidence({ organizationId: org.id, evidenceId: evidence.id, userId: user.id })).needsHumanReview, true);
+  const mediumAnalysis = await mediumService.processEvidence({ organizationId: org.id, evidenceId: evidence.id, userId: user.id });
+  assert.equal(mediumAnalysis.needsHumanReview, true);
+  assert.ok(mediumAnalysis.aiProfile.keyFacts.some((item) => item.supportStatus === "unsupported_candidate"));
 
   const invalidProvider = new MockEvidenceAiProvider(aiConfig, () => output({ detectedEvidenceType: "invented" }));
   const invalidService = createEvidenceAiService({ config: aiConfig, repo, storage, provider: invalidProvider });
   await assert.rejects(() => invalidService.processEvidence({ organizationId: org.id, evidenceId: evidence.id, userId: user.id }), /detectedEvidenceType/);
   assert.equal((await repo.getAiAnalysis(org.id, evidence.id)).processingStatus, "failed");
+  assert.equal((await repo.getAiAnalysis(org.id, evidence.id)).extractionStatus, "extracted");
+  assert.match((await repo.getAiAnalysis(org.id, evidence.id)).normalizedText, /Lockout procedure/);
+  assert.equal((await repo.getAiAnalysis(org.id, evidence.id)).aiProfile.status, "failed");
   const history = await repo.getAiAnalysisHistory(org.id, evidence.id);
   assert.deepEqual(history.map((item) => item.analysisVersion), [3, 2, 1]);
   assert.equal(history[0].isCurrent, true);

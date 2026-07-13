@@ -75,7 +75,7 @@ function render() {
       ${sidebar(route)}
       <div class="main-col">
         ${topbar(route)}
-        <main class="workspace">
+        <main class="workspace ${state.routeTransitioning ? "route-enter" : ""}">
           ${state.error ? `<div class="alert">${html(state.error)} <button class="btn btn-ghost btn-sm" data-action="dismiss-error" style="margin-left:8px">Dismiss</button></div>` : ""}
           ${ROUTES[route].view()}
         </main>
@@ -83,6 +83,7 @@ function render() {
     </div>
     <div class="toast-stack" id="toast-stack"></div>
   `;
+  state.routeTransitioning = false;
 }
 
 function sidebar(activeRoute) {
@@ -202,7 +203,9 @@ async function run(work, { successMessage = "", rethrow = false } = {}) {
 function navigate(route) {
   state.drawerRuleId = null;
   state.mobileNavOpen = false;
-  state.route = ROUTES[route] ? route : "home";
+  const nextRoute = ROUTES[route] ? route : "home";
+  state.routeTransitioning = nextRoute !== state.route;
+  state.route = nextRoute;
   syncRouteHash(state.route);
   render();
   void loadRouteData(state.route);
@@ -394,7 +397,7 @@ const clickActions = {
     await run(async () => {
       await api(`/api/evidence/${encodeURIComponent(dataset.evidenceId)}/process-ai`, { method: "POST", body: {} });
       await refreshFacilityData();
-    }, { successMessage: state.aiStatus.enabled ? "Evidence queued for AI analysis." : "AI is disabled in this environment; deterministic review remains available." });
+    }, { successMessage: state.aiStatus.enabled ? "Evidence queued for extraction and AI analysis." : "Evidence queued for deterministic extraction. AI analysis is not enabled." });
   },
   "retry-processing": async (dataset) => {
     await run(async () => {
@@ -547,7 +550,7 @@ const formActions = {
       }
       form.reset();
       await refreshFacilityData();
-    }, { successMessage: file instanceof File && file.size > 0 ? (state.aiStatus.enabled ? "Evidence uploaded — scan and AI analysis queued." : "Evidence uploaded — scan recorded. AI analysis is disabled here.") : "Evidence logged." });
+    }, { successMessage: file instanceof File && file.size > 0 ? (state.aiStatus.enabled ? "Evidence uploaded — scan, extraction, and AI analysis queued." : "Evidence uploaded — scan and deterministic extraction queued. AI analysis is not enabled.") : "Evidence logged." });
   },
   "ai-review": async (form, submitter) => {
     const data = new FormData(form);
@@ -712,6 +715,7 @@ window.addEventListener("hashchange", () => {
     return;
   }
   if (state.user && ROUTES[route] && route !== state.route) {
+    state.routeTransitioning = true;
     state.route = route;
     state.drawerRuleId = null;
     render();

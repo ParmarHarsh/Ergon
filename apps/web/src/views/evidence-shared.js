@@ -19,6 +19,9 @@ export function processingLabel(item, job) {
   if (item.scanStatus === "scan_suspicious") return { code: "blocked", text: "Suspicious — blocked" };
   if (item.scanStatus === "scan_pending") return { code: "queued", text: "Scan pending" };
   if (analysis?.textExtractionStatus === "ocr_required") return { code: "ocr_required", text: "OCR / manual review required" };
+  if (analysis?.extractionStatus === "failed" || analysis?.textExtractionStatus === "extraction_failed") return { code: "failed", text: "Extraction failed — review or retry" };
+  if (analysis?.extractionStatus === "unsupported") return { code: "failed", text: "Unsupported — manual review" };
+  if (analysis?.extractionStatus === "partial") return { code: "needs_review", text: "Partial extraction — review" };
   if (job?.status === "queued") return { code: "queued", text: "Processing queued" };
   if (job?.status === "processing") return { code: "processing", text: "AI analyzing" };
   if (["failed", "dead_letter"].includes(job?.status) || analysis?.processingStatus === "failed") {
@@ -39,7 +42,18 @@ export function jobFor(evidenceId) {
 
 export function aiAnalysisPanel(analysis) {
   if (!analysis) return "";
+  const profile = analysis.deterministicProfile || {};
+  const anchors = analysis.provenanceAnchors || [];
+  const aiDisabled = analysis.aiProfile?.status === "disabled";
+  const warnings = [...new Set([...(analysis.processingWarnings || []), ...(analysis.issues || [])])];
+  const processingProblem = ["failed", "ocr_required", "unsupported"].includes(analysis.extractionStatus) ? warnings[0] : null;
+  const additionalWarnings = warnings.filter((warning) => warning !== processingProblem);
   const extracted = [
+    ["Detected format", titleCase(analysis.detectedFormat || "unknown")],
+    ["Extraction", titleCase(analysis.extractionStatus || analysis.textExtractionStatus || "not started")],
+    ["Method", titleCase(analysis.extractionMethod || "not available")],
+    ["Source references", String(anchors.length)],
+    ["Words", profile.wordCount === undefined ? "Unknown" : String(profile.wordCount)],
     ["Likely evidence type", titleCase(analysis.detectedEvidenceType || "other")],
     ["Document date", analysis.extractedDocumentDate ? html(analysis.extractedDocumentDate) : "Unknown"],
     ["Expiration date", analysis.extractedExpirationDate ? html(analysis.extractedExpirationDate) : "Unknown"],
@@ -52,26 +66,33 @@ export function aiAnalysisPanel(analysis) {
   return `
     <div class="ai-panel">
       <div class="ai-panel-head">
-        <span class="ai-panel-title">${ICONS.spark} AI evidence intelligence</span>
+        <span class="ai-panel-title">${ICONS.spark} Evidence understanding</span>
         <span class="badge-row">
-          ${confidencePill(analysis.confidence)}
+          ${analysis.confidence === null || analysis.confidence === undefined ? "" : confidencePill(analysis.confidence)}
           ${reviewStatePill(analysis)}
         </span>
       </div>
-      <p>${html(analysis.summary || analysis.error || "No summary available.")}</p>
+      <p>${html(processingProblem || analysis.summary || (aiDisabled ? "AI analysis is not enabled. Deterministic extraction is available below." : analysis.error || "Deterministic extraction is ready for review."))}</p>
+      ${analysis.humanReviewed ? `<div class="alert-info small"><strong>Human-confirmed decision preserved.</strong> New processing output remains a separate candidate until a reviewer explicitly replaces it.</div>` : ""}
       <details class="detail-disclosure">
-        <summary>View extracted details</summary>
+        <summary>View processing details</summary>
         <div class="kv-grid">${extracted.map(([term, value]) => kv(term, value)).join("")}</div>
       </details>
+      ${anchors.length ? `
+        <details class="detail-disclosure">
+          <summary>Source references (${anchors.length})</summary>
+          <ul class="issue-list source-reference-list">${anchors.map((anchor) => `<li><strong>${html(anchor.label || anchor.id)}</strong>${anchor.excerpt ? `<span class="small muted">${html(anchor.excerpt)}</span>` : ""}</li>`).join("")}</ul>
+        </details>
+      ` : ""}
       ${analysis.suggestedObligationTitle ? `
         <div class="kv-grid">
           ${kv("Suggested obligation", html(analysis.suggestedObligationTitle))}
           ${kv("Match reason", html(analysis.matchReason || "No AI match reason"))}
         </div>
       ` : `<p class="small muted">No obligation suggestion — deterministic matching and human review still apply.</p>`}
-      ${(analysis.issues || []).length ? `<ul class="issue-list">${analysis.issues.map((issue) => `<li>${html(issue)}</li>`).join("")}</ul>` : ""}
+      ${additionalWarnings.length ? `<ul class="issue-list">${additionalWarnings.map((issue) => `<li>${html(issue)}</li>`).join("")}</ul>` : ""}
       ${analysis.humanReviewNotes ? `<p class="small"><strong>Reviewer notes:</strong> ${html(analysis.humanReviewNotes)}</p>` : ""}
-      <p class="field-hint">Suggested match — not legal advice. Deterministic rules and human review finalize evidence status.</p>
+      <p class="field-hint">Extracted facts and AI suggestions are review candidates — not legal advice, legal applicability, or compliance certification. Human-confirmed decisions remain authoritative.</p>
     </div>
   `;
 }

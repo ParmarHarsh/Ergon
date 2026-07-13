@@ -70,6 +70,13 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
   // Upload evidence with a private file
   await page.locator(".sidebar").getByRole("button", { name: "Evidence", exact: true }).click();
   await expect(page.getByRole("button", { name: "Add evidence" }).first()).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const expiryBounds = await page.locator('#evidence-form input[name="expirationDate"]').boundingBox();
+  expect(expiryBounds).not.toBeNull();
+  expect(expiryBounds.x).toBeGreaterThanOrEqual(0);
+  expect(expiryBounds.x + expiryBounds.width).toBeLessThanOrEqual(390);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.locator('#evidence-form input[name="title"]').fill("Pilot LOTO procedure");
   await page.locator('#evidence-form select[name="evidenceType"]').selectOption("other");
   await page.locator('#evidence-form textarea[name="description"]').fill("Synthetic lockout tagout procedure dated 2026-04-15.");
@@ -82,7 +89,8 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
   const evidenceCard = page.locator(".evidence-item").filter({ hasText: "Pilot LOTO procedure" });
   await expect(evidenceCard).toBeVisible();
   await expect(evidenceCard).toContainText(/AI processed|Needs review/, { timeout: 15_000 });
-  await expect(evidenceCard).toContainText("AI evidence intelligence");
+  await expect(evidenceCard).toContainText("Evidence understanding");
+  await expect(evidenceCard).toContainText("Source references");
 
   // Review queue shows the item
   await page.locator(".sidebar").getByRole("button", { name: "AI Review" }).click();
