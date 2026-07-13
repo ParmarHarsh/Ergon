@@ -22,7 +22,7 @@ export function facilitiesView() {
       </div>
     </div>
 
-    <div class="grid-2">
+    <div class="grid-2 facilities-layout">
       <section class="card">
         <div class="card-head">
           <div>
@@ -33,7 +33,7 @@ export function facilitiesView() {
         <div class="card-body tight">
           ${state.facilities.length ? `
             <div class="table-wrap">
-              <table>
+              <table class="facilities-table">
                 <thead><tr><th>Facility</th><th>Jurisdiction</th><th>Rules pack</th><th>Employees</th><th>Created</th></tr></thead>
                 <tbody>
                   ${state.facilities.map((facility) => `

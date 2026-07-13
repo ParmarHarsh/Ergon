@@ -26,16 +26,34 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
   await page.getByLabel("Password").fill("PilotPassword#2026");
   await page.getByRole("button", { name: "Log in" }).click();
   await expect(page.getByRole("heading", { name: "Your manufacturing compliance workspace." })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeVisible();
+  const visibleSignOutCount = () => page.locator("[data-action='logout']").evaluateAll((controls) => controls.filter((control) => {
+    const bounds = control.getBoundingClientRect();
+    const style = window.getComputedStyle(control);
+    return style.display !== "none" && style.visibility !== "hidden" && bounds.width > 0 && bounds.height > 0
+      && bounds.right > 0 && bounds.bottom > 0 && bounds.left < window.innerWidth && bounds.top < window.innerHeight;
+  }).length);
+  await expect.poll(visibleSignOutCount).toBe(1);
+  await expect(page.locator(".topbar [data-action='logout']")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   // Mobile navigation drawer exposes grouped routes and sign out.
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(visibleSignOutCount).toBe(0);
   await page.getByRole("button", { name: "Menu" }).click();
   await expect(page.locator("#app-navigation")).toBeVisible();
   await expect(page.locator("#app-navigation").getByRole("button", { name: "Facilities" })).toBeVisible();
   await expect(page.locator("#app-navigation").getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect.poll(visibleSignOutCount).toBe(1);
+  const drawerBounds = await page.locator("#app-navigation").boundingBox();
+  const drawerLogoutBounds = await page.locator("#app-navigation [data-action='logout']").boundingBox();
+  expect(drawerBounds).not.toBeNull();
+  expect(drawerLogoutBounds).not.toBeNull();
+  expect(drawerLogoutBounds.x).toBeGreaterThanOrEqual(drawerBounds.x);
+  expect(drawerLogoutBounds.x + drawerLogoutBounds.width).toBeLessThanOrEqual(drawerBounds.x + drawerBounds.width);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1280, height: 900 });
+  await expect.poll(visibleSignOutCount).toBe(1);
 
   // Create facility
   await page.locator(".sidebar").getByRole("button", { name: "Facilities" }).click();
@@ -43,8 +61,9 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
   await page.locator('#facility-form select[name="country"]').selectOption("US");
   await page.locator('#facility-form input[name="stateProvince"]').fill("Ohio");
   await page.locator('#facility-form input[name="region"]').fill("OH");
-  await page.locator('#facility-form input[name="machinery"]').check();
-  await page.locator('#facility-form input[name="lockoutTagout"]').check();
+  await page.locator('#facility-form input[name="machinery"], #facility-form input[name="lockoutTagout"]').evaluateAll((hazards) => {
+    hazards.forEach((hazard) => { hazard.checked = true; });
+  });
   await page.getByRole("button", { name: "Create facility" }).click();
   await expect(page.locator("#facility-select")).toContainText("Pilot Fabrication Plant");
 
