@@ -3,9 +3,9 @@ import { ICONS, emptyState, formatDate, html, titleCase } from "../ui.js";
 import { emptyFacilityPrompt } from "./builder.js";
 
 const BUCKETS = [
-  ["urgent_7_days", "Urgent — 7 days", "Critical obligations without accepted evidence"],
-  ["30_days", "Next 30 days", "High-priority evidence gaps"],
-  ["90_days", "Next 90 days", "Medium and low priority items"]
+  ["urgent_7_days", "Now", "Critical obligations without accepted evidence"],
+  ["30_days", "Next", "High-priority evidence gaps"],
+  ["90_days", "Later", "Medium and low priority items"]
 ];
 
 export function actionsView() {
@@ -36,7 +36,7 @@ export function actionsView() {
     <div class="page-head">
       <div>
         <h1>Action Plan</h1>
-        <p class="page-sub">${state.actionItems.length} open action${state.actionItems.length === 1 ? "" : "s"} for <strong>${html(facility.name)}</strong>, bucketed by urgency. Actions close automatically when evidence is accepted and the analysis is regenerated.</p>
+          <p class="page-sub">${state.actionItems.length} open action${state.actionItems.length === 1 ? "" : "s"} for <strong>${html(facility.name)}</strong>, grouped by urgency.</p>
       </div>
       <div class="page-actions">
         <button class="btn btn-secondary" data-action="generate-review">${ICONS.refresh} Refresh</button>
@@ -66,16 +66,18 @@ function actionCard(item) {
   return `
     <article class="action-card ${html(item.priority)}">
       <strong>${html(item.title)}</strong>
-      <div class="sub">${html(item.recommendedNextStep)}</div>
+      <div class="sub"><strong>Next:</strong> ${html(item.recommendedNextStep)}</div>
       <div class="meta">
         <span>${html(titleCase(item.priority))}</span>
         <span>·</span>
         <span>${html(item.ownerRole)}</span>
         <span>·</span>
         <span>due ${formatDate(item.dueDate)}</span>
-        <span>·</span>
-        <span>${html(item.authority)} ${html(item.citation)}</span>
       </div>
+      <details class="detail-disclosure">
+        <summary>Why</summary>
+        <div class="sub disclosure-body">${html(item.authority)} ${html(item.citation)}</div>
+      </details>
     </article>
   `;
 }

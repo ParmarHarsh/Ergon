@@ -37,6 +37,7 @@ export const state = {
   mfaChallengeExpiresAt: "",
   health: null,
   drawerRuleId: null,
+  mobileNavOpen: false,
   error: "",
   loginError: "",
   recoveryMessage: "",
@@ -184,7 +185,7 @@ export function resetSession() {
     actionItems: [], packets: [], users: [], expertReviews: [], auditLogs: [],
     health: null, mfaStatus: null, mfaEnrollment: null, mfaRecoveryCodes: [],
     mfaMessage: "", mfaError: "", mfaChallengeToken: "", mfaChallengeExpiresAt: "",
-    drawerRuleId: null, error: "", loginError: "", recoveryMessage: "",
+    drawerRuleId: null, mobileNavOpen: false, error: "", loginError: "", recoveryMessage: "",
     recoveryError: "", resetToken: "", resetMessage: "", resetError: "", route: "home"
   });
 }

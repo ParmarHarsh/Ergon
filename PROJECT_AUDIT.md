@@ -1265,3 +1265,80 @@ Safe next action:
   - Claim scan - live regulatory monitoring and certification matches are negative/disclaimer contexts or banned-phrase lint configuration.
 - Recommended next phase:
   - Phase 21 - explicit post-merge repository/local-folder rename planning, or next product capability slice from `ERGON_PRODUCT_STRATEGY.md`.
+
+## Phase 21 ERGON experience reconstruction note
+
+- Pulled latest `main` and confirmed Phase 20 was merged before branching.
+- Created:
+  - `phase-21-ergon-experience-reconstruction`.
+- Repository baseline:
+  - Local path: `/Users/harshparmar/Desktop/Projects/Ergon`.
+  - Remote: `git@github.com:ParmarHarsh/Ergon.git`.
+  - Main SHA before branch: `85057836158f212dd69ea213ecc1057fed893c05`.
+- Product decision:
+  - Primary visible brand is now `ERGON`.
+  - Normal prose may use `Ergon`.
+  - Technical identifiers remain `ergon`.
+  - Historical audit entries were preserved without rewriting past evidence.
+- UX reconstruction:
+  - Rebuilt the authenticated shell around stronger ERGON branding, a visible sign-out control, visible account context, responsive navigation, and a mobile drawer with scrim and Escape close behavior.
+  - Reworked Home around priority work and one obvious next action.
+  - Reworked Evidence around add-evidence entry, upload focus, compact status, and AI extraction details on demand.
+  - Reworked AI Review around priority decisions, concise finding/rationale/action sections, and filters behind disclosure.
+  - Reworked Gaps & Actions around priority gaps before the full matrix.
+  - Reworked Action Plan, Audit Packs, Facilities, Team & Roles, Security, and System copy to reduce repeated text and competing calls for attention.
+  - Added responsive layout, spacing, status, disclosure, drawer, table/card, motion, focus, and reduced-motion standards to the CSS system.
+- Brand and cleanup audit:
+  - `ERGON_CLEANUP_AUDIT.md` now records the Phase 21 file inventory and brand classification.
+  - Tracked files reviewed: 129.
+  - Text-readable tracked files: 129.
+  - Non-text/binary tracked files: 0.
+  - Former-brand filename matches: 0.
+  - Former-brand content matches: historical audit entries only.
+  - Active former-brand defects fixed: 0.
+  - Unresolved active former-brand defects: 0.
+  - No files met the safe-delete standard, so no repository files were deleted.
+- Dependency and migration policy:
+  - No new npm dependency was added.
+  - No `package.json` or `package-lock.json` diff exists.
+  - No database migration was added or edited.
+  - No infrastructure, deployment, DNS, bucket, database, scanner service, or secret was provisioned.
+- Responsive manual review:
+  - Local API and web servers were started with seeded synthetic pilot data.
+  - Playwright checked authenticated flows at 390, 480, 768, 1024, 1440, and 1920 px.
+  - Mobile widths used drawer navigation; desktop widths used sidebar navigation.
+  - Primary content, sign-out, and primary actions were visible; no horizontal overflow was detected.
+- Pilot decision:
+  - `NO_GO` remains until a manufacturer walkthrough is retested manually.
+- Verification:
+  - `node --version` - `v24.4.0`.
+  - `npm --version` - `11.4.2`.
+  - Pre-change `npm run lint` - passed; linted 80 files.
+  - Pre-change `npm run typecheck` - passed; checked 88 JavaScript files.
+  - Pre-change `npm test` - passed; 70 tests total, 68 passed, 2 skipped, 0 failed.
+  - Pre-change `npm run build` - passed.
+  - Pre-change `npm audit` - passed; found 0 vulnerabilities.
+  - Pre-change `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+  - Pre-change `npm run scan:claims` - passed; linted 80 files.
+  - Pre-change `npm run scan:random` - passed; 1 deterministic-safety test passed.
+  - Pre-change `npm run qa:pilot` - passed with localhost server permission; 1 Chromium smoke test passed.
+  - `node --check` changed JavaScript files - passed.
+  - `node --test tests/frontend-ux.test.js` - passed; 7 tests.
+  - Focused auth/API/repository regression suite - passed with localhost server permission; 38 tests.
+  - `npm run lint` - passed; linted 80 files.
+  - `npm run typecheck` - passed; checked 88 JavaScript files.
+  - `npm test` - passed; 73 tests total, 71 passed, 2 skipped, 0 failed.
+  - `npm run build` - passed.
+  - `npm audit` - passed; found 0 vulnerabilities.
+  - `npm audit --omit=dev` - passed; found 0 production dependency vulnerabilities.
+  - `npm run scan:claims` - passed; linted 80 files.
+  - `npm run scan:random` - passed; 1 deterministic-safety test passed.
+  - `npm run qa:pilot` - passed with localhost server permission; 1 Chromium smoke test passed.
+  - Migration diff scan - no changes.
+  - Dependency diff scan - no `package.json` or `package-lock.json` changes.
+  - Former-brand scan - remaining matches are historical audit entries only.
+  - Secret-shaped filename scan - found tracked `.env.example` only; no private keys, certs, SQLite, or database files.
+  - Generated artifact status scan for `node_modules`, `apps/web/dist`, `coverage`, `playwright-report`, and `test-results` - no tracked changes.
+  - `git diff --check` - passed.
+- Recommended next phase:
+  - Phase 22 - manufacturer acceptance retest and targeted workflow refinements based on new user ratings.

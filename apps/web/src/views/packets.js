@@ -12,24 +12,32 @@ export function packetsView() {
   }
   const activePackets = state.packets.filter((packet) => !packet.archived);
   const archivedPackets = state.packets.filter((packet) => packet.archived);
+  const missingEvidence = state.latestReview?.summary?.missingEvidenceCount ?? null;
   return `
     <div class="page-head">
       <div>
         <h1>Audit Packs</h1>
-        <p class="page-sub">Exported readiness packets for <strong>${html(facility.name)}</strong>. Each PDF includes the facility profile, readiness score, gap matrix, action plan, AI evidence lineage, reviewer decisions, and disclaimers.</p>
+        <p class="page-sub">Export a traceable packet when the latest analysis is ready for <strong>${html(facility.name)}</strong>.</p>
       </div>
       <div class="page-actions">
         <button class="btn btn-primary" data-action="export-packet" ${state.latestReview ? "" : "disabled"}>${ICONS.packet} Export new packet</button>
       </div>
     </div>
 
-    ${state.latestReview ? "" : `<div class="alert-info">Generate a gap analysis before exporting — the packet is built from the latest backend review.</div>`}
+    <div class="summary-strip">
+      <div class="summary-chip"><span>Active packs</span><strong>${activePackets.length}</strong></div>
+      <div class="summary-chip"><span>Readiness</span><strong>${state.latestReview ? state.latestReview.readinessScore : "—"}</strong></div>
+      <div class="summary-chip"><span>Missing evidence</span><strong class="${missingEvidence ? "warn" : "ok"}">${missingEvidence ?? "—"}</strong></div>
+      <div class="summary-chip"><span>Archived</span><strong>${archivedPackets.length}</strong></div>
+    </div>
+
+    ${state.latestReview ? "" : `<div class="alert-info">Generate a gap analysis before exporting. The packet is built from that review.</div>`}
 
     <section class="card">
       <div class="card-head">
         <div>
           <h2>Packet history</h2>
-          <p class="hint">Downloads are authenticated and tenant-scoped; every download is audit-logged.</p>
+          <p class="hint">Includes facility scope, readiness score, gaps, actions, evidence lineage, reviewer decisions, and disclaimers.</p>
         </div>
       </div>
       <div class="card-body tight">

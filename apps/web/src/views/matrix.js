@@ -11,11 +11,15 @@ export function matrixView() {
     `;
   }
   const summary = state.latestReview?.summary;
+  const priorityRows = [...state.gapRows]
+    .filter((row) => ["missing", "partial", "expired", "rejected"].includes(row.status) || ["critical", "high"].includes(row.priority))
+    .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
+    .slice(0, 6);
   return `
     <div class="page-head">
       <div>
         <h1>Gaps & Actions</h1>
-        <p class="page-sub">Every applicable obligation for <strong>${html(facility.name)}</strong> with its evidence position: matched, partial, missing, expired, or rejected. Select a row for the full evidence lineage.</p>
+        <p class="page-sub">Start with what is missing, why it matters, and what to do next for <strong>${html(facility.name)}</strong>.</p>
       </div>
       <div class="page-actions">
         <button class="btn btn-primary" data-action="generate-review">${ICONS.refresh} ${state.latestReview ? "Regenerate analysis" : "Generate analysis"}</button>
@@ -32,11 +36,29 @@ export function matrixView() {
       </div>
     ` : ""}
 
+    ${state.gapRows.length ? `
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>Priority gaps</h2>
+            <p class="hint">Critical and high-impact items first. Open a gap for evidence lineage.</p>
+          </div>
+        </div>
+        <div class="card-body priority-list">
+          ${priorityRows.length ? priorityRows.map(gapPriorityCard).join("") : emptyState({
+            icon: "check",
+            title: "No priority gaps found",
+            copy: "The latest analysis did not find critical or high-priority missing evidence."
+          })}
+        </div>
+      </section>
+    ` : ""}
+
     <section class="card">
       <div class="card-head">
         <div>
-          <h2>Obligation coverage</h2>
-          <p class="hint">${state.rulesPack ? `${html(state.rulesPack.name)} · ${html(state.rulesPack.version)}${state.rulesPack.demoContent ? " · demo/unverified content" : ""}` : "Rules pack pending"}</p>
+          <h2>Full obligation coverage</h2>
+          <p class="hint">${state.rulesPack ? `${html(state.rulesPack.name)} · ${html(state.rulesPack.version)}${state.rulesPack.demoContent ? " · demo/unverified content" : ""}` : "Rules pack pending"} · select a row for detail</p>
         </div>
       </div>
       <div class="card-body tight">
@@ -71,6 +93,30 @@ export function matrixView() {
     <p class="footer-note">${html(DISCLAIMER_SHORT)}</p>
     ${state.drawerRuleId ? matrixDrawer() : ""}
   `;
+}
+
+function gapPriorityCard(row) {
+  const acceptedTypes = new Set(row.matchedEvidence.filter((item) => item.status === "accepted").map((item) => item.evidenceType));
+  const missingTypes = row.requiredEvidence.filter((type) => !acceptedTypes.has(type));
+  return `
+    <article class="priority-card ${html(row.priority)}">
+      <div class="row">
+        ${pill(row.priority, { text: `${titleCase(row.priority)} priority` })}
+        ${pill(row.status)}
+        <span class="muted small">due ${formatDate(row.dueDate)}</span>
+      </div>
+      <h3>${html(row.obligationTitle)}</h3>
+      <p>${missingTypes.length ? `Missing accepted evidence: ${missingTypes.map((type) => html(label(type))).join(", ")}.` : "Evidence exists, but review or freshness still needs attention."}</p>
+      <p><strong>Next step:</strong> ${html(row.recommendedAction)}</p>
+      <div class="row">
+        <button class="btn btn-secondary btn-sm" data-action="open-gap-row" data-rule-id="${html(row.ruleId)}">View details</button>
+      </div>
+    </article>
+  `;
+}
+
+function priorityRank(priority) {
+  return { critical: 0, high: 1, medium: 2, low: 3 }[priority] ?? 4;
 }
 
 function matrixRow(row) {

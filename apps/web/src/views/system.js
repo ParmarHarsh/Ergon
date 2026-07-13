@@ -6,8 +6,8 @@ export function systemView() {
   return `
     <div class="page-head">
       <div>
-        <h1>System status</h1>
-        <p class="page-sub">Runtime configuration and dependency health for this workspace. Secrets are never exposed to the browser.</p>
+        <h1>System</h1>
+        <p class="page-sub">Administrative health checks and recent audit activity. Secrets are never exposed to the browser.</p>
       </div>
       <div class="page-actions">
         ${canReview() ? `<button class="btn btn-secondary" data-action="enforce-retention">Enforce retention</button>` : ""}
@@ -43,7 +43,7 @@ export function systemView() {
             ${kv("Storage backend", html(state.aiStatus.storageBackend || "local"))}
             ${kv("Scanner", html(state.aiStatus.malwareScanner || "disabled"))}
           </div>
-          <p class="field-hint" style="margin-top:12px">AI calls run backend-only. The browser never holds provider keys. When AI is disabled, deterministic analysis and manual review remain fully functional.</p>
+          <p class="field-hint disclosure-body">AI calls run backend-only. When AI is disabled, deterministic analysis and manual review remain available.</p>
         </div>
       </section>
     </div>

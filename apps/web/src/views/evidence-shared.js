@@ -59,7 +59,10 @@ export function aiAnalysisPanel(analysis) {
         </span>
       </div>
       <p>${html(analysis.summary || analysis.error || "No summary available.")}</p>
-      <div class="kv-grid">${extracted.map(([term, value]) => kv(term, value)).join("")}</div>
+      <details class="detail-disclosure">
+        <summary>View extracted details</summary>
+        <div class="kv-grid">${extracted.map(([term, value]) => kv(term, value)).join("")}</div>
+      </details>
       ${analysis.suggestedObligationTitle ? `
         <div class="kv-grid">
           ${kv("Suggested obligation", html(analysis.suggestedObligationTitle))}

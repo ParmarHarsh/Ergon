@@ -70,7 +70,8 @@ function render() {
     window.setTimeout(() => syncRouteHash(route), 0);
   }
   root.innerHTML = `
-    <div class="app-shell">
+    <div class="app-shell ${state.mobileNavOpen ? "nav-open" : ""}">
+      ${state.mobileNavOpen ? `<div class="mobile-nav-scrim" data-action="close-mobile-nav"></div>` : ""}
       ${sidebar(route)}
       <div class="main-col">
         ${topbar(route)}
@@ -88,13 +89,14 @@ function sidebar(activeRoute) {
   const reviewCount = canReview() ? state.reviewQueue.length : 0;
   const criticalCount = state.latestReview?.summary?.criticalGapsCount || 0;
   return `
-    <aside class="sidebar">
+    <aside class="sidebar" id="app-navigation" aria-label="Primary navigation">
       <div class="brand">
         <div class="brand-mark">${ICONS.logo}</div>
         <div>
-          <div class="brand-name">Ergon</div>
+          <div class="brand-name">ERGON</div>
           <div class="brand-sub">Manufacturing Compliance</div>
         </div>
+        <button class="drawer-close mobile-nav-close" data-action="close-mobile-nav" aria-label="Close navigation">${ICONS.close}</button>
       </div>
       ${NAV.map(([groupLabel, items]) => {
         const visible = items.filter(([route]) => routeVisible(route));
@@ -120,7 +122,7 @@ function sidebar(activeRoute) {
             <div class="sidebar-user-name">${html(state.user.name || state.user.email)}</div>
             <div class="sidebar-user-role">${html(String(state.user.role || "").replaceAll("_", " "))}</div>
           </div>
-          <button class="logout-btn" data-action="logout" title="Log out" aria-label="Log out">${ICONS.logout}</button>
+          <button class="logout-btn" data-action="logout">${ICONS.logout}<span>Sign out</span></button>
         </div>
       </div>
     </aside>
@@ -130,6 +132,7 @@ function sidebar(activeRoute) {
 function topbar(route) {
   return `
     <header class="topbar">
+      <button class="mobile-menu-btn" data-action="open-mobile-nav" aria-controls="app-navigation" aria-expanded="${state.mobileNavOpen ? "true" : "false"}">${ICONS.menu}<span>Menu</span></button>
       <span class="topbar-title">${ROUTES[route].title}</span>
       <span class="topbar-spacer"></span>
       ${state.facilities.length ? `
@@ -140,6 +143,14 @@ function topbar(route) {
           </select>
         </label>
       ` : ""}
+      <div class="topbar-user">
+        <span class="avatar">${html(initials(state.user.name || state.user.email))}</span>
+        <span class="topbar-user-meta">
+          <strong>${html(state.user.name || state.user.email)}</strong>
+          <span>${html(String(state.user.role || "").replaceAll("_", " "))}</span>
+        </span>
+        <button class="btn btn-secondary btn-sm" data-action="logout">${ICONS.logout} Sign out</button>
+      </div>
     </header>
   `;
 }
@@ -190,6 +201,7 @@ async function run(work, { successMessage = "", rethrow = false } = {}) {
 
 function navigate(route) {
   state.drawerRuleId = null;
+  state.mobileNavOpen = false;
   state.route = ROUTES[route] ? route : "home";
   syncRouteHash(state.route);
   render();
@@ -236,6 +248,17 @@ async function loadRouteData(route) {
 }
 
 const clickActions = {
+  "open-mobile-nav": () => {
+    state.mobileNavOpen = true;
+    render();
+  },
+  "close-mobile-nav": () => {
+    state.mobileNavOpen = false;
+    render();
+  },
+  "focus-add-evidence": () => {
+    document.querySelector('#evidence-form input[name="title"]')?.focus();
+  },
   "dismiss-error": () => {
     state.error = "";
     render();
@@ -671,6 +694,11 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.mobileNavOpen) {
+    state.mobileNavOpen = false;
+    render();
+    return;
+  }
   if (event.key === "Escape" && state.drawerRuleId) {
     state.drawerRuleId = null;
     render();
