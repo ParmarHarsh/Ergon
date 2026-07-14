@@ -22,7 +22,7 @@ export function evidenceView() {
         <h1>Evidence</h1>
         <p class="page-sub">Add, review, and connect facility evidence for <strong>${html(facility.name)}</strong>.</p>
       </div>
-      <div class="page-actions">
+      <div class="page-actions evidence-page-cta">
         <button class="btn btn-primary" data-action="focus-add-evidence">${ICONS.upload} Add evidence</button>
       </div>
     </div>

@@ -1,10 +1,11 @@
 import { EVIDENCE_TAXONOMY, validationError } from "../../shared/src/index.js";
 
 export const AI_PROCESSING_STATUSES = ["not_started", "processing", "processed", "failed", "needs_review"];
-export const AI_PROMPT_VERSION = "evidence-intelligence-v1";
+export const AI_PROMPT_VERSION = "evidence-intelligence-v2";
+export const AI_SCHEMA_VERSION = "evidence-intelligence-schema-v1";
 
-const nullableString = { type: ["string", "null"] };
-const stringArray = { type: "array", items: { type: "string" } };
+const nullableString = (maxLength) => ({ type: ["string", "null"], maxLength });
+const stringArray = (maxItems = 100, maxLength = 300) => ({ type: "array", maxItems, items: { type: "string", maxLength } });
 
 export const EVIDENCE_AI_JSON_SCHEMA = {
   type: "object",
@@ -17,29 +18,34 @@ export const EVIDENCE_AI_JSON_SCHEMA = {
   ],
   properties: {
     detectedEvidenceType: { type: "string", enum: EVIDENCE_TAXONOMY },
-    detectedTitle: nullableString,
-    summary: { type: "string" },
-    documentDate: nullableString,
-    expirationDate: nullableString,
-    facilityName: nullableString,
-    employeeNames: stringArray,
-    equipmentNames: stringArray,
-    chemicalNames: stringArray,
+    detectedTitle: nullableString(300),
+    summary: { type: "string", minLength: 1, maxLength: 2_000 },
+    documentDate: nullableString(10),
+    expirationDate: nullableString(10),
+    facilityName: nullableString(300),
+    employeeNames: stringArray(),
+    equipmentNames: stringArray(),
+    chemicalNames: stringArray(),
     signaturePresent: { type: ["boolean", "null"] },
-    authorityMentions: stringArray,
-    citationMentions: stringArray,
-    issues: stringArray,
+    authorityMentions: stringArray(),
+    citationMentions: stringArray(),
+    issues: stringArray(100, 500),
     confidence: { type: "number", minimum: 0, maximum: 1 },
     needsHumanReview: { type: "boolean" },
-    suggestedRuleId: nullableString,
-    suggestedObligationTitle: nullableString,
-    matchReason: nullableString,
-    missingFieldsOrIssues: stringArray
+    suggestedRuleId: nullableString(160),
+    suggestedObligationTitle: nullableString(300),
+    matchReason: nullableString(1_000),
+    missingFieldsOrIssues: stringArray(100, 500)
   }
 };
 
 export function validateEvidenceAiOutput(input, { applicableRules = [], reviewRequiredThreshold = 0.7 } = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw invalidAiOutput("AI output must be an object");
+  const expectedFields = new Set(EVIDENCE_AI_JSON_SCHEMA.required);
+  const missingFields = EVIDENCE_AI_JSON_SCHEMA.required.filter((field) => !Object.hasOwn(input, field));
+  if (missingFields.length) throw invalidAiOutput(`AI output is missing required fields: ${missingFields.join(", ")}`);
+  const unexpectedFields = Object.keys(input).filter((field) => !expectedFields.has(field));
+  if (unexpectedFields.length) throw invalidAiOutput(`AI output contains unexpected fields: ${unexpectedFields.join(", ")}`);
   const detectedEvidenceType = requiredEnum(input.detectedEvidenceType, EVIDENCE_TAXONOMY, "detectedEvidenceType");
   const confidence = requiredNumber(input.confidence, "confidence", 0, 1);
   const suggestedRuleId = nullableBoundedString(input.suggestedRuleId, "suggestedRuleId", 160);

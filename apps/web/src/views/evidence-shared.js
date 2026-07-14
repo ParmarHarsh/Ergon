@@ -100,7 +100,9 @@ export function aiAnalysisPanel(analysis) {
 export function reviewForm(item, analysis) {
   if (!canReview() || !analysis) return "";
   return `
-    <form class="review-form" data-form="ai-review" data-evidence-id="${html(item.id)}">
+    <details class="detail-disclosure review-disclosure">
+      <summary>Review evidence decision</summary>
+      <form class="review-form" data-form="ai-review" data-evidence-id="${html(item.id)}">
       <div class="review-form-controls">
         <label class="field">
           <span class="field-label">Evidence type decision</span>
@@ -129,7 +131,8 @@ export function reviewForm(item, analysis) {
         <button type="submit" class="btn btn-ghost btn-sm" name="action" value="mark_needs_review">Keep in review</button>
         <button type="submit" class="btn btn-ghost btn-sm" name="action" value="request_more_evidence">Request more evidence</button>
       </div>
-    </form>
+      </form>
+    </details>
   `;
 }
 

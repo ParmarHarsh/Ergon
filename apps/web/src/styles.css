@@ -351,8 +351,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .workspace.route-enter { animation: route-enter 140ms var(--ease) both; }
 
 @keyframes route-enter {
-  from { opacity: 0.72; transform: translateY(3px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0.72; }
+  to { opacity: 1; }
 }
 
 .loading-panel {
@@ -904,7 +904,8 @@ input[type="file"] { padding: 7px; font-size: 0.8rem; color: var(--muted); }
 .issue-list { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
 .issue-list li { color: var(--warn); font-size: 0.8rem; line-height: 1.45; }
 
-.review-form { display: grid; gap: 10px; border-top: 1px dashed var(--line); padding-top: 12px; }
+.review-form { display: grid; gap: 10px; padding-top: 12px; }
+.review-disclosure { border-top: 1px dashed var(--line); padding-top: 10px; }
 .review-form-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .review-form-actions { display: flex; gap: 7px; flex-wrap: wrap; }
 
@@ -1199,4 +1200,8 @@ input[type="file"] { padding: 7px; font-size: 0.8rem; color: var(--muted); }
   .evidence-actions, .review-form-actions { width: 100%; }
   .evidence-actions .btn, .review-form-actions .btn { flex: 1 1 140px; }
   .pill, .confidence-meter { max-width: 100%; }
+}
+
+@media (min-width: 1200px) {
+  .evidence-page-cta { display: none; }
 }

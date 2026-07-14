@@ -68,7 +68,7 @@ INGEST -> UNDERSTAND -> MAP -> DETECT -> PRIORITIZE -> RECOMMEND -> DRAFT -> REV
 
 Current implementation supports a narrower version: facilities, evidence, verified multi-format uploads and provenance-backed extraction, mock or optional AI analysis foundations, review queue, deterministic gap analysis, action plan, audit packets, lifecycle controls, and system health. Planned and long-term phases expand OCR, regulatory intelligence, integrations, and monitoring.
 
-Phase 24 is the first concrete `INGEST → UNDERSTAND` implementation: it turns supported private documents into bounded normalized content, format-specific source anchors, deterministic profiles, optional AI candidates, and reviewable version history. `MAP → DETECT → PRIORITIZE → RECOMMEND → DRAFT` remain limited to the existing starter-rule and audit-readiness foundations; `MONITOR → RE-EVALUATE` remains future source-backed regulatory work.
+Phase 24 established `INGEST → UNDERSTAND`; Phase 25 makes the existing OpenAI path ready for controlled real-provider acceptance with strict structured output, server validation, grounding, evaluation, and cost bounds. `INGEST` is an implemented foundation. `UNDERSTAND` is implemented when a real provider is configured, while deterministic fallback remains available. `MAP → DETECT → PRIORITIZE → RECOMMEND` remain partial starter-rule/audit-readiness foundations, `DRAFT` remains developing, and `MONITOR → RE-EVALUATE` remains future source-backed regulatory work.
 
 ## The Ergon compliance graph
 

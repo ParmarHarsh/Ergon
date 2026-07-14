@@ -22,7 +22,7 @@ Ergon should automate repetitive work such as ingestion, classification, metadat
 - bounded normalized extraction with format-specific structure, source anchors, deterministic document profiles, SHA-256 lineage, and truthful partial/failure states;
 - local/private storage and S3-capable storage adapter;
 - malware-scanning adapter with local mock and ClamAV-capable provider;
-- optional backend AI evidence-analysis foundation with mock/OpenAI providers;
+- optional backend AI evidence analysis with mock/OpenAI providers, strict Responses API structured output, server validation, source grounding, safe usage metadata, and bounded cost controls;
 - human review queue and evidence override decisions;
 - deterministic gap analysis and action-plan generation;
 - audit packet PDF generation and authenticated downloads;
@@ -129,6 +129,66 @@ Copy `.env.example` only when you need a local editable environment. Do not comm
 Production or closed-pilot deployments require deliberate external infrastructure: Postgres, private S3-compatible storage, secure session secret, HTTPS origins, and production-appropriate malware scanning. Closed pilot additionally requires enabled, required, fail-closed ClamAV scanning.
 
 Optional integrations include OpenAI-backed evidence analysis and SMTP password recovery. Keep both disabled unless deliberately configured.
+
+### Controlled real-provider acceptance
+
+Real-provider acceptance is local and deliberate; it is not a public production deployment. Keep all values below in the current shell or another untracked secret store. Never commit a populated `.env`, paste secrets into chat, or put provider values in browser code.
+
+The OpenAI model is never hardcoded. `OPENAI_MODEL` selects it. For the current acceptance starting point, `gpt-5.6-terra` balances extraction capability and cost and supports the Responses API and Structured Outputs; change it without a code edit if provider availability or evaluation evidence favors another supported model. Each request is bounded by `AI_MAX_FILE_TEXT_CHARS` (default 12,000), `AI_MAX_OUTPUT_TOKENS` (default 2,000), and `AI_TIMEOUT_MS` (default 30,000). The worker defaults to one concurrent job and at most three queue attempts, with exactly one provider call per attempt.
+
+Set the AI values privately:
+
+```bash
+export AI_ENABLED=true
+export AI_PROVIDER=openai
+export OPENAI_MODEL=gpt-5.6-terra
+export AI_MAX_FILE_TEXT_CHARS=12000
+export AI_MAX_OUTPUT_TOKENS=2000
+export AI_TIMEOUT_MS=30000
+read -r -s 'OPENAI_API_KEY?OpenAI API key: '
+export OPENAI_API_KEY
+printf '\n'
+```
+
+The optional live AI command makes five paid requests using repository-generated synthetic TXT, CSV, PDF, DOCX, and XLSX evidence. It refuses to run without explicit opt-in and private provider configuration, and prints only safe classifications, metrics, latency, and token counts:
+
+```bash
+npm run qa:ai-eval
+ERGON_LIVE_AI_ACCEPTANCE=true npm run qa:ai-live
+```
+
+Provision a local acceptance administrator with a real email and a password chosen privately. This reuses the one-time audited provisioning command; it does not create public self-signup:
+
+```bash
+export PROVISION_ORGANIZATION_NAME='ERGON Acceptance Workspace'
+export PROVISION_ADMIN_NAME='Acceptance Administrator'
+read -r 'PROVISION_ADMIN_EMAIL?Acceptance email: '
+export PROVISION_ADMIN_EMAIL
+read -r -s 'PROVISION_ADMIN_PASSWORD?Private acceptance password: '
+export PROVISION_ADMIN_PASSWORD
+printf '\n'
+npm run admin:provision
+```
+
+Configure SMTP in the same private shell. With `SMTP_USE_TLS=true`, port 465 uses implicit TLS and other ports such as 587 require STARTTLS. Confirm the port with the mail provider. Certificate and hostname verification stay enabled.
+
+```bash
+export RECOVERY_DELIVERY_PROVIDER=smtp
+export RECOVERY_EXPOSE_TEST_TOKEN=false
+export APP_URL=http://localhost:5173
+read -r 'SMTP_HOST?SMTP host: '
+read -r 'SMTP_PORT?SMTP port: '
+read -r 'SMTP_USERNAME?SMTP username: '
+read -r -s 'SMTP_PASSWORD?SMTP password: '
+printf '\n'
+read -r 'SMTP_FROM_EMAIL?SMTP from email: '
+export SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_FROM_EMAIL
+export SMTP_USE_TLS=true
+```
+
+Start the API and web app from that shell with the same untracked file repository used for provisioning. Then request recovery from the sign-in screen. A successful SMTP handoff is not proof of inbox arrival: only the recipient can classify a real inbox test as passed. Reset links may use localhost only for this controlled same-machine acceptance.
+
+Normal `npm test` and CI never call OpenAI or send real email. Deterministic extraction, provenance, and human review remain available with `AI_ENABLED=false` or if the provider fails. Real provider results remain candidates, never legal truth or automatic evidence acceptance.
 
 ## Verification
 

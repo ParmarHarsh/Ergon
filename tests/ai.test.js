@@ -30,6 +30,11 @@ test("AI providers validate taxonomy, JSON, confidence, and bounded extraction",
 
   assert.throws(() => validateEvidenceAiOutput(output({ detectedEvidenceType: "invented_type" }), { applicableRules }), /detectedEvidenceType/);
   assert.throws(() => validateEvidenceAiOutput(output({ confidence: 1.2 }), { applicableRules }), /confidence/);
+  assert.throws(() => validateEvidenceAiOutput({ ...output(), unexpected: true }, { applicableRules }), /unexpected fields/);
+  const missingSummary = output();
+  delete missingSummary.summary;
+  assert.throws(() => validateEvidenceAiOutput(missingSummary, { applicableRules }), /missing required fields/);
+  assert.throws(() => validateEvidenceAiOutput(output({ employeeNames: Array.from({ length: 101 }, () => "Employee") }), { applicableRules }), /at most 100/);
   const low = validateEvidenceAiOutput(output({ confidence: 0.4, needsHumanReview: false }), { applicableRules, reviewRequiredThreshold: 0.7 });
   assert.equal(low.needsHumanReview, true);
 
@@ -39,6 +44,54 @@ test("AI providers validate taxonomy, JSON, confidence, and bounded extraction",
     aiReviewRequiredThreshold: 0.7
   }, async () => ({ ok: true, status: 200, json: async () => ({ output_text: "not-json" }) }));
   await assert.rejects(() => openai.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), /not valid JSON/);
+
+  const malformedBody = new OpenAiEvidenceProvider({ openAiApiKey: "test-key", openAiModel: "test-model", aiReviewRequiredThreshold: 0.7 }, async () => ({
+    ok: true,
+    status: 200,
+    json: async () => null
+  }));
+  await assert.rejects(() => malformedBody.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), /malformed/);
+
+  let requestBody;
+  const structured = new OpenAiEvidenceProvider({
+    openAiApiKey: "test-key",
+    openAiModel: "test-model",
+    aiReviewRequiredThreshold: 0.7,
+    aiTimeoutMs: 5_000,
+    aiMaxOutputTokens: 1_500
+  }, async (_url, request) => {
+    requestBody = JSON.parse(request.body);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ status: "completed", output_text: JSON.stringify(output()), usage: { input_tokens: 120, output_tokens: 80, total_tokens: 200 } })
+    };
+  });
+  const structuredResult = await structured.analyzeEvidenceDocument({ text: "forklift training", evidence: {}, facility: {}, applicableRules, extraction: { deterministicProfile: {}, provenanceAnchors: [] } });
+  assert.equal(requestBody.max_output_tokens, 1_500);
+  assert.equal(requestBody.text.format.strict, true);
+  assert.equal(requestBody.text.format.schema.additionalProperties, false);
+  assert.deepEqual(structuredResult.providerUsage.inputTokens, 120);
+  assert.equal(JSON.stringify(structuredResult).includes("providerUsage"), false);
+
+  const refusal = new OpenAiEvidenceProvider({ openAiApiKey: "test-key", openAiModel: "test-model", aiReviewRequiredThreshold: 0.7 }, async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ status: "completed", output: [{ content: [{ type: "refusal", refusal: "Cannot process" }] }] })
+  }));
+  await assert.rejects(() => refusal.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), (error) => error.code === "AI_PROVIDER_REFUSAL" && error.retryable === false);
+
+  const incomplete = new OpenAiEvidenceProvider({ openAiApiKey: "test-key", openAiModel: "test-model", aiReviewRequiredThreshold: 0.7 }, async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ status: "incomplete", incomplete_details: { reason: "max_output_tokens" } })
+  }));
+  await assert.rejects(() => incomplete.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), (error) => error.code === "AI_PROVIDER_INCOMPLETE");
+
+  const timeoutProvider = new OpenAiEvidenceProvider({ openAiApiKey: "test-key", openAiModel: "test-model", aiReviewRequiredThreshold: 0.7, aiTimeoutMs: 5 }, async (_url, request) => new Promise((_resolve, reject) => {
+    request.signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+  }));
+  await assert.rejects(() => timeoutProvider.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), (error) => error.code === "AI_PROVIDER_TIMEOUT" && error.retryable === true);
 
   const extracted = await extractEvidenceText({ buffer: Buffer.from("a".repeat(100)), fileName: "record.txt", evidence: { title: "Record" }, maxChars: 20 });
   assert.equal(extracted.text.length, 20);
@@ -85,6 +138,7 @@ test("AI processing is auditable and human override wins over AI and determinist
   assert.equal(analysis.deterministicProfile.contentHash, saved.sha256);
   assert.equal(analysis.deterministicProfile.fileSizeBytes, 40);
   assert.equal(analysis.aiProfile.status, "candidate");
+  assert.equal(analysis.aiProfile.generationMetadata.providerCalls, 1);
   assert.ok(Array.isArray(analysis.aiProfile.keyFacts));
   assert.ok(analysis.aiProfile.keyFacts.every((item) => ["source_supported", "unsupported_candidate"].includes(item.supportStatus)));
   assert.equal((await service.processEvidence({ organizationId: org.id, evidenceId: evidence.id, userId: reviewer.id, processingJobId: job.id })).id, analysis.id);
@@ -134,6 +188,7 @@ test("AI processing is auditable and human override wins over AI and determinist
   assert.ok(logs.some((entry) => entry.action === "human_overrode_rule_match" && entry.metadata.overrideRuleId === "us-ppe-training"));
   assert.ok(logs.some((entry) => entry.action === "human_requested_more_evidence"));
   assert.ok(logs.some((entry) => entry.action === "evidence_extraction_completed"));
+  assert.ok(logs.some((entry) => entry.action === "ai_provider_usage_recorded" && entry.metadata.providerCalls === 1));
   assert.equal(logs.some((entry) => JSON.stringify(entry.metadata).includes("Lockout Tagout procedure")), false);
 
   const otherOrg = await repo.createOrganization({ name: "Other Tenant" });

@@ -1593,3 +1593,82 @@ Safe next action:
   - `NO_GO` pending manufacturer acceptance plus production infrastructure, monitoring, backups, malware scanning, and operational readiness work.
 - Recommended next phase:
   - Manufacturer evidence-intelligence acceptance validation and production-readiness gap review.
+
+## Phase 25 real AI, email recovery, and end-to-end acceptance note
+
+- Phase 24 merged:
+  - Yes. Commit `f1293cfe53c99597b89ec7bf119593f1c44a2b4d` was confirmed reachable from `main` before the Phase 25 branch was created.
+- Real AI architecture:
+  - The existing server-side provider and evidence-processing service were retained. Deterministic bounded extraction, normalized content, source anchors, and deterministic profiles feed one optional AI provider call, followed by server validation, grounding, review, persistence, and audit.
+- AI-first product decision:
+  - Real customer-facing mode normally enables AI.
+  - Deterministic fallback remains supported.
+- AI provider:
+  - Existing native `fetch` OpenAI provider; no second abstraction or SDK dependency was added.
+- API path:
+  - OpenAI Responses API at `v1/responses` with strict `text.format` JSON Schema output.
+- Model configuration:
+  - `OPENAI_MODEL` remains required and configurable. `gpt-5.6-terra` is the documented acceptance starting point because it currently balances intelligence and cost while supporting Responses and Structured Outputs; it is not hardcoded.
+- Structured output:
+  - Strict schema with every field required and `additionalProperties: false`; string lengths, array sizes, enums, dates, confidence, applicable rule IDs, missing fields, and unexpected fields are validated again server-side.
+- Schema validation:
+  - Valid output, missing fields, unexpected fields, wrong enum/type/range, oversized arrays, malformed JSON, refusal, incomplete response, and timeout paths are covered.
+- Prompt/schema versioning:
+  - Prompt version `evidence-intelligence-v2` and schema version `evidence-intelligence-schema-v1` are retained with safe provider/model generation metadata.
+- Provenance validation:
+  - Candidate facts are source-supported only when an existing extracted anchor excerpt contains the candidate. Unknown anchor IDs or mismatched excerpts classify as `invalid_provenance`; facts without anchors remain `unsupported_candidate`.
+- Abstention:
+  - The prompt explicitly permits unknown/insufficient evidence and requires human review for ambiguity; deterministic evaluation includes an abstention case.
+- Cost guardrails:
+  - Default maximum normalized input is 12,000 characters, output is 2,000 tokens, provider timeout is 30 seconds, queue concurrency defaults to one, and there is exactly one provider call per queue attempt.
+- Timeout/retry:
+  - Provider calls abort at the configured bounded timeout. There is no nested HTTP retry loop; the existing queue supplies at most three attempts by default and respects non-retryable refusals/content failures.
+- Evaluation harness:
+  - Repository-local deterministic evaluation measures schema validity, document type, fact recall, unsupported candidates, provenance coverage/validity, abstention, and human-review flags. Optional `npm run qa:ai-live` makes exactly five explicitly opted-in synthetic format requests and is excluded from normal tests/CI.
+- Real AI acceptance:
+  - `READY_MISSING_API_KEY`.
+- Real SMTP:
+  - `READY_MISSING_SMTP_CONFIGURATION`. Port 465 uses implicit TLS; other TLS-enabled ports require STARTTLS. Certificate and hostname verification remain enabled.
+- Real inbox delivery:
+  - `READY_MISSING_SMTP_CONFIGURATION`.
+- Real account login:
+  - Not run with a real email/password because no private acceptance identity was configured. Synthetic/local auth regression passed.
+- Real password reset:
+  - Not run against a real inbox. Synthetic reset, single-use token, session revocation, and MFA-preservation regressions passed.
+- Old password after reset:
+  - Synthetic regression passed; real acceptance not run.
+- New password after reset:
+  - Synthetic regression passed; real acceptance not run.
+- UX:
+  - Add evidence duplication: the header CTA is hidden at widths of 1200 px and above where the uploader is immediately visible; it remains at 1024 px and below where it provides useful jump/focus behavior.
+  - Evidence density: per-item reviewer controls now use collapsed progressive disclosure.
+  - Route fade: the existing 140 ms transition is opacity-only with no hierarchy-implying movement and retains reduced-motion handling.
+- Migration:
+  - None.
+- Migrations 0001–0009 changed:
+  - No.
+- Dependencies:
+  - No dependency or lockfile changes; existing native `fetch`, Nodemailer, parsers, and OOXML libraries were reused.
+- Production deployment:
+  - No.
+- Infrastructure provisioned:
+  - No.
+- Pilot status:
+  - `NO_GO`.
+- Verification:
+  - Node `v24.4.0`; npm `11.4.2`.
+  - `npm run lint` passed; 84 files.
+  - `npm run typecheck` passed; 93 JavaScript files.
+  - Focused AI/evidence/processing tests passed; 20 tests.
+  - Recovery, SMTP, API, MFA, repository, and migration regressions passed; one expected PostgreSQL integration skip.
+  - `npm test` passed; 82 total, 80 passed, 2 expected infrastructure skips, 0 failed.
+  - `npm run build` passed.
+  - `npm audit` and `npm audit --omit=dev` passed with 0 vulnerabilities.
+  - `npm run scan:claims` passed; 84 files.
+  - `npm run scan:random` passed; 1 test.
+  - `npm run qa:pilot` passed; 1 Chromium test.
+  - In-app browser review passed at 390, 480, 768, 1024, 1280, 1440, and 1920 px with no page overflow; five top-level routes used an opacity-only transition with no transform.
+- Manual acceptance:
+  - Required for live OpenAI, real inbox arrival, real-email account provisioning, and the complete 40-step acceptance walkthrough.
+- Recommended next phase:
+  - Controlled private real-provider acceptance execution and evidence-based go/no-go review.

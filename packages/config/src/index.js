@@ -132,6 +132,8 @@ export function readConfig(env = process.env) {
   const aiEnabled = env.AI_ENABLED === "true";
   const aiProvider = env.AI_PROVIDER || "openai";
   const aiMaxFileTextChars = positiveInteger(env.AI_MAX_FILE_TEXT_CHARS || "12000", "AI_MAX_FILE_TEXT_CHARS");
+  const aiTimeoutMs = boundedInteger(env.AI_TIMEOUT_MS || "30000", "AI_TIMEOUT_MS", 1_000, 120_000);
+  const aiMaxOutputTokens = boundedInteger(env.AI_MAX_OUTPUT_TOKENS || "2000", "AI_MAX_OUTPUT_TOKENS", 256, 16_000);
   const aiConfidenceThreshold = unitInterval(env.AI_CONFIDENCE_THRESHOLD || "0.8", "AI_CONFIDENCE_THRESHOLD");
   const aiReviewRequiredThreshold = unitInterval(env.AI_REVIEW_REQUIRED_THRESHOLD || "0.7", "AI_REVIEW_REQUIRED_THRESHOLD");
   if (aiReviewRequiredThreshold > aiConfidenceThreshold) {
@@ -242,6 +244,8 @@ export function readConfig(env = process.env) {
     aiEnabled,
     aiProvider,
     aiMaxFileTextChars,
+    aiTimeoutMs,
+    aiMaxOutputTokens,
     aiConfidenceThreshold,
     aiReviewRequiredThreshold,
     openAiApiKey: env.OPENAI_API_KEY || "",

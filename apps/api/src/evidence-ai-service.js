@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { createOcrProvider, extractEvidenceText, providerMetadata } from "../../../packages/ai/src/index.js";
+import { createOcrProvider, extractEvidenceText, groundEvidenceAiOutput, providerMetadata } from "../../../packages/ai/src/index.js";
 import { getApplicableRules } from "../../../packages/rules/src/index.js";
 import { notFound, validationError } from "../../../packages/shared/src/index.js";
 
@@ -113,7 +113,8 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
           return analysis;
         }
 
-        const output = await provider.analyzeEvidenceDocument({ text: extraction.text, evidence, facility, applicableRules });
+        const output = await provider.analyzeEvidenceDocument({ text: extraction.text, evidence, facility, applicableRules, extraction });
+        const providerUsage = output.providerUsage || null;
         const suggestedRule = output.suggestedRuleId ? applicableRules.find((rule) => rule.id === output.suggestedRuleId) : null;
         const deterministicAgreement = Boolean(suggestedRule?.requiredEvidenceTypes.includes(output.detectedEvidenceType));
         const needsHumanReview = Boolean(previousAnalysis?.humanReviewed)
@@ -150,10 +151,20 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
           missingFieldsOrIssues: output.missingFieldsOrIssues,
           confidence: output.confidence,
           needsHumanReview,
-          aiProfile: buildAiProfile(output, extraction, Boolean(previousAnalysis?.humanReviewed)),
+          aiProfile: {
+            ...groundEvidenceAiOutput(output, extraction, Boolean(previousAnalysis?.humanReviewed)),
+            generationMetadata: providerUsage
+          },
           error: null
         });
         await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action: "ai_classification_generated", metadata: { detectedEvidenceType: analysis.detectedEvidenceType, confidence: analysis.confidence, needsHumanReview } });
+        if (providerUsage) {
+          await logAiEvent(repo, {
+            organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id,
+            action: "ai_provider_usage_recorded",
+            metadata: providerUsage
+          });
+        }
         await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action: "evidence_intelligence_generated", metadata: { analysisVersion: analysis.analysisVersion, candidateCount: analysis.aiProfile?.keyFacts?.length || 0, sourceSupportedCandidateCount: analysis.aiProfile?.keyFacts?.filter((item) => item.supportStatus === "source_supported").length || 0 } });
         if (analysis.suggestedRuleId) {
           await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action: "ai_match_suggested", metadata: { suggestedRuleId: analysis.suggestedRuleId, confidence: analysis.confidence, deterministicAgreement } });
@@ -170,11 +181,11 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
           contentHash: evidence.fileSha256 || analysis.contentHash || null,
           textExtractionStatus: lastExtraction?.textExtractionStatus || analysis.textExtractionStatus || "failed",
           needsHumanReview: true,
-          aiProfile: { status: "failed", errorCode: error.code || "AI_PROCESSING_ERROR" },
+          aiProfile: { status: "failed", errorCode: error.code || "AI_PROCESSING_ERROR", generationMetadata: error.providerUsage || null },
           error: safeError(error)
         });
         const action = error.code === "AI_INVALID_OUTPUT" ? "ai_output_rejected_invalid_schema" : "evidence_processing_failed";
-        await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action, metadata: { errorCode: error.code || "AI_PROCESSING_ERROR" } });
+        await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action, metadata: error.providerUsage || { errorCode: error.code || "AI_PROCESSING_ERROR" } });
         if (error.code === "AI_INVALID_OUTPUT") error.status = 502;
         throw error;
       }
@@ -346,53 +357,6 @@ function extractionAnalysisFields(extraction) {
     deterministicProfile: extraction.deterministicProfile || {},
     processingWarnings: extraction.processingWarnings || []
   };
-}
-
-function buildAiProfile(output, extraction, preservedHumanReview) {
-  const candidates = [
-    ...candidateValues("date", [output.documentDate, output.expirationDate], extraction, output.confidence),
-    ...candidateValues("facility", [output.facilityName], extraction, output.confidence),
-    ...candidateValues("employee", output.employeeNames, extraction, output.confidence),
-    ...candidateValues("equipment", output.equipmentNames, extraction, output.confidence),
-    ...candidateValues("chemical_or_material", output.chemicalNames, extraction, output.confidence),
-    ...candidateValues("authority", output.authorityMentions, extraction, output.confidence),
-    ...candidateValues("citation", output.citationMentions, extraction, output.confidence)
-  ];
-  const identifierCandidates = candidateValues("identifier", extraction.deterministicProfile?.identifiers || [], extraction, null);
-  return {
-    status: "candidate",
-    summary: output.summary,
-    documentTypeCandidate: output.detectedEvidenceType,
-    titleCandidate: output.detectedTitle,
-    purposeCandidate: null,
-    evidenceCategories: output.detectedEvidenceType ? [output.detectedEvidenceType] : [],
-    keyFacts: candidates,
-    keyDates: candidates.filter((item) => item.category === "date"),
-    organizations: [],
-    facilities: candidates.filter((item) => item.category === "facility"),
-    jurisdictions: [],
-    products: [],
-    processes: [],
-    equipment: candidates.filter((item) => item.category === "equipment"),
-    materials: candidates.filter((item) => item.category === "chemical_or_material"),
-    permitsOrLicenses: identifierCandidates.filter((item) => /permit|license/i.test(item.value)),
-    standardsOrRegulatoryIdentifiers: identifierCandidates,
-    qualityConcerns: output.issues || [],
-    missingInformation: output.missingFieldsOrIssues || [],
-    followUpSuggestions: output.missingFieldsOrIssues || [],
-    overallConfidence: output.confidence,
-    preservedHumanReview,
-    disclaimer: "AI output is a reviewable candidate, not legal applicability or a compliance conclusion."
-  };
-}
-
-function candidateValues(category, values, extraction, confidence) {
-  return (values || []).filter(Boolean).map((value) => {
-    const normalized = String(value).toLowerCase();
-    const anchors = (extraction.provenanceAnchors || []).filter((item) => String(item.excerpt || "").toLowerCase().includes(normalized));
-    const provenance = anchors.map(({ excerpt: _excerpt, ...location }) => location);
-    return { category, value, confidence, provenance, provenanceAnchorIds: anchors.map((item) => item.id), supportStatus: anchors.length ? "source_supported" : "unsupported_candidate" };
-  });
 }
 
 function extractionAuditAction(extraction) {

@@ -175,5 +175,9 @@ test("AI is optional and OpenAI configuration is required only when enabled", ()
     AI_REVIEW_REQUIRED_THRESHOLD: "0.7"
   });
   assert.equal(mock.aiProvider, "mock");
+  assert.equal(mock.aiTimeoutMs, 30_000);
+  assert.equal(mock.aiMaxOutputTokens, 2_000);
+  assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", AI_ENABLED: "false", AI_TIMEOUT_MS: "999" }), /AI_TIMEOUT_MS/);
+  assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", AI_ENABLED: "false", AI_MAX_OUTPUT_TOKENS: "20000" }), /AI_MAX_OUTPUT_TOKENS/);
   assert.throws(() => readConfig({ ...productionEnv, AI_ENABLED: "true", AI_PROVIDER: "mock" }), /not allowed in production/);
 });

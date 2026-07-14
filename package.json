@@ -24,6 +24,8 @@
     "test": "node --test tests/*.test.js",
     "test:e2e": "playwright test",
     "qa:pilot": "playwright test tests/e2e/pilot-smoke.spec.js",
+    "qa:ai-eval": "node --test tests/ai-evaluation.test.js",
+    "qa:ai-live": "node --env-file-if-exists=.env scripts/qa-ai-live.mjs",
     "validate:postgres": "node --env-file-if-exists=.env scripts/validate-postgres.mjs",
     "validate:storage": "node --env-file-if-exists=.env scripts/validate-storage.mjs",
     "validate:scanner": "node --env-file-if-exists=.env scripts/validate-scanner.mjs",

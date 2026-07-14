@@ -50,14 +50,16 @@ export function createRecoveryDelivery(config, dependencies = {}) {
 }
 
 export function createSmtpTransportConfig(config) {
+  const implicitTls = Boolean(config.smtpUseTls && config.smtpPort === 465);
   const transport = {
     host: config.smtpHost,
     port: config.smtpPort,
-    secure: config.smtpUseTls,
+    secure: implicitTls,
     connectionTimeout: SMTP_TIMEOUT_MS,
     greetingTimeout: SMTP_TIMEOUT_MS,
     socketTimeout: SMTP_TIMEOUT_MS
   };
+  if (config.smtpUseTls && !implicitTls) transport.requireTLS = true;
   if (config.smtpUsername && config.smtpPassword) {
     transport.auth = {
       user: config.smtpUsername,

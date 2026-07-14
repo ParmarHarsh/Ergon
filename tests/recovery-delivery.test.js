@@ -120,7 +120,8 @@ test("SMTP transport config omits auth when credentials are absent", () => {
   }), {
     host: "smtp.example.com",
     port: 587,
-    secure: true,
+    secure: false,
+    requireTLS: true,
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
     socketTimeout: 10_000

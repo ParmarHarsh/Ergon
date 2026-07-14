@@ -135,6 +135,8 @@ test("browser title and design CSS use the Phase 21 ERGON convention", async () 
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /mobile-nav-scrim/);
   assert.match(css, /\.workspace\.route-enter\s*\{\s*animation:\s*route-enter 140ms/);
+  assert.match(css, /@keyframes route-enter\s*\{[\s\S]*from\s*\{\s*opacity:\s*0\.72;\s*\}[\s\S]*to\s*\{\s*opacity:\s*1;\s*\}/);
+  assert.doesNotMatch(css, /@keyframes route-enter\s*\{[^}]*translateY/);
 });
 
 test("responsive layout CSS protects mobile hierarchy and wide workflow content", async () => {
