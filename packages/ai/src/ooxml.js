@@ -106,7 +106,9 @@ export function parseOoxmlXml(bytes, partName) {
 export function orderedNodesByName(nodes, name, output = []) {
   for (const node of Array.isArray(nodes) ? nodes : []) {
     if (!node || typeof node !== "object") continue;
-    if (Object.hasOwn(node, name)) output.push(node[name]);
+    for (const [key, value] of Object.entries(node)) {
+      if (xmlNameMatches(key, name)) output.push(value);
+    }
     for (const [key, value] of Object.entries(node)) {
       if (key !== ":@" && Array.isArray(value)) orderedNodesByName(value, name, output);
     }
@@ -117,12 +119,18 @@ export function orderedNodesByName(nodes, name, output = []) {
 export function orderedElementsByName(nodes, name, output = []) {
   for (const node of Array.isArray(nodes) ? nodes : []) {
     if (!node || typeof node !== "object") continue;
-    if (Object.hasOwn(node, name)) output.push(node);
+    if (Object.keys(node).some((key) => xmlNameMatches(key, name))) output.push(node);
     for (const [key, value] of Object.entries(node)) {
       if (key !== ":@" && Array.isArray(value)) orderedElementsByName(value, name, output);
     }
   }
   return output;
+}
+
+export function orderedElementContent(node, name) {
+  if (!node || typeof node !== "object") return [];
+  const key = Object.keys(node).find((candidate) => xmlNameMatches(candidate, name));
+  return key ? node[key] : [];
 }
 
 export function orderedText(nodes) {
@@ -134,7 +142,18 @@ export function orderedText(nodes) {
 }
 
 export function orderedAttribute(node, name) {
-  return node?.[":@"]?.[`@_${name}`] ?? null;
+  const attributes = node?.[":@"];
+  if (!attributes || typeof attributes !== "object") return null;
+  const requested = `@_${name}`;
+  if (Object.hasOwn(attributes, requested)) return attributes[requested];
+  const key = Object.keys(attributes).find((candidate) => xmlNameMatches(candidate.replace(/^@_/, ""), name));
+  return key ? attributes[key] : null;
+}
+
+function xmlNameMatches(candidate, requested) {
+  if (candidate === requested) return true;
+  if (candidate === ":@" || candidate === "#text" || requested.includes(":")) return false;
+  return candidate.slice(candidate.lastIndexOf(":") + 1) === requested;
 }
 
 function walk(nodes, visitor) {

@@ -115,8 +115,13 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
 
         const output = await provider.analyzeEvidenceDocument({ text: extraction.text, evidence, facility, applicableRules, extraction });
         const providerUsage = output.providerUsage || null;
-        const suggestedRule = output.suggestedRuleId ? applicableRules.find((rule) => rule.id === output.suggestedRuleId) : null;
-        const deterministicAgreement = Boolean(suggestedRule?.requiredEvidenceTypes.includes(output.detectedEvidenceType));
+        const obligationMatch = qualifyObligationSuggestion({
+          output,
+          applicableRules,
+          sourceText: extraction.normalizedText || extraction.text,
+          confidenceThreshold: config.aiConfidenceThreshold
+        });
+        const deterministicAgreement = obligationMatch.classification === "SUPPORTED_MATCH";
         const needsHumanReview = Boolean(previousAnalysis?.humanReviewed)
           || output.needsHumanReview
           || output.confidence < config.aiConfidenceThreshold
@@ -145,14 +150,15 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
           extractedCitationMentions: sourceSupportedMentions(output.citationMentions, extraction.text),
           summary: output.summary,
           issues,
-          suggestedRuleId: output.suggestedRuleId,
-          suggestedObligationTitle: output.suggestedObligationTitle,
-          matchReason: output.matchReason,
+          suggestedRuleId: deterministicAgreement ? output.suggestedRuleId : null,
+          suggestedObligationTitle: deterministicAgreement ? obligationMatch.candidateTitle : null,
+          matchReason: deterministicAgreement ? output.matchReason : "No sufficiently supported obligation match — human review required.",
           missingFieldsOrIssues: output.missingFieldsOrIssues,
           confidence: output.confidence,
           needsHumanReview,
           aiProfile: {
             ...groundEvidenceAiOutput(output, extraction, Boolean(previousAnalysis?.humanReviewed)),
+            obligationMatch,
             generationMetadata: providerUsage
           },
           error: null
@@ -168,6 +174,8 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
         await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action: "evidence_intelligence_generated", metadata: { analysisVersion: analysis.analysisVersion, candidateCount: analysis.aiProfile?.keyFacts?.length || 0, sourceSupportedCandidateCount: analysis.aiProfile?.keyFacts?.filter((item) => item.supportStatus === "source_supported").length || 0 } });
         if (analysis.suggestedRuleId) {
           await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action: "ai_match_suggested", metadata: { suggestedRuleId: analysis.suggestedRuleId, confidence: analysis.confidence, deterministicAgreement } });
+        } else if (obligationMatch.classification === "WEAK_CANDIDATE") {
+          await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action: "ai_match_withheld_weak_support", metadata: { candidateRuleId: obligationMatch.candidateRuleId, reasonCode: obligationMatch.reasonCode } });
         }
         await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action: "evidence_processing_completed", metadata: { status: analysis.processingStatus, extractionStatus: analysis.textExtractionStatus } });
         return analysis;
@@ -286,6 +294,89 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
       return result;
     }
   };
+}
+
+export function qualifyObligationSuggestion({ output, applicableRules = [], sourceText = "", confidenceThreshold = 0.8 }) {
+  if (!output?.suggestedRuleId) {
+    return {
+      classification: "NO_SUPPORTED_MATCH",
+      candidateRuleId: null,
+      candidateTitle: null,
+      candidateReason: null,
+      reasonCode: "NO_PROVIDER_CANDIDATE",
+      reason: "No sufficiently supported obligation match — human review required."
+    };
+  }
+
+  const rule = applicableRules.find((item) => item.id === output.suggestedRuleId) || null;
+  const candidate = {
+    candidateRuleId: output.suggestedRuleId,
+    candidateTitle: rule?.title || output.suggestedObligationTitle || null,
+    candidateReason: output.matchReason || null
+  };
+  if (!rule) return weakMatch(candidate, "RULE_NOT_APPLICABLE", "The provider candidate is not an applicable facility obligation.");
+  if (!rule.requiredEvidenceTypes.includes(output.detectedEvidenceType)) {
+    return weakMatch(candidate, "EVIDENCE_TYPE_MISMATCH", "The candidate obligation does not require the detected evidence type.");
+  }
+  if (!Number.isFinite(output.confidence) || output.confidence < confidenceThreshold) {
+    return weakMatch(candidate, "BELOW_CONFIDENCE_THRESHOLD", "The provider confidence is below ERGON's precision-first match threshold.");
+  }
+  if (!sourceSupportsEvidenceType(sourceText, output.detectedEvidenceType)) {
+    return weakMatch(candidate, "MISSING_SOURCE_SPECIFIC_SUPPORT", "The source lacks obligation-specific terminology for the detected evidence type.");
+  }
+  return {
+    classification: "SUPPORTED_MATCH",
+    ...candidate,
+    reasonCode: "TYPE_AND_SOURCE_SUPPORTED",
+    reason: "The applicable obligation, detected evidence type, confidence, and source-specific terminology agree."
+  };
+}
+
+function weakMatch(candidate, reasonCode, detail) {
+  return {
+    classification: "WEAK_CANDIDATE",
+    ...candidate,
+    reasonCode,
+    reason: `${detail} No sufficiently supported obligation match — human review required.`
+  };
+}
+
+function sourceSupportsEvidenceType(sourceText, evidenceType) {
+  const text = normalizeMatchText(sourceText);
+  if (!text) return false;
+  const signalGroups = {
+    fire_extinguisher_inspections: [["fire", "extinguisher"]],
+    loto_procedures: [["loto"], ["lockout", "tagout"], ["energy", "control", "procedure"]],
+    loto_training_records: [["loto", "training"], ["lockout", "training"], ["tagout", "training"]],
+    osha_300_log: [["osha", "300"], ["injury", "illness", "recordkeeping"]],
+    osha_300a_summary: [["osha", "300a"], ["injury", "illness", "summary"]],
+    hazardous_waste_determination: [["hazardous", "waste", "determination"]],
+    hazardous_waste_manifests: [["hazardous", "waste", "manifest"]],
+    waste_area_inspections: [["waste", "area", "inspection"], ["hazardous", "waste", "inspection"]],
+    hazcom_training_records: [["hazcom", "training"], ["hazard", "communication", "training"]],
+    written_hazcom_program: [["hazcom", "program"], ["hazard", "communication", "program"]],
+    forklift_training_records: [["forklift", "training"], ["powered", "industrial", "truck", "training"]],
+    ppe_training_records: [["ppe", "training"], ["personal", "protective", "equipment", "training"]],
+    ppe_hazard_assessment: [["ppe", "hazard", "assessment"], ["personal", "protective", "equipment", "assessment"]],
+    sds_library: [["sds"], ["safety", "data", "sheet"]],
+    chemical_inventory: [["chemical", "inventory"]]
+  };
+  const groups = signalGroups[evidenceType] || derivedEvidenceTypeSignals(evidenceType);
+  return groups.some((group) => group.every((term) => matchTerm(text, term)));
+}
+
+function derivedEvidenceTypeSignals(evidenceType) {
+  const generic = new Set(["record", "records", "inspection", "inspections", "training", "procedure", "procedures", "log", "logs", "summary", "review", "documentation"]);
+  const terms = String(evidenceType || "").split("_").filter((term) => term && !generic.has(term));
+  return terms.length ? [terms] : [];
+}
+
+function normalizeMatchText(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function matchTerm(text, term) {
+  return ` ${text} `.includes(` ${term} `);
 }
 
 function baseAnalysis({ evidence, metadata, processingStatus, previousAnalysis = null }) {

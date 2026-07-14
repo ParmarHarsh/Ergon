@@ -41,7 +41,7 @@ Starter rules are demo/unverified unless expert-reviewed. Ergon is audit-prepara
 | Text-layer PDF | IMPLEMENTED_NOW | Bounded page text with page anchors |
 | Image-only PDF | OCR_REQUIRED | No fake extraction; waits for real OCR or manual review |
 | DOCX | IMPLEMENTED_NOW | Bounded OOXML paragraph/table structure with paragraph anchors |
-| XLSX | IMPLEMENTED_NOW | Bounded sheets/cached cell values with sheet/row/cell-range anchors; formulas are never evaluated |
+| XLSX | IMPLEMENTED_NOW | Bounded namespace-aware sheets and direct/shared/inline/cached cell values with sheet/row/cell-range anchors; formulas are never evaluated |
 | PNG/JPEG and other accepted images | OCR_REQUIRED | Signature-verified intake only until real OCR is configured |
 
 This is the first concrete implementation of `INGEST → UNDERSTAND`. Candidate obligation mapping, regulatory source intelligence, autonomous applicability decisions, production OCR, and external document connectors remain planned or future work.
@@ -65,7 +65,7 @@ Evidence processing reuses the scan-gated private-storage queue and versioned hu
 
 The current deterministic limits are 10,000 text lines, 10,000 CSV rows / 100,000 cells, 200 PDF pages, 10,000 DOCX blocks, and 100 XLSX sheets / 10,000 rows per sheet / 100,000 cells. OOXML expansion is capped at 50 MB with a 20 MB single-part cap. Downstream analysis text remains capped by `AI_MAX_FILE_TEXT_CHARS`. Limit hits are marked partial with a review warning; corrupt, encrypted, unsupported, and empty inputs fail safely into review.
 
-Images and PDFs without a text layer are explicitly `OCR_REQUIRED` unless a real configured OCR provider returns text. Ergon does not simulate OCR. AI is optional: when disabled, normalized extraction, deterministic profiles, provenance, and human review still run. AI outputs are source-supported candidates where possible, never autonomous legal applicability or accepted compliance conclusions.
+Images and PDFs without a text layer are explicitly `OCR_REQUIRED` unless a real configured OCR provider returns text. Ergon does not simulate OCR. AI is optional: when disabled, normalized extraction, deterministic profiles, provenance, and human review still run. AI outputs are source-supported candidates where possible, never autonomous legal applicability or accepted compliance conclusions. Obligation suggestions are promoted only when an applicable rule, required evidence type, configured confidence threshold, and source-specific terminology agree; weak candidates remain reviewable context instead of confident-looking matches.
 
 ## Repository structure
 

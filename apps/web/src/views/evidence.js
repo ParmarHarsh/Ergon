@@ -121,6 +121,9 @@ function evidenceItem(item) {
   const canRestore = item.archived && item.storageDeletionStatus !== "deleted";
   const canRetryDeletion = item.storageDeletionStatus === "failed" && item.fileReference;
   const status = evidenceStatus(item, job, analysis);
+  const extractionNeedsRetry = ["failed", "extraction_failed"].includes(analysis?.extractionStatus)
+    || ["failed", "dead_letter"].includes(job?.status);
+  const processButton = `<button class="btn btn-secondary btn-sm" data-action="process-ai" data-evidence-id="${html(item.id)}" ${!active && !blocked && item.fileReference && !item.archived ? "" : "disabled"}>${ICONS.spark} ${active ? "Processing…" : analysis ? "Reprocess" : "Process"}</button>`;
   return `
     <article class="evidence-item">
       <div class="evidence-top">
@@ -134,15 +137,8 @@ function evidenceItem(item) {
           </div>
         </div>
         <div class="evidence-actions">
-          ${pill(status.code, { text: status.text })}
-          ${item.fileReference && item.scanStatus !== "scan_suspicious" && !item.archived ? `<button class="btn btn-ghost btn-sm" data-action="download-evidence" data-evidence-id="${html(item.id)}">${ICONS.download} File</button>` : ""}
-          <button class="btn btn-secondary btn-sm" data-action="process-ai" data-evidence-id="${html(item.id)}" ${!active && !blocked && item.fileReference && !item.archived ? "" : "disabled"}>${ICONS.spark} ${active ? "Processing…" : analysis ? "Reprocess" : "Process"}</button>
-          ${canReview() && !item.archived ? (item.legalHoldActive
-            ? `<button class="btn btn-secondary btn-sm" data-action="release-evidence-hold" data-evidence-id="${html(item.id)}">Release hold</button>`
-            : `<button class="btn btn-secondary btn-sm" data-action="hold-evidence" data-evidence-id="${html(item.id)}">Hold</button>`) : ""}
-          ${canReview() && canRetryDeletion ? `<button class="btn btn-secondary btn-sm" data-action="retry-evidence-deletion" data-evidence-id="${html(item.id)}">Retry deletion</button>` : ""}
-          ${canReview() && canRestore ? `<button class="btn btn-secondary btn-sm" data-action="restore-evidence" data-evidence-id="${html(item.id)}">Restore</button>` : ""}
-          ${canReview() && !item.archived ? `<button class="btn btn-danger btn-sm" data-action="archive-evidence" data-evidence-id="${html(item.id)}" ${item.legalHoldActive ? "disabled" : ""}>Archive</button>` : ""}
+          <span data-ui-role="primary-workflow-state">${pill(status.code, { text: status.text })}</span>
+          ${(!analysis || extractionNeedsRetry) && !item.archived ? processButton : ""}
         </div>
       </div>
       ${item.legalHoldActive ? `<div class="alert-info small">Legal hold active${item.legalHoldReason ? `: ${html(item.legalHoldReason)}` : ""}</div>` : ""}
@@ -150,6 +146,21 @@ function evidenceItem(item) {
       ${processingBadges(item, job)}
       ${analysis ? aiAnalysisPanel(analysis) : `<p class="small muted">${item.fileReference ? "Waiting for a clean scan before evidence processing." : "Manual record — no file to process."}</p>`}
       ${item.archived ? "" : reviewForm(item, analysis)}
+      ${(item.fileReference || canReview()) ? `
+        <details class="detail-disclosure evidence-secondary-actions" data-ui-role="secondary-lifecycle-actions">
+          <summary>File and lifecycle actions</summary>
+          <div class="secondary-action-row">
+            ${item.fileReference && item.scanStatus !== "scan_suspicious" && !item.archived ? `<button class="btn btn-ghost btn-sm" data-action="download-evidence" data-evidence-id="${html(item.id)}">${ICONS.download} File</button>` : ""}
+            ${analysis && !extractionNeedsRetry && !item.archived ? processButton : ""}
+            ${canReview() && !item.archived ? (item.legalHoldActive
+              ? `<button class="btn btn-secondary btn-sm" data-action="release-evidence-hold" data-evidence-id="${html(item.id)}">Release hold</button>`
+              : `<button class="btn btn-secondary btn-sm" data-action="hold-evidence" data-evidence-id="${html(item.id)}">Hold</button>`) : ""}
+            ${canReview() && canRetryDeletion ? `<button class="btn btn-secondary btn-sm" data-action="retry-evidence-deletion" data-evidence-id="${html(item.id)}">Retry deletion</button>` : ""}
+            ${canReview() && canRestore ? `<button class="btn btn-secondary btn-sm" data-action="restore-evidence" data-evidence-id="${html(item.id)}">Restore</button>` : ""}
+            ${canReview() && !item.archived ? `<button class="btn btn-danger btn-sm" data-action="archive-evidence" data-evidence-id="${html(item.id)}" ${item.legalHoldActive ? "disabled" : ""}>Archive</button>` : ""}
+          </div>
+        </details>
+      ` : ""}
     </article>
   `;
 }
@@ -160,7 +171,9 @@ function evidenceStatus(item, job, analysis) {
   if (item.scanStatus === "scan_suspicious" || ["failed", "dead_letter"].includes(job?.status)) return { code: "failed", text: "Failed" };
   if (["queued", "processing"].includes(job?.status) || item.scanStatus === "scan_pending") return { code: "processing", text: "Processing" };
   if (item.status === "accepted") return { code: "accepted", text: "Accepted" };
-  if (item.status === "needs_review" || analysis?.needsHumanReview) return { code: "needs_review", text: "Ready for review" };
   if (["expired", "rejected"].includes(item.status)) return { code: "warn", text: "Needs attention" };
+  if (analysis?.humanReviewed) return { code: "human_reviewed", text: "Human-reviewed" };
+  if (analysis) return { code: "needs_review", text: "Ready for review" };
+  if (item.status === "needs_review") return { code: "needs_review", text: "Ready for review" };
   return { code: "processed", text: "Logged" };
 }

@@ -20,6 +20,8 @@ Start with the decision a user needs to make. Keep expert detail, lineage, citat
 
 Default pages should show summary first and expert detail second. Use drawers, native disclosure, compact filters, and focused details before adding more always-visible panels.
 
+Evidence cards should expose one primary workflow state, the summary, the highest-priority findings, and the primary review decision first. Processing metadata, full provenance, weak AI candidates, lifecycle controls, and destructive or infrequent review actions remain available through labeled disclosure.
+
 ## Plain language
 
 Use manufacturing and compliance language that a plant manager, EHS lead, quality manager, or operations owner can understand. Avoid unnecessary internal terms.

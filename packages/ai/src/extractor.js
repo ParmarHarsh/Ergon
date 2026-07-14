@@ -3,6 +3,7 @@ import { PDFParse } from "pdf-parse";
 import {
   openOoxml,
   orderedAttribute,
+  orderedElementContent,
   orderedElementsByName,
   orderedNodesByName,
   orderedText,
@@ -175,15 +176,18 @@ function extractXlsx({ buffer, metadataText, maxChars }) {
     for (const rowElement of rowElements.slice(0, MAX_XLSX_ROWS_PER_SHEET)) {
       if (totalCells >= MAX_XLSX_CELLS) { bounded = true; break; }
       const values = [];
-      const cells = orderedElementsByName(rowElement.row, "c");
+      const cells = orderedElementsByName(orderedElementContent(rowElement, "row"), "c");
       for (const cell of cells) {
         if (totalCells >= MAX_XLSX_CELLS) { bounded = true; break; }
         const type = orderedAttribute(cell, "t");
-        if (orderedNodesByName(cell.c, "f").length) formulaCount += 1;
+        const cellContent = orderedElementContent(cell, "c");
+        if (orderedNodesByName(cellContent, "f").length) formulaCount += 1;
         const reference = orderedAttribute(cell, "r") || null;
-        const raw = orderedNodesByName(cell.c, type === "inlineStr" ? "is" : "v")[0];
+        const raw = orderedNodesByName(cellContent, type === "inlineStr" ? "is" : "v")[0];
         let value = cleanText(raw ? orderedText(raw) : "");
         if (type === "s" && /^\d+$/.test(value)) value = sharedStrings[Number(value)] ?? "";
+        if (type === "b") value = value === "1" ? "true" : value === "0" ? "false" : "";
+        if (value.length > MAX_CELL_CHARS) bounded = true;
         value = value.slice(0, MAX_CELL_CHARS);
         if (value) values.push({ reference, value });
         totalCells += 1;

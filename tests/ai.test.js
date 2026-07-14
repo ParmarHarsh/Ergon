@@ -4,7 +4,7 @@ import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { AzureOpenAiEvidenceProvider, createEvidenceAiProvider, extractEvidenceText, groundEvidenceAiOutput, MockEvidenceAiProvider, normalizeAzureOpenAiEndpoint, OpenAiEvidenceProvider, validateEvidenceAiOutput } from "../packages/ai/src/index.js";
-import { createEvidenceAiService } from "../apps/api/src/evidence-ai-service.js";
+import { createEvidenceAiService, qualifyObligationSuggestion } from "../apps/api/src/evidence-ai-service.js";
 import { createPrivateStorage } from "../apps/api/src/storage.js";
 import { FileRepository } from "../packages/db/src/file-repository.js";
 import { parseEvidenceInput, parseFacilityInput } from "../packages/shared/src/index.js";
@@ -196,6 +196,62 @@ test("Azure OpenAI uses the shared Responses contract with safe configuration, e
   }
 });
 
+test("obligation suggestions require source-specific support instead of generic recordkeeping language", () => {
+  const facility = {
+    country: "US",
+    industry: "industrial_manufacturing",
+    hazardProfile: { fireExtinguishers: true, lockoutTagout: true, machinery: true, hazardousWaste: true }
+  };
+  const rules = getApplicableRules(facility).rules;
+  const rule = (id) => rules.find((item) => item.id === id);
+  const candidate = (overrides) => output({ confidence: 0.93, ...overrides });
+
+  const fire = qualifyObligationSuggestion({
+    output: candidate({ detectedEvidenceType: "fire_extinguisher_inspections", suggestedRuleId: rule("us-fire-extinguishers").id }),
+    applicableRules: rules,
+    sourceText: "Monthly portable fire extinguisher inspection completed for Plant A."
+  });
+  assert.equal(fire.classification, "SUPPORTED_MATCH");
+
+  const training = qualifyObligationSuggestion({
+    output: candidate({ detectedEvidenceType: "osha_300_log", suggestedRuleId: rule("us-injury-recordkeeping").id }),
+    applicableRules: rules,
+    sourceText: "Safety training matrix with employee names, course titles, and completion dates."
+  });
+  assert.equal(training.classification, "WEAK_CANDIDATE");
+
+  const environmental = qualifyObligationSuggestion({
+    output: candidate({ detectedEvidenceType: "osha_300_log", suggestedRuleId: rule("us-injury-recordkeeping").id }),
+    applicableRules: rules,
+    sourceText: "Monthly environmental inspection of stormwater controls and housekeeping."
+  });
+  assert.equal(environmental.classification, "WEAK_CANDIDATE");
+
+  const loto = qualifyObligationSuggestion({
+    output: candidate({ detectedEvidenceType: "loto_procedures", suggestedRuleId: rule("us-loto-procedures").id }),
+    applicableRules: rules,
+    sourceText: "Equipment-specific lockout/tagout energy control procedure for maintenance."
+  });
+  assert.equal(loto.classification, "SUPPORTED_MATCH");
+
+  const genericCorrectiveAction = qualifyObligationSuggestion({
+    output: candidate({ detectedEvidenceType: "osha_300_log", suggestedRuleId: rule("us-injury-recordkeeping").id }),
+    applicableRules: rules,
+    sourceText: "Corrective action record reviewed and closed after inspection."
+  });
+  assert.equal(genericCorrectiveAction.classification, "WEAK_CANDIDATE");
+
+  const injuryLog = qualifyObligationSuggestion({
+    output: candidate({ detectedEvidenceType: "osha_300_log", suggestedRuleId: rule("us-injury-recordkeeping").id }),
+    applicableRules: rules,
+    sourceText: "OSHA 300 log of work-related injuries and illnesses."
+  });
+  assert.equal(injuryLog.classification, "SUPPORTED_MATCH");
+
+  const none = qualifyObligationSuggestion({ output: candidate({ suggestedRuleId: null }), applicableRules: rules, sourceText: "General document." });
+  assert.equal(none.classification, "NO_SUPPORTED_MATCH");
+});
+
 test("AI processing is auditable and human override wins over AI and deterministic suggestions", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "ciq-ai-"));
   const repo = new FileRepository(path.join(dir, "db.json"));
@@ -234,6 +290,7 @@ test("AI processing is auditable and human override wins over AI and determinist
   assert.equal(analysis.deterministicProfile.contentHash, saved.sha256);
   assert.equal(analysis.deterministicProfile.fileSizeBytes, 40);
   assert.equal(analysis.aiProfile.status, "candidate");
+  assert.equal(analysis.aiProfile.obligationMatch.classification, "SUPPORTED_MATCH");
   assert.equal(analysis.aiProfile.generationMetadata.providerCalls, 1);
   assert.ok(Array.isArray(analysis.aiProfile.keyFacts));
   assert.ok(analysis.aiProfile.keyFacts.every((item) => ["source_supported", "unsupported_candidate"].includes(item.supportStatus)));
@@ -326,6 +383,10 @@ test("medium confidence requires review and invalid provider output is persisted
   const mediumService = createEvidenceAiService({ config: aiConfig, repo, storage, provider: mediumProvider });
   const mediumAnalysis = await mediumService.processEvidence({ organizationId: org.id, evidenceId: evidence.id, userId: user.id });
   assert.equal(mediumAnalysis.needsHumanReview, true);
+  assert.equal(mediumAnalysis.suggestedRuleId, null);
+  assert.equal(mediumAnalysis.suggestedObligationTitle, null);
+  assert.equal(mediumAnalysis.aiProfile.obligationMatch.classification, "WEAK_CANDIDATE");
+  assert.match(mediumAnalysis.matchReason, /No sufficiently supported obligation match/);
   assert.ok(mediumAnalysis.aiProfile.keyFacts.some((item) => item.supportStatus === "unsupported_candidate"));
 
   const invalidProvider = new MockEvidenceAiProvider(aiConfig, () => output({ detectedEvidenceType: "invented" }));

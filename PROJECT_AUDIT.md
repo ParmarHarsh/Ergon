@@ -1748,3 +1748,72 @@ Safe next action:
   - Yes. This Phase 25B change set continues the existing PR `#22`; no duplicate PR is used.
 - Manual acceptance:
   - Required after private Azure configuration, followed by real SMTP and account acceptance.
+
+## Phase 25C real-acceptance repair note
+
+- Existing branch reused:
+  - `phase-25-real-ai-email-acceptance`.
+- Existing PR reused:
+  - `#22`.
+- New branch:
+  - No.
+- New PR:
+  - No.
+- XLSX real-acceptance defect:
+  - A valid workbook was detected as XLSX but extracted as empty.
+- XLSX root cause:
+  - Ordered OOXML traversal matched literal element names such as `sheet`, `row`, `c`, and `v`; the acceptance workbook used namespace-prefixed names such as `x:sheet`, `x:row`, `x:c`, and `x:v`, so no sheets or cells were discovered. Direct-string `t="str"` values already used cached `v` content once a cell was reached.
+- Direct-string `t="str"` support:
+  - Passed with namespace-prefixed acceptance-style cells.
+- Shared-string support:
+  - Preserved and passed, including an empty shared-string table.
+- Inline-string support:
+  - Passed, including rich-text runs.
+- Cached formula-value handling:
+  - Cached values are extracted; a formula without a cached value contributes no evidence.
+- Formula execution:
+  - Never.
+- Multi-sheet extraction:
+  - Passed for three sheets with non-sequential relationship IDs.
+- XLSX provenance:
+  - Passed with five sheet/row/cell-range anchors across all three sheets.
+- Suspicious repeated obligation match:
+  - Provider misclassification repeatedly selected `osha_300_log`; the previous gate checked only that the selected applicable rule required the provider-detected type, so a confident but source-unsupported pair could pass. The obligation catalog and deterministic applicability rules were not the source of the repeated title.
+- Precision-first matching:
+  - Suggestions are promoted only when the rule is applicable, the required evidence type matches, confidence meets the configured threshold, and deterministic source text contains evidence-type-specific terminology. Weak candidates remain reviewable but are withheld from the primary suggestion.
+- Fire extinguisher result:
+  - `SUPPORTED_MATCH` for Fire extinguisher inspection records.
+- Training matrix result:
+  - `WEAK_CANDIDATE`; Incident and injury recordkeeping is withheld because source-specific injury/OSHA 300 terminology is absent.
+- Environmental inspection result:
+  - `WEAK_CANDIDATE`; Incident and injury recordkeeping is withheld because source-specific injury/OSHA 300 terminology is absent.
+- LOTO result:
+  - `SUPPORTED_MATCH` for Lockout/Tagout written procedures.
+- Evidence-card density:
+  - Summary, up to three findings, primary review state, and primary review actions are first; processing metadata, full provenance, weak candidates, lifecycle controls, and infrequent/destructive actions use labeled disclosure.
+- Duplicate review statuses:
+  - Removed; each evidence card exposes one primary workflow state plus a separate supporting scan/processing trust row.
+- Review actions:
+  - Confirm classification and apply override remain primary; status changes and destructive/infrequent actions are secondary.
+- Migration:
+  - None.
+- Migrations 0001–0009 changed:
+  - No.
+- Dependencies:
+  - None; no package or lockfile changes.
+- Real Azure preserved:
+  - Azure OpenAI, standard OpenAI, mock, shared strict schema, grounding, provenance, and authoritative human review remain intact. No live provider call occurs in normal tests or CI.
+- Real Azure XLSX retest:
+  - `READY_FOR_USER_REAL_AZURE_RETEST`; private Azure variables were not present in the Codex process, so no live call was claimed.
+- Full verification:
+  - Node `v24.4.0`; npm `11.4.2`.
+  - Focused AI, evaluation, XLSX, and frontend UX suites passed; 23 tests, 0 failed.
+  - API, configuration, recovery, SMTP, MFA, repository, and migration regressions passed; PostgreSQL integration remained the one expected focused skip.
+  - `npm run lint` passed; 84 files. `npm run typecheck` passed; 93 JavaScript files.
+  - `npm test` passed; 86 total, 84 passed, 2 expected infrastructure skips, 0 failed.
+  - Build, both dependency audits, claims/randomness scans, deterministic AI evaluation, and Chromium pilot smoke passed.
+  - In-app browser review passed at 390, 480, 768, 1024, 1440, and 1920 px with five synthetic evidence formats, no page-level overflow, and no browser warnings or errors.
+- PR #22:
+  - Updated, still unmerged.
+- Manual acceptance:
+  - Must resume at the repaired real Azure XLSX step, then continue obligation review, UI density review, SMTP recovery, and feedback.

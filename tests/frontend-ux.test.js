@@ -118,6 +118,62 @@ test("primary workflows expose clear purpose and primary actions", () => {
   assert.match(packetsView(), /Generate a gap analysis before exporting|Export a traceable packet/);
 });
 
+test("Evidence review uses progressive disclosure and withholds weak obligation candidates", () => {
+  Object.assign(state, {
+    user: { role: "admin", email: "pilot-admin@ergon.local", name: "Synthetic Pilot Administrator" },
+    facilities: [{ id: "facility-1", name: "Synthetic Plant", country: "US", region: "OH" }],
+    selectedFacilityId: "facility-1",
+    evidenceTypes: ["other", "osha_300_log"],
+    applicableRules: [{ id: "us-injury-recordkeeping", title: "Injury and illness recordkeeping" }],
+    evidence: [{
+      id: "evidence-1", facilityId: "facility-1", title: "Safety training matrix", evidenceType: "other",
+      fileName: "training.csv", fileSizeBytes: 120, fileReference: "private/file", scanStatus: "scan_clean",
+      status: "needs_review", archived: false, legalHoldActive: false, storageDeletionStatus: "retained"
+    }],
+    processingJobs: [],
+    aiAnalyses: [{
+      id: "analysis-1", evidenceId: "evidence-1", processingStatus: "needs_review", textExtractionStatus: "extracted",
+      extractionStatus: "extracted", extractionMethod: "csv_parser", detectedFormat: "csv", detectedEvidenceType: "osha_300_log",
+      confidence: 0.91, needsHumanReview: true, summary: "A safety training matrix with completion dates.",
+      issues: ["Finding one", "Finding two", "Finding three", "Finding four"], processingWarnings: [],
+      provenanceAnchors: [{ id: "csv-row-1", label: "CSV row 1", excerpt: "employee, course" }],
+      deterministicProfile: { wordCount: 8 }, aiProfile: { obligationMatch: {
+        classification: "WEAK_CANDIDATE", candidateRuleId: "us-injury-recordkeeping",
+        candidateTitle: "Injury and illness recordkeeping", reason: "The source lacks obligation-specific terminology."
+      } },
+      humanReviewed: false, humanOverrideRuleId: null, humanReviewNotes: null
+    }],
+    aiStatus: { enabled: true, provider: "azure_openai", model: "deployment" }
+  });
+
+  const markup = evidenceView();
+  assert.equal((markup.match(/data-ui-role="primary-workflow-state"/g) || []).length, 1);
+  assert.equal((markup.match(/Ready for review/g) || []).length, 1);
+  assert.match(markup, /Scan clean/);
+  assert.doesNotMatch(markup, /Evidence needs review/);
+  assert.match(markup, /A safety training matrix with completion dates/);
+  assert.match(markup, /Finding one[\s\S]*Finding two[\s\S]*Finding three/);
+  assert.match(markup, /data-ui-role="additional-findings"[\s\S]*Show all findings \(4\)/);
+  assert.match(markup, /Source references \(1\)/);
+  assert.match(markup, /View processing details/);
+  assert.match(markup, /No sufficiently supported obligation match/);
+  assert.match(markup, /data-match-classification="WEAK_CANDIDATE"[\s\S]*Review weak obligation candidate/);
+  assert.doesNotMatch(markup, /data-match-classification="SUPPORTED_MATCH"/);
+  assert.match(markup, /Review evidence/);
+  assert.match(markup, /data-ui-role="secondary-review-actions"[\s\S]*More review actions/);
+  assert.match(markup, /data-ui-role="secondary-lifecycle-actions"[\s\S]*File and lifecycle actions/);
+
+  state.aiAnalyses[0] = {
+    ...state.aiAnalyses[0], extractionStatus: "empty", textExtractionStatus: "empty",
+    suggestedRuleId: "us-injury-recordkeeping", suggestedObligationTitle: "Injury and illness recordkeeping",
+    aiProfile: {}
+  };
+  const failedMarkup = evidenceView();
+  assert.doesNotMatch(failedMarkup, /data-match-classification="SUPPORTED_MATCH"/);
+  assert.match(failedMarkup, /No sufficiently supported obligation match/);
+  assert.doesNotMatch(failedMarkup, /<option value="us-injury-recordkeeping" selected>/);
+});
+
 test("app shell source includes mobile navigation and visible sign out controls", async () => {
   const source = await readFile(path.resolve("apps/web/src/app.js"), "utf8");
   assert.match(source, /mobile-menu-btn/);
