@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createEvidenceAiProvider, extractEvidenceText, MockEvidenceAiProvider, OpenAiEvidenceProvider, validateEvidenceAiOutput } from "../packages/ai/src/index.js";
+import { AzureOpenAiEvidenceProvider, createEvidenceAiProvider, extractEvidenceText, groundEvidenceAiOutput, MockEvidenceAiProvider, normalizeAzureOpenAiEndpoint, OpenAiEvidenceProvider, validateEvidenceAiOutput } from "../packages/ai/src/index.js";
 import { createEvidenceAiService } from "../apps/api/src/evidence-ai-service.js";
 import { createPrivateStorage } from "../apps/api/src/storage.js";
 import { FileRepository } from "../packages/db/src/file-repository.js";
@@ -53,13 +53,17 @@ test("AI providers validate taxonomy, JSON, confidence, and bounded extraction",
   await assert.rejects(() => malformedBody.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), /malformed/);
 
   let requestBody;
+  let requestUrl;
+  let requestHeaders;
   const structured = new OpenAiEvidenceProvider({
     openAiApiKey: "test-key",
     openAiModel: "test-model",
     aiReviewRequiredThreshold: 0.7,
     aiTimeoutMs: 5_000,
     aiMaxOutputTokens: 1_500
-  }, async (_url, request) => {
+  }, async (url, request) => {
+    requestUrl = url;
+    requestHeaders = request.headers;
     requestBody = JSON.parse(request.body);
     return {
       ok: true,
@@ -69,6 +73,9 @@ test("AI providers validate taxonomy, JSON, confidence, and bounded extraction",
   });
   const structuredResult = await structured.analyzeEvidenceDocument({ text: "forklift training", evidence: {}, facility: {}, applicableRules, extraction: { deterministicProfile: {}, provenanceAnchors: [] } });
   assert.equal(requestBody.max_output_tokens, 1_500);
+  assert.equal(requestUrl, "https://api.openai.com/v1/responses");
+  assert.equal(requestHeaders.Authorization, "Bearer test-key");
+  assert.equal(requestHeaders["api-key"], undefined);
   assert.equal(requestBody.text.format.strict, true);
   assert.equal(requestBody.text.format.schema.additionalProperties, false);
   assert.deepEqual(structuredResult.providerUsage.inputTokens, 120);
@@ -98,6 +105,95 @@ test("AI providers validate taxonomy, JSON, confidence, and bounded extraction",
   assert.equal(extracted.truncated, true);
   const unsupported = await extractEvidenceText({ buffer: Buffer.from("%PDF"), fileName: "scan.pdf", evidence: { title: "Scan" }, maxChars: 100 });
   assert.equal(unsupported.textExtractionStatus, "extraction_failed");
+});
+
+test("Azure OpenAI uses the shared Responses contract with safe configuration, errors, and grounding", async () => {
+  assert.equal(normalizeAzureOpenAiEndpoint("https://example.openai.azure.com"), "https://example.openai.azure.com/openai/v1/responses");
+  assert.equal(normalizeAzureOpenAiEndpoint("https://example.openai.azure.com/openai/v1"), "https://example.openai.azure.com/openai/v1/responses");
+  assert.equal(normalizeAzureOpenAiEndpoint("https://example.openai.azure.com/openai/v1/"), "https://example.openai.azure.com/openai/v1/responses");
+  assert.equal(normalizeAzureOpenAiEndpoint("https://example.openai.azure.com/openai/v1/responses"), "https://example.openai.azure.com/openai/v1/responses");
+  assert.throws(() => normalizeAzureOpenAiEndpoint("http://example.openai.azure.com"), /HTTPS/);
+  assert.throws(() => normalizeAzureOpenAiEndpoint("not-a-url"), /valid absolute HTTPS URL/);
+  assert.throws(() => normalizeAzureOpenAiEndpoint("https://user:secret@example.openai.azure.com"), /embedded credentials/);
+  assert.throws(() => normalizeAzureOpenAiEndpoint("https://example.openai.azure.com/custom/path"), /path must be/);
+
+  const applicableRules = [{ id: "rule-1", title: "Forklift training", requiredEvidenceTypes: ["forklift_training_records"] }];
+  const azureConfig = {
+    aiEnabled: true,
+    aiProvider: "azure_openai",
+    azureOpenAiEndpoint: "https://example.openai.azure.com/",
+    azureOpenAiApiKey: "azure-test-secret",
+    azureOpenAiDeployment: "ergon-test-deployment",
+    aiReviewRequiredThreshold: 0.7,
+    aiTimeoutMs: 5_000,
+    aiMaxOutputTokens: 1_500
+  };
+  let requestUrl;
+  let request;
+  const provider = createEvidenceAiProvider(azureConfig, {
+    fetchImpl: async (url, options) => {
+      requestUrl = url;
+      request = options;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ status: "completed", output_text: JSON.stringify(output({ equipmentNames: ["Forklift", "Crane"] })), usage: { input_tokens: 40, output_tokens: 20, total_tokens: 60 } })
+      };
+    }
+  });
+  const extraction = {
+    deterministicProfile: { identifiers: [] },
+    provenanceAnchors: [{ id: "line-1", excerpt: "Forklift training completed." }]
+  };
+  const result = await provider.analyzeEvidenceDocument({ text: "Forklift training completed.", evidence: {}, facility: {}, applicableRules, extraction });
+  const body = JSON.parse(request.body);
+  assert.equal(provider.kind, "azure_openai");
+  assert.equal(requestUrl, "https://example.openai.azure.com/openai/v1/responses");
+  assert.equal(request.headers["api-key"], "azure-test-secret");
+  assert.equal(request.headers.Authorization, undefined);
+  assert.equal(body.model, "ergon-test-deployment");
+  assert.equal(body.text.format.name, "ergon_evidence_analysis");
+  assert.equal(body.text.format.strict, true);
+  assert.equal(body.text.format.schema.additionalProperties, false);
+  assert.equal(result.providerUsage.provider, "azure_openai");
+  assert.equal(result.providerUsage.deployment, "ergon-test-deployment");
+  assert.equal(result.providerUsage.promptVersion, "evidence-intelligence-v2");
+  assert.equal(result.providerUsage.schemaVersion, "evidence-intelligence-schema-v1");
+  assert.equal(result.providerUsage.inputTokens, 40);
+  const grounded = groundEvidenceAiOutput(result, extraction);
+  assert.equal(grounded.equipment.find((item) => item.value === "Forklift").supportStatus, "source_supported");
+  assert.equal(grounded.equipment.find((item) => item.value === "Crane").supportStatus, "unsupported_candidate");
+
+  const malformed = new AzureOpenAiEvidenceProvider(azureConfig, async () => ({ ok: true, status: 200, json: async () => ({ output_text: "not-json" }) }));
+  await assert.rejects(() => malformed.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), (error) => error.code === "AI_PROVIDER_INVALID_RESPONSE");
+
+  const refusal = new AzureOpenAiEvidenceProvider(azureConfig, async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ status: "completed", output: [{ content: [{ type: "refusal", refusal: "Cannot process" }] }] })
+  }));
+  await assert.rejects(() => refusal.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), (error) => error.code === "AI_PROVIDER_REFUSAL" && error.retryable === false);
+
+  const timeout = new AzureOpenAiEvidenceProvider({ ...azureConfig, aiTimeoutMs: 5 }, async (_url, options) => new Promise((_resolve, reject) => {
+    options.signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+  }));
+  await assert.rejects(() => timeout.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), (error) => error.code === "AI_PROVIDER_TIMEOUT" && error.retryable === true);
+
+  for (const [status, code, retryable] of [
+    [401, "AI_PROVIDER_AUTH_ERROR", false],
+    [403, "AI_PROVIDER_AUTH_ERROR", false],
+    [429, "AI_PROVIDER_QUOTA_OR_LIMIT", true],
+    [400, "AI_PROVIDER_BAD_REQUEST", false],
+    [503, "AI_PROVIDER_UNAVAILABLE", true]
+  ]) {
+    const failing = new AzureOpenAiEvidenceProvider(azureConfig, async () => ({ ok: false, status }));
+    await assert.rejects(() => failing.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), (error) => {
+      assert.equal(error.code, code);
+      assert.equal(error.retryable, retryable);
+      assert.equal(JSON.stringify({ message: error.message, usage: error.providerUsage }).includes("azure-test-secret"), false);
+      return true;
+    });
+  }
 });
 
 test("AI processing is auditable and human override wins over AI and deterministic suggestions", async () => {

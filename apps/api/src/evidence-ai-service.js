@@ -184,7 +184,7 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
           aiProfile: { status: "failed", errorCode: error.code || "AI_PROCESSING_ERROR", generationMetadata: error.providerUsage || null },
           error: safeError(error)
         });
-        const action = error.code === "AI_INVALID_OUTPUT" ? "ai_output_rejected_invalid_schema" : "evidence_processing_failed";
+        const action = ["AI_INVALID_OUTPUT", "AI_PROVIDER_INVALID_RESPONSE"].includes(error.code) ? "ai_output_rejected_invalid_schema" : "evidence_processing_failed";
         await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action, metadata: error.providerUsage || { errorCode: error.code || "AI_PROCESSING_ERROR" } });
         if (error.code === "AI_INVALID_OUTPUT") error.status = 502;
         throw error;

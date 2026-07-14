@@ -162,7 +162,7 @@ test("repository config requires Postgres in production without requiring unrela
   assert.equal(config.databaseUrl, productionEnv.DATABASE_URL);
 });
 
-test("AI is optional and OpenAI configuration is required only when enabled", () => {
+test("AI is optional and each provider requires only its own configuration", () => {
   const disabled = readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", AI_ENABLED: "false" });
   assert.equal(disabled.aiEnabled, false);
   assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", AI_ENABLED: "true" }), /OPENAI_API_KEY and OPENAI_MODEL/);
@@ -177,6 +177,39 @@ test("AI is optional and OpenAI configuration is required only when enabled", ()
   assert.equal(mock.aiProvider, "mock");
   assert.equal(mock.aiTimeoutMs, 30_000);
   assert.equal(mock.aiMaxOutputTokens, 2_000);
+  const openai = readConfig({
+    NODE_ENV: "development",
+    REPOSITORY_BACKEND: "file",
+    AI_ENABLED: "true",
+    AI_PROVIDER: "openai",
+    OPENAI_API_KEY: "test-openai-key",
+    OPENAI_MODEL: "test-openai-model"
+  });
+  assert.equal(openai.aiProvider, "openai");
+  assert.equal(openai.openAiModel, "test-openai-model");
+  assert.equal(openai.azureOpenAiApiKey, "");
+
+  const azureBase = {
+    NODE_ENV: "development",
+    REPOSITORY_BACKEND: "file",
+    AI_ENABLED: "true",
+    AI_PROVIDER: "azure_openai",
+    AZURE_OPENAI_ENDPOINT: "https://example.openai.azure.com",
+    AZURE_OPENAI_API_KEY: "test-azure-key",
+    AZURE_OPENAI_DEPLOYMENT: "ergon-deployment"
+  };
+  const azure = readConfig(azureBase);
+  assert.equal(azure.aiProvider, "azure_openai");
+  assert.equal(azure.azureOpenAiEndpoint, "https://example.openai.azure.com/openai/v1/responses");
+  assert.equal(azure.azureOpenAiDeployment, "ergon-deployment");
+  assert.equal(azure.openAiApiKey, "");
+  assert.equal(readConfig({ ...azureBase, AZURE_OPENAI_ENDPOINT: "https://example.openai.azure.com/openai/v1" }).azureOpenAiEndpoint, "https://example.openai.azure.com/openai/v1/responses");
+  assert.equal(readConfig({ ...azureBase, AZURE_OPENAI_ENDPOINT: "https://example.openai.azure.com/openai/v1/" }).azureOpenAiEndpoint, "https://example.openai.azure.com/openai/v1/responses");
+  for (const missingName of ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT"]) {
+    assert.throws(() => readConfig({ ...azureBase, [missingName]: "" }), new RegExp(missingName));
+  }
+  assert.throws(() => readConfig({ ...azureBase, AZURE_OPENAI_ENDPOINT: "http://example.openai.azure.com" }), /HTTPS/);
+  assert.throws(() => readConfig({ ...azureBase, AZURE_OPENAI_ENDPOINT: "not-a-url" }), /valid absolute HTTPS URL/);
   assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", AI_ENABLED: "false", AI_TIMEOUT_MS: "999" }), /AI_TIMEOUT_MS/);
   assert.throws(() => readConfig({ NODE_ENV: "development", REPOSITORY_BACKEND: "file", AI_ENABLED: "false", AI_MAX_OUTPUT_TOKENS: "20000" }), /AI_MAX_OUTPUT_TOKENS/);
   assert.throws(() => readConfig({ ...productionEnv, AI_ENABLED: "true", AI_PROVIDER: "mock" }), /not allowed in production/);

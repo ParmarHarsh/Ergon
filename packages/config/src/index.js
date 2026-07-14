@@ -1,3 +1,5 @@
+import { normalizeAzureOpenAiEndpoint } from "../../ai/src/providers.js";
+
 export function readRepositoryConfig(env = process.env) {
   const nodeEnv = env.NODE_ENV || "development";
   const isProduction = nodeEnv === "production";
@@ -139,14 +141,23 @@ export function readConfig(env = process.env) {
   if (aiReviewRequiredThreshold > aiConfidenceThreshold) {
     throw new Error("AI_REVIEW_REQUIRED_THRESHOLD must be less than or equal to AI_CONFIDENCE_THRESHOLD");
   }
-  if (aiEnabled && !["openai", "mock"].includes(aiProvider)) {
-    throw new Error("AI_PROVIDER must be openai or mock when AI is enabled");
+  if (aiEnabled && !["openai", "azure_openai", "mock"].includes(aiProvider)) {
+    throw new Error("AI_PROVIDER must be mock, openai, or azure_openai when AI is enabled");
   }
   if (isSecureDeployment && aiEnabled && aiProvider === "mock") {
     throw new Error("AI_PROVIDER=mock is not allowed in production");
   }
   if (aiEnabled && aiProvider === "openai" && (!env.OPENAI_API_KEY || !env.OPENAI_MODEL)) {
     throw new Error("OPENAI_API_KEY and OPENAI_MODEL are required when AI_ENABLED=true and AI_PROVIDER=openai");
+  }
+  let azureOpenAiEndpoint = env.AZURE_OPENAI_ENDPOINT || "";
+  if (aiEnabled && aiProvider === "azure_openai") {
+    const requiredAzureVariables = ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT"];
+    const missingAzureVariables = requiredAzureVariables.filter((name) => !env[name]);
+    if (missingAzureVariables.length > 0) {
+      throw new Error(`Missing required Azure OpenAI environment variables: ${missingAzureVariables.join(", ")}`);
+    }
+    azureOpenAiEndpoint = normalizeAzureOpenAiEndpoint(azureOpenAiEndpoint);
   }
 
   const loginRateLimitMaxAttempts = boundedInteger(env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || "10", "LOGIN_RATE_LIMIT_MAX_ATTEMPTS", 3, 1_000);
@@ -249,7 +260,10 @@ export function readConfig(env = process.env) {
     aiConfidenceThreshold,
     aiReviewRequiredThreshold,
     openAiApiKey: env.OPENAI_API_KEY || "",
-    openAiModel: env.OPENAI_MODEL || ""
+    openAiModel: env.OPENAI_MODEL || "",
+    azureOpenAiEndpoint,
+    azureOpenAiApiKey: env.AZURE_OPENAI_API_KEY || "",
+    azureOpenAiDeployment: env.AZURE_OPENAI_DEPLOYMENT || ""
   };
 }
 

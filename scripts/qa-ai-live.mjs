@@ -5,15 +5,26 @@ import { readConfig } from "../packages/config/src/index.js";
 if (process.env.ERGON_LIVE_AI_ACCEPTANCE !== "true") {
   fail("Refusing live provider calls. Set ERGON_LIVE_AI_ACCEPTANCE=true to acknowledge that five synthetic requests may incur cost.");
 }
-if (process.env.AI_ENABLED !== "true" || process.env.AI_PROVIDER !== "openai") {
-  fail("Live acceptance requires AI_ENABLED=true and AI_PROVIDER=openai.");
+if (process.env.AI_ENABLED !== "true" || !["openai", "azure_openai"].includes(process.env.AI_PROVIDER)) {
+  fail("Live acceptance requires AI_ENABLED=true and AI_PROVIDER=openai or AI_PROVIDER=azure_openai.");
 }
-if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL) {
-  fail("Live acceptance requires private OPENAI_API_KEY and OPENAI_MODEL environment values.");
+if (process.env.AI_PROVIDER === "openai" && (!process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL)) {
+  failWithClassification("READY_MISSING_API_KEY", "Live OpenAI acceptance requires private OPENAI_API_KEY and OPENAI_MODEL environment values.");
+}
+if (process.env.AI_PROVIDER === "azure_openai") {
+  const missing = ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT"].filter((name) => !process.env[name]);
+  if (missing.length > 0) failWithClassification("READY_MISSING_AZURE_CONFIGURATION", `Live Azure OpenAI acceptance is missing: ${missing.join(", ")}.`);
 }
 
-const config = readConfig(process.env);
-const provider = createEvidenceAiProvider(config);
+let config;
+let provider;
+try {
+  config = readConfig(process.env);
+  provider = createEvidenceAiProvider(config);
+} catch (error) {
+  const classification = process.env.AI_PROVIDER === "azure_openai" ? "READY_MISSING_AZURE_CONFIGURATION" : "BLOCKED_PROVIDER_CONFIGURATION";
+  failWithClassification(classification, error.message);
+}
 const facility = { name: "Synthetic Acceptance Plant", country: "US", region: "OH", industry: "industrial_manufacturing" };
 const applicableRules = [
   rule("synthetic-forklift", "Forklift operator training", "forklift_training_records"),
@@ -38,34 +49,52 @@ for (const fixture of fixtures) {
     fail(`Synthetic ${fixture.format} extraction did not produce bounded text.`);
   }
   const evidence = { title: fixture.title, evidenceType: "other", fileName: fixture.fileName };
-  const output = await provider.analyzeEvidenceDocument({ text: extraction.text, evidence, facility, applicableRules, extraction });
-  const usage = output.providerUsage;
-  cases.push({
-    id: fixture.format,
-    output,
-    extraction,
-    applicableRules,
-    expectedEvidenceType: fixture.expectedEvidenceType,
-    expectedFacts: fixture.expectedFacts,
-    expectHumanReview: false
-  });
-  safeRuns.push({
-    format: fixture.format,
-    detectedEvidenceType: output.detectedEvidenceType,
-    needsHumanReview: output.needsHumanReview,
-    latencyMs: usage?.latencyMs ?? null,
-    inputTokens: usage?.inputTokens ?? null,
-    outputTokens: usage?.outputTokens ?? null,
-    totalTokens: usage?.totalTokens ?? null
-  });
+  try {
+    const output = await provider.analyzeEvidenceDocument({ text: extraction.text, evidence, facility, applicableRules, extraction });
+    const usage = output.providerUsage;
+    cases.push({
+      id: fixture.format,
+      output,
+      extraction,
+      applicableRules,
+      expectedEvidenceType: fixture.expectedEvidenceType,
+      expectedFacts: fixture.expectedFacts,
+      expectHumanReview: false
+    });
+    safeRuns.push({
+      format: fixture.format,
+      success: true,
+      detectedEvidenceType: output.detectedEvidenceType,
+      needsHumanReview: output.needsHumanReview,
+      schemaValid: true,
+      latencyMs: usage?.latencyMs ?? null,
+      inputTokens: usage?.inputTokens ?? null,
+      outputTokens: usage?.outputTokens ?? null,
+      totalTokens: usage?.totalTokens ?? null
+    });
+  } catch (error) {
+    const usage = error.providerUsage;
+    safeRuns.push({
+      format: fixture.format,
+      success: false,
+      schemaValid: false,
+      errorCode: error.code || "AI_PROVIDER_ERROR",
+      latencyMs: usage?.latencyMs ?? null,
+      inputTokens: usage?.inputTokens ?? null,
+      outputTokens: usage?.outputTokens ?? null,
+      totalTokens: usage?.totalTokens ?? null
+    });
+  }
 }
 
 const evaluation = evaluateEvidenceCases(cases);
-const passed = evaluation.metrics.schemaValidity === 1 && evaluation.metrics.documentTypeAccuracy >= 0.6;
+const passed = cases.length === fixtures.length && evaluation.metrics.schemaValidity === 1 && evaluation.metrics.documentTypeAccuracy >= 0.6;
+const classification = liveClassification(provider.kind, passed, safeRuns);
 process.stdout.write(`${JSON.stringify({
-  classification: passed ? "PASSED_REAL_OPENAI" : "FAILED_PROVIDER_REQUEST",
+  classification,
   provider: provider.kind,
   model: provider.model,
+  deployment: provider.deployment || null,
   promptVersion: cases[0]?.output.providerUsage?.promptVersion,
   schemaVersion: cases[0]?.output.providerUsage?.schemaVersion,
   syntheticOnly: true,
@@ -174,4 +203,18 @@ function pdf(value) {
 function fail(message) {
   process.stderr.write(`${message}\n`);
   process.exit(1);
+}
+
+function failWithClassification(classification, message) {
+  process.stderr.write(`${JSON.stringify({ classification, message })}\n`);
+  process.exit(1);
+}
+
+function liveClassification(providerKind, passed, runs) {
+  if (passed) return providerKind === "azure_openai" ? "PASSED_REAL_AZURE_OPENAI" : "PASSED_REAL_OPENAI";
+  if (providerKind !== "azure_openai") return "FAILED_PROVIDER_REQUEST";
+  const errorCodes = new Set(runs.map((run) => run.errorCode).filter(Boolean));
+  if (errorCodes.has("AI_PROVIDER_AUTH_ERROR")) return "FAILED_AZURE_AUTHENTICATION";
+  if (errorCodes.has("AI_PROVIDER_BAD_REQUEST")) return "BLOCKED_AZURE_DEPLOYMENT_OR_REGION";
+  return "FAILED_AZURE_PROVIDER_REQUEST";
 }

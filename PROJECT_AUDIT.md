@@ -1672,3 +1672,79 @@ Safe next action:
   - Required for live OpenAI, real inbox arrival, real-email account provisioning, and the complete 40-step acceptance walkthrough.
 - Recommended next phase:
   - Controlled private real-provider acceptance execution and evidence-based go/no-go review.
+
+## Phase 25B Azure OpenAI provider support note
+
+- Phase 25 branch:
+  - `phase-25-real-ai-email-acceptance`.
+- Existing Phase 25 PR:
+  - `#22`.
+- New branch created:
+  - No.
+- New PR created:
+  - No.
+- Standard OpenAI preserved:
+  - Yes. The standard `https://api.openai.com/v1/responses` endpoint, Bearer authentication, `OPENAI_MODEL`, strict schema, validation, grounding, and review path remain supported.
+- Azure OpenAI provider added:
+  - Yes, as `AI_PROVIDER=azure_openai` within the existing provider factory and shared Responses implementation.
+- Azure API:
+  - Responses API v1.
+- Azure authentication implemented:
+  - API key through the `api-key` header; Azure keys are never sent as Bearer tokens in this flow.
+- Azure endpoint:
+  - Configurable, HTTPS-only, credential-free, and normalized to `/openai/v1/responses`.
+- Azure deployment:
+  - Configurable through `AZURE_OPENAI_DEPLOYMENT` and sent as the Responses `model` value.
+- Shared schema:
+  - `evidence-intelligence-schema-v1` reused without an Azure fork.
+- Shared prompt version:
+  - `evidence-intelligence-v2` reused without provider-specific divergence.
+- Shared grounding:
+  - Existing `source_supported`, `unsupported_candidate`, and `invalid_provenance` logic reused.
+- Shared provenance:
+  - Existing deterministic TXT line, CSV row, PDF page, DOCX paragraph, and XLSX sheet/cell anchors reused; provider citations are not trusted directly.
+- Shared human review:
+  - Existing review, override, persistence, and audit path remains authoritative.
+- AI-disabled fallback:
+  - Preserved.
+- Live Azure acceptance:
+  - `READY_MISSING_AZURE_CONFIGURATION`.
+- TXT live Azure:
+  - Not run; private Azure configuration was unavailable.
+- CSV live Azure:
+  - Not run; private Azure configuration was unavailable.
+- PDF live Azure:
+  - Not run; private Azure configuration was unavailable.
+- DOCX live Azure:
+  - Not run; private Azure configuration was unavailable.
+- XLSX live Azure:
+  - Not run; private Azure configuration was unavailable.
+- Azure key committed:
+  - No.
+- Azure key exposed in browser:
+  - No.
+- Normal CI uses live Azure:
+  - No.
+- Entra ID implemented:
+  - No.
+- Future production identity direction:
+  - Microsoft Entra ID / Managed Identity where appropriate.
+- Migration:
+  - None.
+- Migrations 0001–0009 changed:
+  - No.
+- Dependencies:
+  - None; native `fetch` and existing packages were reused.
+- Full verification:
+  - Node `v24.4.0`; npm `11.4.2`.
+  - Provider/config/schema/grounding/evaluation focus passed; 23 tests, 0 failed.
+  - Auth, recovery, SMTP, MFA, repository, and migration regressions passed; 20 passed with one expected PostgreSQL integration skip.
+  - `npm run lint` passed; 84 files.
+  - `npm run typecheck` passed; 93 JavaScript files.
+  - `npm test` passed; 83 total, 81 passed, 2 expected infrastructure skips, 0 failed.
+  - `npm run build`, both dependency audits, claims/randomness scans, deterministic AI evaluation, and Chromium pilot smoke passed.
+  - Missing Azure configuration refusal passed with `READY_MISSING_AZURE_CONFIGURATION` and zero provider calls.
+- Existing PR updated:
+  - Yes. This Phase 25B change set continues the existing PR `#22`; no duplicate PR is used.
+- Manual acceptance:
+  - Required after private Azure configuration, followed by real SMTP and account acceptance.

@@ -2,18 +2,21 @@ import { AI_PROMPT_VERSION, AI_SCHEMA_VERSION, EVIDENCE_AI_JSON_SCHEMA, invalidA
 
 const SYSTEM_INSTRUCTIONS = `You are an evidence classification service for industrial audit preparation. Classify only from the supplied taxonomy and applicable obligation list. Extract only fields explicitly supported by the document text or supplied source anchors. Use null or empty arrays when unknown, abstain when evidence is insufficient, and set needsHumanReview when content is ambiguous. Never claim compliance, legal applicability, legal sufficiency, certification, regulator approval, or that no further action is needed. Do not invent citations. Suggestions require human review and deterministic rules remain authoritative.`;
 
-export class OpenAiEvidenceProvider {
-  constructor(config, fetchImpl = globalThis.fetch) {
-    if (!config.openAiApiKey) throw providerConfigError("OPENAI_API_KEY is required for the OpenAI AI provider");
-    if (!config.openAiModel) throw providerConfigError("OPENAI_MODEL is required for the OpenAI AI provider");
-    if (typeof fetchImpl !== "function") throw providerConfigError("A fetch implementation is required for the OpenAI AI provider");
-    this.apiKey = config.openAiApiKey;
-    this.model = config.openAiModel;
+const OPENAI_RESPONSES_ENDPOINT = "https://api.openai.com/v1/responses";
+
+class ResponsesEvidenceProvider {
+  constructor(config, options, fetchImpl = globalThis.fetch) {
+    if (typeof fetchImpl !== "function") throw providerConfigError(`A fetch implementation is required for the ${options.providerLabel} AI provider`);
+    this.model = options.model;
+    this.deployment = options.deployment || null;
+    this.endpoint = options.endpoint;
+    this.headers = Object.freeze({ ...options.headers, "Content-Type": "application/json" });
     this.fetch = fetchImpl;
     this.reviewRequiredThreshold = config.aiReviewRequiredThreshold;
     this.timeoutMs = config.aiTimeoutMs ?? 30_000;
     this.maxOutputTokens = config.aiMaxOutputTokens ?? 2_000;
-    this.kind = "openai";
+    this.kind = options.kind;
+    this.providerLabel = options.providerLabel;
   }
 
   async analyzeEvidenceDocument({ text, evidence, facility, applicableRules, extraction = null }) {
@@ -21,55 +24,42 @@ export class OpenAiEvidenceProvider {
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     const startedAt = Date.now();
     try {
-      const response = await this.fetch("https://api.openai.com/v1/responses", {
+      const response = await this.fetch(this.endpoint, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json"
-        },
+        headers: this.headers,
         signal: controller.signal,
-        body: JSON.stringify({
-          model: this.model,
-          instructions: SYSTEM_INSTRUCTIONS,
-          input: buildEvidencePrompt({ text, evidence, facility, applicableRules, extraction }),
-          max_output_tokens: this.maxOutputTokens,
-          text: {
-            format: {
-              type: "json_schema",
-              name: "ergon_evidence_analysis",
-              strict: true,
-              schema: EVIDENCE_AI_JSON_SCHEMA
-            }
-          }
-        })
+        body: JSON.stringify(buildResponsesRequest(this, { text, evidence, facility, applicableRules, extraction }))
       });
       if (!response.ok) {
-        const error = new Error(`OpenAI evidence analysis failed with status ${response.status}`);
-        error.status = 502;
-        error.code = "AI_PROVIDER_ERROR";
-        error.retryable = response.status === 408 || response.status === 409 || response.status === 429 || response.status >= 500;
-        throw error;
+        throw providerHttpError(this.providerLabel, response.status);
       }
       let payload;
       try {
         payload = await response.json();
       } catch {
-        throw invalidAiOutput("OpenAI response body was not valid JSON");
+        throw invalidProviderResponse(`${this.providerLabel} response body was not valid JSON`);
       }
-      if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw invalidAiOutput("OpenAI response body was malformed");
-      assertCompleteResponse(payload);
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw invalidProviderResponse(`${this.providerLabel} response body was malformed`);
+      assertCompleteResponse(payload, this.providerLabel);
       const outputText = getOutputText(payload);
-      if (!outputText) throw invalidAiOutput("OpenAI response did not contain structured output text");
+      if (!outputText) throw invalidProviderResponse(`${this.providerLabel} response did not contain structured output text`);
       let parsed;
       try {
         parsed = JSON.parse(outputText);
       } catch {
-        throw invalidAiOutput("OpenAI response was not valid JSON");
+        throw invalidProviderResponse(`${this.providerLabel} response was not valid JSON`);
       }
-      const validated = validateEvidenceAiOutput(parsed, { applicableRules, reviewRequiredThreshold: this.reviewRequiredThreshold });
+      let validated;
+      try {
+        validated = validateEvidenceAiOutput(parsed, { applicableRules, reviewRequiredThreshold: this.reviewRequiredThreshold });
+      } catch (error) {
+        if (error.code !== "AI_INVALID_OUTPUT") throw error;
+        throw invalidProviderResponse(`${this.providerLabel} structured output failed ERGON schema validation`);
+      }
       return attachProviderUsage(validated, {
         provider: this.kind,
         model: this.model,
+        deployment: this.deployment,
         promptVersion: AI_PROMPT_VERSION,
         schemaVersion: AI_SCHEMA_VERSION,
         latencyMs: Date.now() - startedAt,
@@ -81,18 +71,56 @@ export class OpenAiEvidenceProvider {
       });
     } catch (error) {
       if (error.name === "AbortError") {
-        const timeoutError = new Error("OpenAI evidence analysis timed out");
+        const timeoutError = new Error(`${this.providerLabel} evidence analysis timed out`);
         timeoutError.status = 504;
         timeoutError.code = "AI_PROVIDER_TIMEOUT";
         timeoutError.retryable = true;
         attachFailureUsage(timeoutError, this, startedAt);
         throw timeoutError;
       }
+      if (!error.code) {
+        const unavailableError = new Error(`${this.providerLabel} evidence analysis was unavailable`);
+        unavailableError.status = 502;
+        unavailableError.code = "AI_PROVIDER_UNAVAILABLE";
+        unavailableError.retryable = true;
+        attachFailureUsage(unavailableError, this, startedAt);
+        throw unavailableError;
+      }
       attachFailureUsage(error, this, startedAt);
       throw error;
     } finally {
       clearTimeout(timeout);
     }
+  }
+}
+
+export class OpenAiEvidenceProvider extends ResponsesEvidenceProvider {
+  constructor(config, fetchImpl = globalThis.fetch) {
+    if (!config.openAiApiKey) throw providerConfigError("OPENAI_API_KEY is required for the OpenAI AI provider");
+    if (!config.openAiModel) throw providerConfigError("OPENAI_MODEL is required for the OpenAI AI provider");
+    super(config, {
+      kind: "openai",
+      providerLabel: "OpenAI",
+      endpoint: OPENAI_RESPONSES_ENDPOINT,
+      model: config.openAiModel,
+      headers: { Authorization: `Bearer ${config.openAiApiKey}` }
+    }, fetchImpl);
+  }
+}
+
+export class AzureOpenAiEvidenceProvider extends ResponsesEvidenceProvider {
+  constructor(config, fetchImpl = globalThis.fetch) {
+    if (!config.azureOpenAiEndpoint) throw providerConfigError("AZURE_OPENAI_ENDPOINT is required for the Azure OpenAI AI provider");
+    if (!config.azureOpenAiApiKey) throw providerConfigError("AZURE_OPENAI_API_KEY is required for the Azure OpenAI AI provider");
+    if (!config.azureOpenAiDeployment) throw providerConfigError("AZURE_OPENAI_DEPLOYMENT is required for the Azure OpenAI AI provider");
+    super(config, {
+      kind: "azure_openai",
+      providerLabel: "Azure OpenAI",
+      endpoint: normalizeAzureOpenAiEndpoint(config.azureOpenAiEndpoint),
+      model: config.azureOpenAiDeployment,
+      deployment: config.azureOpenAiDeployment,
+      headers: { "api-key": config.azureOpenAiApiKey }
+    }, fetchImpl);
   }
 }
 
@@ -129,11 +157,47 @@ export function createEvidenceAiProvider(config, options = {}) {
   if (!config.aiEnabled) return { kind: "disabled", model: null };
   if (config.aiProvider === "mock") return new MockEvidenceAiProvider(config, options.mockResolver);
   if (config.aiProvider === "openai") return new OpenAiEvidenceProvider(config, options.fetchImpl);
+  if (config.aiProvider === "azure_openai") return new AzureOpenAiEvidenceProvider(config, options.fetchImpl);
   throw providerConfigError(`Unsupported AI provider: ${config.aiProvider}`);
 }
 
 export function providerMetadata(provider) {
-  return { provider: provider.kind, model: provider.model || null, promptVersion: AI_PROMPT_VERSION, schemaVersion: AI_SCHEMA_VERSION };
+  return { provider: provider.kind, model: provider.model || null, deployment: provider.deployment || null, promptVersion: AI_PROMPT_VERSION, schemaVersion: AI_SCHEMA_VERSION };
+}
+
+export function normalizeAzureOpenAiEndpoint(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw providerConfigError("AZURE_OPENAI_ENDPOINT must be a valid absolute HTTPS URL");
+  }
+  if (url.protocol !== "https:") throw providerConfigError("AZURE_OPENAI_ENDPOINT must use HTTPS");
+  if (url.username || url.password) throw providerConfigError("AZURE_OPENAI_ENDPOINT must not contain embedded credentials");
+  if (url.search || url.hash) throw providerConfigError("AZURE_OPENAI_ENDPOINT must not contain a query string or fragment");
+  const path = url.pathname.replace(/\/+$/, "");
+  if (path === "" || path === "/") url.pathname = "/openai/v1/responses";
+  else if (path === "/openai/v1") url.pathname = "/openai/v1/responses";
+  else if (path === "/openai/v1/responses") url.pathname = path;
+  else throw providerConfigError("AZURE_OPENAI_ENDPOINT path must be empty, /openai/v1, or /openai/v1/responses");
+  return url.toString();
+}
+
+function buildResponsesRequest(provider, context) {
+  return {
+    model: provider.model,
+    instructions: SYSTEM_INSTRUCTIONS,
+    input: buildEvidencePrompt(context),
+    max_output_tokens: provider.maxOutputTokens,
+    text: {
+      format: {
+        type: "json_schema",
+        name: "ergon_evidence_analysis",
+        strict: true,
+        schema: EVIDENCE_AI_JSON_SCHEMA
+      }
+    }
+  };
 }
 
 function buildEvidencePrompt({ text, evidence, facility, applicableRules, extraction }) {
@@ -204,10 +268,10 @@ function getOutputText(payload) {
   return null;
 }
 
-function assertCompleteResponse(payload) {
+function assertCompleteResponse(payload, providerLabel) {
   if (payload?.status === "incomplete") {
     const reason = payload.incomplete_details?.reason || "unknown";
-    const error = invalidAiOutput(`OpenAI response was incomplete (${reason})`);
+    const error = invalidProviderResponse(`${providerLabel} response was incomplete (${reason})`);
     error.code = "AI_PROVIDER_INCOMPLETE";
     error.status = 502;
     error.retryable = reason !== "content_filter";
@@ -216,7 +280,7 @@ function assertCompleteResponse(payload) {
   for (const output of payload?.output || []) {
     for (const content of output.content || []) {
       if (content.type === "refusal" || typeof content.refusal === "string") {
-        const error = invalidAiOutput("OpenAI refused the evidence analysis request");
+        const error = invalidProviderResponse(`${providerLabel} refused the evidence analysis request`);
         error.code = "AI_PROVIDER_REFUSAL";
         error.status = 502;
         error.retryable = false;
@@ -241,6 +305,7 @@ function attachFailureUsage(error, provider, startedAt) {
     value: Object.freeze({
       provider: provider.kind,
       model: provider.model,
+      deployment: provider.deployment || null,
       promptVersion: AI_PROMPT_VERSION,
       schemaVersion: AI_SCHEMA_VERSION,
       latencyMs: Date.now() - startedAt,
@@ -253,6 +318,39 @@ function attachFailureUsage(error, provider, startedAt) {
     }),
     enumerable: false
   });
+}
+
+function providerHttpError(providerLabel, status) {
+  const error = new Error(`${providerLabel} evidence analysis failed with status ${status}`);
+  error.status = status === 408 || status === 504 ? 504 : 502;
+  if (status === 401 || status === 403) {
+    error.code = "AI_PROVIDER_AUTH_ERROR";
+    error.retryable = false;
+  } else if (status === 429) {
+    error.code = "AI_PROVIDER_QUOTA_OR_LIMIT";
+    error.retryable = true;
+  } else if (status === 408 || status === 504) {
+    error.code = "AI_PROVIDER_TIMEOUT";
+    error.retryable = true;
+  } else if (status === 400 || status === 404 || status === 422) {
+    error.code = "AI_PROVIDER_BAD_REQUEST";
+    error.retryable = false;
+  } else if (status >= 500) {
+    error.code = "AI_PROVIDER_UNAVAILABLE";
+    error.retryable = true;
+  } else {
+    error.code = "AI_PROVIDER_ERROR";
+    error.retryable = false;
+  }
+  return error;
+}
+
+function invalidProviderResponse(message) {
+  const error = invalidAiOutput(message);
+  error.code = "AI_PROVIDER_INVALID_RESPONSE";
+  error.status = 502;
+  error.retryable = false;
+  return error;
 }
 
 function providerConfigError(message) {
