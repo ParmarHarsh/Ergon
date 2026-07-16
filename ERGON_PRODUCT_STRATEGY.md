@@ -66,9 +66,9 @@ The long-term workflow is:
 INGEST -> UNDERSTAND -> MAP -> DETECT -> PRIORITIZE -> RECOMMEND -> DRAFT -> REVIEW -> ACT -> PROVE -> MONITOR -> RE-EVALUATE
 ```
 
-Current implementation supports a narrower version: facilities, evidence, verified multi-format uploads and provenance-backed extraction, mock or optional AI analysis foundations, review queue, deterministic gap analysis, action plan, audit packets, lifecycle controls, and system health. Planned and long-term phases expand OCR, regulatory intelligence, integrations, and monitoring.
+Current implementation supports a narrower version: facilities, evidence, verified multi-format uploads and provenance-backed extraction, mock or optional provider-portable AI analysis foundations, review queue, deterministic gap analysis, action plan, audit packets, lifecycle controls, and system health. Planned and long-term phases expand OCR, regulatory intelligence, integrations, and monitoring.
 
-Phase 24 is the first concrete `INGEST → UNDERSTAND` implementation: it turns supported private documents into bounded normalized content, format-specific source anchors, deterministic profiles, optional AI candidates, and reviewable version history. `MAP → DETECT → PRIORITIZE → RECOMMEND → DRAFT` remain limited to the existing starter-rule and audit-readiness foundations; `MONITOR → RE-EVALUATE` remains future source-backed regulatory work.
+Phase 24 established `INGEST → UNDERSTAND`; Phase 25 makes real-provider analysis ready for controlled acceptance with strict structured output, server validation, grounding, evaluation, and cost bounds. Standard OpenAI and Azure OpenAI are interchangeable infrastructure providers under one ERGON-owned evidence-intelligence contract; neither changes deterministic evidence or human authority, and Azure is not production-proven until live acceptance succeeds. `INGEST` is an implemented foundation. `UNDERSTAND` is implemented when a real provider is configured, while deterministic fallback remains available. `MAP → DETECT → PRIORITIZE → RECOMMEND` remain partial starter-rule/audit-readiness foundations, `DRAFT` remains developing, and `MONITOR → RE-EVALUATE` remains future source-backed regulatory work.
 
 ## The Ergon compliance graph
 
@@ -143,7 +143,7 @@ Ergon should understand each facility's jurisdiction, industry, processes, equip
 
 ## Evidence intelligence
 
-Evidence intelligence should classify documents, extract metadata, identify entities, summarize content, detect stale or weak evidence, map evidence to candidate obligations, preserve versions, and route uncertain items to humans. Current support includes verified upload intake; local/private storage; scan-gated processing; bounded TXT, Markdown, CSV, text-layer PDF, DOCX, and XLSX extraction; deterministic profiles; page/line/row/paragraph/sheet-cell provenance; optional mock/OpenAI-backed candidate analysis; review queues; immutable analysis versions; and human overrides that remain authoritative across reprocessing. Images and textless PDFs are honestly marked `OCR_REQUIRED`; production OCR is not yet implemented.
+Evidence intelligence should classify documents, extract metadata, identify entities, summarize content, detect stale or weak evidence, map evidence to candidate obligations, preserve versions, and route uncertain items to humans. Current support includes verified upload intake; local/private storage; scan-gated processing; bounded TXT, Markdown, CSV, text-layer PDF, DOCX, and XLSX extraction; deterministic profiles; page/line/row/paragraph/sheet-cell provenance; optional mock, standard OpenAI, or Azure OpenAI candidate analysis through one shared contract; review queues; immutable analysis versions; and human overrides that remain authoritative across reprocessing. Images and textless PDFs are honestly marked `OCR_REQUIRED`; production OCR is not yet implemented.
 
 ## Obligation and applicability intelligence
 

@@ -1593,3 +1593,291 @@ Safe next action:
   - `NO_GO` pending manufacturer acceptance plus production infrastructure, monitoring, backups, malware scanning, and operational readiness work.
 - Recommended next phase:
   - Manufacturer evidence-intelligence acceptance validation and production-readiness gap review.
+
+## Phase 25 real AI, email recovery, and end-to-end acceptance note
+
+- Phase 24 merged:
+  - Yes. Commit `f1293cfe53c99597b89ec7bf119593f1c44a2b4d` was confirmed reachable from `main` before the Phase 25 branch was created.
+- Real AI architecture:
+  - The existing server-side provider and evidence-processing service were retained. Deterministic bounded extraction, normalized content, source anchors, and deterministic profiles feed one optional AI provider call, followed by server validation, grounding, review, persistence, and audit.
+- AI-first product decision:
+  - Real customer-facing mode normally enables AI.
+  - Deterministic fallback remains supported.
+- AI provider:
+  - Existing native `fetch` OpenAI provider; no second abstraction or SDK dependency was added.
+- API path:
+  - OpenAI Responses API at `v1/responses` with strict `text.format` JSON Schema output.
+- Model configuration:
+  - `OPENAI_MODEL` remains required and configurable. `gpt-5.6-terra` is the documented acceptance starting point because it currently balances intelligence and cost while supporting Responses and Structured Outputs; it is not hardcoded.
+- Structured output:
+  - Strict schema with every field required and `additionalProperties: false`; string lengths, array sizes, enums, dates, confidence, applicable rule IDs, missing fields, and unexpected fields are validated again server-side.
+- Schema validation:
+  - Valid output, missing fields, unexpected fields, wrong enum/type/range, oversized arrays, malformed JSON, refusal, incomplete response, and timeout paths are covered.
+- Prompt/schema versioning:
+  - Prompt version `evidence-intelligence-v2` and schema version `evidence-intelligence-schema-v1` are retained with safe provider/model generation metadata.
+- Provenance validation:
+  - Candidate facts are source-supported only when an existing extracted anchor excerpt contains the candidate. Unknown anchor IDs or mismatched excerpts classify as `invalid_provenance`; facts without anchors remain `unsupported_candidate`.
+- Abstention:
+  - The prompt explicitly permits unknown/insufficient evidence and requires human review for ambiguity; deterministic evaluation includes an abstention case.
+- Cost guardrails:
+  - Default maximum normalized input is 12,000 characters, output is 2,000 tokens, provider timeout is 30 seconds, queue concurrency defaults to one, and there is exactly one provider call per queue attempt.
+- Timeout/retry:
+  - Provider calls abort at the configured bounded timeout. There is no nested HTTP retry loop; the existing queue supplies at most three attempts by default and respects non-retryable refusals/content failures.
+- Evaluation harness:
+  - Repository-local deterministic evaluation measures schema validity, document type, fact recall, unsupported candidates, provenance coverage/validity, abstention, and human-review flags. Optional `npm run qa:ai-live` makes exactly five explicitly opted-in synthetic format requests and is excluded from normal tests/CI.
+- Real AI acceptance:
+  - `READY_MISSING_API_KEY`.
+- Real SMTP:
+  - `READY_MISSING_SMTP_CONFIGURATION`. Port 465 uses implicit TLS; other TLS-enabled ports require STARTTLS. Certificate and hostname verification remain enabled.
+- Real inbox delivery:
+  - `READY_MISSING_SMTP_CONFIGURATION`.
+- Real account login:
+  - Not run with a real email/password because no private acceptance identity was configured. Synthetic/local auth regression passed.
+- Real password reset:
+  - Not run against a real inbox. Synthetic reset, single-use token, session revocation, and MFA-preservation regressions passed.
+- Old password after reset:
+  - Synthetic regression passed; real acceptance not run.
+- New password after reset:
+  - Synthetic regression passed; real acceptance not run.
+- UX:
+  - Add evidence duplication: the header CTA is hidden at widths of 1200 px and above where the uploader is immediately visible; it remains at 1024 px and below where it provides useful jump/focus behavior.
+  - Evidence density: per-item reviewer controls now use collapsed progressive disclosure.
+  - Route fade: the existing 140 ms transition is opacity-only with no hierarchy-implying movement and retains reduced-motion handling.
+- Migration:
+  - None.
+- Migrations 0001–0009 changed:
+  - No.
+- Dependencies:
+  - No dependency or lockfile changes; existing native `fetch`, Nodemailer, parsers, and OOXML libraries were reused.
+- Production deployment:
+  - No.
+- Infrastructure provisioned:
+  - No.
+- Pilot status:
+  - `NO_GO`.
+- Verification:
+  - Node `v24.4.0`; npm `11.4.2`.
+  - `npm run lint` passed; 84 files.
+  - `npm run typecheck` passed; 93 JavaScript files.
+  - Focused AI/evidence/processing tests passed; 20 tests.
+  - Recovery, SMTP, API, MFA, repository, and migration regressions passed; one expected PostgreSQL integration skip.
+  - `npm test` passed; 82 total, 80 passed, 2 expected infrastructure skips, 0 failed.
+  - `npm run build` passed.
+  - `npm audit` and `npm audit --omit=dev` passed with 0 vulnerabilities.
+  - `npm run scan:claims` passed; 84 files.
+  - `npm run scan:random` passed; 1 test.
+  - `npm run qa:pilot` passed; 1 Chromium test.
+  - In-app browser review passed at 390, 480, 768, 1024, 1280, 1440, and 1920 px with no page overflow; five top-level routes used an opacity-only transition with no transform.
+- Manual acceptance:
+  - Required for live OpenAI, real inbox arrival, real-email account provisioning, and the complete 40-step acceptance walkthrough.
+- Recommended next phase:
+  - Controlled private real-provider acceptance execution and evidence-based go/no-go review.
+
+## Phase 25B Azure OpenAI provider support note
+
+- Phase 25 branch:
+  - `phase-25-real-ai-email-acceptance`.
+- Existing Phase 25 PR:
+  - `#22`.
+- New branch created:
+  - No.
+- New PR created:
+  - No.
+- Standard OpenAI preserved:
+  - Yes. The standard `https://api.openai.com/v1/responses` endpoint, Bearer authentication, `OPENAI_MODEL`, strict schema, validation, grounding, and review path remain supported.
+- Azure OpenAI provider added:
+  - Yes, as `AI_PROVIDER=azure_openai` within the existing provider factory and shared Responses implementation.
+- Azure API:
+  - Responses API v1.
+- Azure authentication implemented:
+  - API key through the `api-key` header; Azure keys are never sent as Bearer tokens in this flow.
+- Azure endpoint:
+  - Configurable, HTTPS-only, credential-free, and normalized to `/openai/v1/responses`.
+- Azure deployment:
+  - Configurable through `AZURE_OPENAI_DEPLOYMENT` and sent as the Responses `model` value.
+- Shared schema:
+  - `evidence-intelligence-schema-v1` reused without an Azure fork.
+- Shared prompt version:
+  - `evidence-intelligence-v2` reused without provider-specific divergence.
+- Shared grounding:
+  - Existing `source_supported`, `unsupported_candidate`, and `invalid_provenance` logic reused.
+- Shared provenance:
+  - Existing deterministic TXT line, CSV row, PDF page, DOCX paragraph, and XLSX sheet/cell anchors reused; provider citations are not trusted directly.
+- Shared human review:
+  - Existing review, override, persistence, and audit path remains authoritative.
+- AI-disabled fallback:
+  - Preserved.
+- Live Azure acceptance:
+  - `READY_MISSING_AZURE_CONFIGURATION`.
+- TXT live Azure:
+  - Not run; private Azure configuration was unavailable.
+- CSV live Azure:
+  - Not run; private Azure configuration was unavailable.
+- PDF live Azure:
+  - Not run; private Azure configuration was unavailable.
+- DOCX live Azure:
+  - Not run; private Azure configuration was unavailable.
+- XLSX live Azure:
+  - Not run; private Azure configuration was unavailable.
+- Azure key committed:
+  - No.
+- Azure key exposed in browser:
+  - No.
+- Normal CI uses live Azure:
+  - No.
+- Entra ID implemented:
+  - No.
+- Future production identity direction:
+  - Microsoft Entra ID / Managed Identity where appropriate.
+- Migration:
+  - None.
+- Migrations 0001–0009 changed:
+  - No.
+- Dependencies:
+  - None; native `fetch` and existing packages were reused.
+- Full verification:
+  - Node `v24.4.0`; npm `11.4.2`.
+  - Provider/config/schema/grounding/evaluation focus passed; 23 tests, 0 failed.
+  - Auth, recovery, SMTP, MFA, repository, and migration regressions passed; 20 passed with one expected PostgreSQL integration skip.
+  - `npm run lint` passed; 84 files.
+  - `npm run typecheck` passed; 93 JavaScript files.
+  - `npm test` passed; 83 total, 81 passed, 2 expected infrastructure skips, 0 failed.
+  - `npm run build`, both dependency audits, claims/randomness scans, deterministic AI evaluation, and Chromium pilot smoke passed.
+  - Missing Azure configuration refusal passed with `READY_MISSING_AZURE_CONFIGURATION` and zero provider calls.
+- Existing PR updated:
+  - Yes. This Phase 25B change set continues the existing PR `#22`; no duplicate PR is used.
+- Manual acceptance:
+  - Required after private Azure configuration, followed by real SMTP and account acceptance.
+
+## Phase 25C real-acceptance repair note
+
+- Existing branch reused:
+  - `phase-25-real-ai-email-acceptance`.
+- Existing PR reused:
+  - `#22`.
+- New branch:
+  - No.
+- New PR:
+  - No.
+- XLSX real-acceptance defect:
+  - A valid workbook was detected as XLSX but extracted as empty.
+- XLSX root cause:
+  - Ordered OOXML traversal matched literal element names such as `sheet`, `row`, `c`, and `v`; the acceptance workbook used namespace-prefixed names such as `x:sheet`, `x:row`, `x:c`, and `x:v`, so no sheets or cells were discovered. Direct-string `t="str"` values already used cached `v` content once a cell was reached.
+- Direct-string `t="str"` support:
+  - Passed with namespace-prefixed acceptance-style cells.
+- Shared-string support:
+  - Preserved and passed, including an empty shared-string table.
+- Inline-string support:
+  - Passed, including rich-text runs.
+- Cached formula-value handling:
+  - Cached values are extracted; a formula without a cached value contributes no evidence.
+- Formula execution:
+  - Never.
+- Multi-sheet extraction:
+  - Passed for three sheets with non-sequential relationship IDs.
+- XLSX provenance:
+  - Passed with five sheet/row/cell-range anchors across all three sheets.
+- Suspicious repeated obligation match:
+  - Provider misclassification repeatedly selected `osha_300_log`; the previous gate checked only that the selected applicable rule required the provider-detected type, so a confident but source-unsupported pair could pass. The obligation catalog and deterministic applicability rules were not the source of the repeated title.
+- Precision-first matching:
+  - Suggestions are promoted only when the rule is applicable, the required evidence type matches, confidence meets the configured threshold, and deterministic source text contains evidence-type-specific terminology. Weak candidates remain reviewable but are withheld from the primary suggestion.
+- Fire extinguisher result:
+  - `SUPPORTED_MATCH` for Fire extinguisher inspection records.
+- Training matrix result:
+  - `WEAK_CANDIDATE`; Incident and injury recordkeeping is withheld because source-specific injury/OSHA 300 terminology is absent.
+- Environmental inspection result:
+  - `WEAK_CANDIDATE`; Incident and injury recordkeeping is withheld because source-specific injury/OSHA 300 terminology is absent.
+- LOTO result:
+  - `SUPPORTED_MATCH` for Lockout/Tagout written procedures.
+- Evidence-card density:
+  - Summary, up to three findings, primary review state, and primary review actions are first; processing metadata, full provenance, weak candidates, lifecycle controls, and infrequent/destructive actions use labeled disclosure.
+- Duplicate review statuses:
+  - Removed; each evidence card exposes one primary workflow state plus a separate supporting scan/processing trust row.
+- Review actions:
+  - Confirm classification and apply override remain primary; status changes and destructive/infrequent actions are secondary.
+- Migration:
+  - None.
+- Migrations 0001–0009 changed:
+  - No.
+- Dependencies:
+  - None; no package or lockfile changes.
+- Real Azure preserved:
+  - Azure OpenAI, standard OpenAI, mock, shared strict schema, grounding, provenance, and authoritative human review remain intact. No live provider call occurs in normal tests or CI.
+- Real Azure XLSX retest:
+  - `READY_FOR_USER_REAL_AZURE_RETEST`; private Azure variables were not present in the Codex process, so no live call was claimed.
+- Full verification:
+  - Node `v24.4.0`; npm `11.4.2`.
+  - Focused AI, evaluation, XLSX, and frontend UX suites passed; 23 tests, 0 failed.
+  - API, configuration, recovery, SMTP, MFA, repository, and migration regressions passed; PostgreSQL integration remained the one expected focused skip.
+  - `npm run lint` passed; 84 files. `npm run typecheck` passed; 93 JavaScript files.
+  - `npm test` passed; 86 total, 84 passed, 2 expected infrastructure skips, 0 failed.
+  - Build, both dependency audits, claims/randomness scans, deterministic AI evaluation, and Chromium pilot smoke passed.
+  - In-app browser review passed at 390, 480, 768, 1024, 1440, and 1920 px with five synthetic evidence formats, no page-level overflow, and no browser warnings or errors.
+- PR #22:
+  - Updated, still unmerged.
+- Manual acceptance:
+  - Must resume at the repaired real Azure XLSX step, then continue obligation review, UI density review, SMTP recovery, and feedback.
+
+## Phase 25D Azure schema and SMTP acceptance repair note
+
+- Existing branch reused:
+  - `phase-25-real-ai-email-acceptance`.
+- Existing PR reused:
+  - `#22`.
+- New branch:
+  - No.
+- New PR:
+  - No.
+- Live deterministic XLSX:
+  - Extraction/provenance succeeded with 19 source references in the user's acceptance run.
+- Live Azure result:
+  - Structured output failed ERGON validation in the user's acceptance run.
+- Exact safe validation cause:
+  - Historical field/reason: `$ / DIAGNOSTIC_NOT_RETAINED_FOR_HISTORICAL_CALL`. Phase 25B collapsed `AI_INVALID_OUTPUT` into a generic provider error and retained no field/reason, while raw output was intentionally not persisted. The historical field cannot be recovered without speculation; Phase 25D retains safe field/reason diagnostics for every future call.
+- Schema/validator mismatch:
+  - The strict request included Azure-unsupported validation keywords (`minLength`, `maxLength`, `minimum`, `maximum`, and `maxItems`) while the server enforced additional bounds and exact ISO-date semantics. It also treated an unknown/non-applicable `suggestedRuleId` as fatal structural output even though the provider schema accepted any nullable string. The v2 request now uses Azure's supported strict subset, server validation keeps semantic bounds, optional invalid dates become null plus a review warning, and obligation qualification is contextual.
+- Structural validation:
+  - Missing/extra fields, malformed JSON, wrong types, invalid evidence taxonomy values, invalid arrays, invalid required strings, and out-of-range confidence remain fatal to the AI candidate with safe field/reason diagnostics.
+- Contextual obligation qualification:
+  - Unknown, non-applicable, type-incompatible, source-unsupported, low-confidence, and title-mismatched candidates are withheld as weak candidates; only repository rule titles can be promoted.
+- Invalid contextual candidate:
+  - Withheld without destroying valid analysis.
+- Deterministic extraction on AI failure:
+  - Preserved with provenance, processing details, manual override, needs-review status, and bounded reprocess behavior.
+- Invalid AI confirmation action:
+  - Removed when no valid AI classification exists; the API independently rejects `accept_ai` in that state.
+- Targeted live format command:
+  - `ERGON_LIVE_AI_FORMAT=xlsx ERGON_LIVE_AI_ACCEPTANCE=true npm run qa:ai-live` is implemented; allowed selectors are TXT, CSV, PDF, DOCX, XLSX, and all.
+- SMTP live verification:
+  - Explicit private `npm run qa:smtp-live` command verifies the existing transport and sends one harmless token-free message only after verification.
+- SMTP safe error classification:
+  - Configuration, connection, TLS, authentication, timeout, sender, recipient, message, and provider categories are derived only from safe code/command/response-code metadata.
+- Generic recovery response:
+  - Preserved.
+- Failed-delivery token invalidation:
+  - Preserved.
+- Real Azure XLSX:
+  - `BLOCKED_PRIVATE_AZURE_CONFIGURATION`; private configuration was not present in the Codex process and no live call was made.
+- SMTP connection/auth:
+  - `READY_MISSING_SMTP_CONFIGURATION`; no live connection was made.
+- SMTP message accepted:
+  - `READY_MISSING_SMTP_CONFIGURATION`; no live message was sent.
+- Real inbox:
+  - Requires user confirmation.
+- Migration:
+  - None.
+- Migrations 0001–0009 changed:
+  - No.
+- Dependencies:
+  - None; the existing native `fetch` and Nodemailer dependency are reused. `package.json` adds only the `qa:smtp-live` script.
+- Full verification:
+  - Node `v24.4.0`; npm `11.4.2`.
+  - Focused AI/schema/config/evidence/SMTP/frontend suite passed: 45 tests, 0 failed.
+  - Recovery/API/MFA/repository/migration regressions passed: 24 passed, one expected PostgreSQL integration skip.
+  - `npm test` passed: 92 total, 90 passed, 2 expected external-infrastructure skips, 0 failed.
+  - Lint passed for 84 files; typecheck passed for 94 JavaScript files; build passed.
+  - Deterministic AI evaluation passed: 2/2. Claims/randomness scans and Chromium pilot smoke passed.
+  - Both npm audits passed with 0 vulnerabilities.
+  - In-app browser partial-success review passed at the default viewport and 390 px: needs-review state, 19 references, reprocess and manual override were present; invalid AI confirmation was absent; no mobile page overflow was observed.
+- PR #22:
+  - To be updated on the same branch; remains draft and unmerged.

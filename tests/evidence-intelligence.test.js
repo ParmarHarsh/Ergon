@@ -54,6 +54,31 @@ test("XLSX extraction identifies sheets and cells without evaluating formulas", 
   assert.match(result.processingWarnings.join(" "), /not evaluated/i);
 });
 
+test("XLSX extraction accepts namespace-prefixed direct strings and empty shared strings", async () => {
+  const xlsx = makeAcceptanceStyleXlsx();
+  const result = await extract("inspection-register.xlsx", xlsx);
+
+  assert.equal(result.detectedFormat, "xlsx");
+  assert.equal(result.textExtractionStatus, "extracted");
+  assert.equal(result.structuredContent.sheets.length, 3);
+  assert.deepEqual(result.structuredContent.sheets.map((sheet) => sheet.name), ["Inspection Log", "Corrective Actions", "Summary"]);
+  assert.match(result.normalizedText, /A1: Inspection ID/);
+  assert.match(result.normalizedText, /B2: Northern Precision Components - Plant A/);
+  assert.match(result.normalizedText, /A1: Corrective Actions/);
+  assert.match(result.normalizedText, /C3: 6/);
+  assert.match(result.normalizedText, /B3: true/);
+  assert.match(result.normalizedText, /E3: 2026-07-14/);
+  assert.doesNotMatch(result.normalizedText, /COUNTA/);
+  assert.doesNotMatch(result.normalizedText, /D3:/);
+  assert.equal(result.documentMetadata.formulaCount, 3);
+  assert.equal(result.documentMetadata.cellCount, 13);
+  assert.equal(result.deterministicProfile.wordCount, 62);
+  assert.equal(result.provenanceAnchors.length, 5);
+  assert.equal(result.provenanceAnchors[0].sheet, "Inspection Log");
+  assert.equal(result.provenanceAnchors[0].cellRange, "A1:B1");
+  assert.match(result.processingWarnings.join(" "), /not evaluated/i);
+});
+
 test("Office signature mismatches, generic ZIPs, macros, corrupt containers, and expansion limits fail closed", () => {
   const docx = makeDocx("Safe text");
   assert.throws(() => validateUploadedFile({ buffer: docx, fileName: "renamed.xlsx", declaredContentType: OOXML_MIME.xlsx, maxBytes }), (error) => error.code === "FILE_TYPE_MISMATCH");
@@ -114,6 +139,18 @@ function makeXlsx() {
     "xl/_rels/workbook.xml.rels": strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
     "xl/sharedStrings.xml": strToU8("<sst><si><t>Permit</t></si><si><t>P-104</t></si></sst>"),
     "xl/worksheets/sheet1.xml": strToU8('<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1"><f>1+1</f><v>2</v></c></row></sheetData></worksheet>')
+  }));
+}
+
+function makeAcceptanceStyleXlsx() {
+  return Buffer.from(zipSync({
+    "[Content_Types].xml": strToU8("<Types/>"),
+    "xl/workbook.xml": strToU8('<x:workbook xmlns:x="urn:sheet" xmlns:r="urn:rels"><x:sheets><x:sheet name="Inspection Log" sheetId="1" r:id="inspectionRel"/><x:sheet name="Corrective Actions" sheetId="2" r:id="actionsRel"/><x:sheet name="Summary" sheetId="3" r:id="summaryRel"/></x:sheets></x:workbook>'),
+    "xl/_rels/workbook.xml.rels": strToU8('<Relationships><Relationship Id="summaryRel" Target="worksheets/summary.xml"/><Relationship Id="inspectionRel" Target="worksheets/inspection.xml"/><Relationship Id="actionsRel" Target="worksheets/actions.xml"/></Relationships>'),
+    "xl/sharedStrings.xml": strToU8('<x:sst xmlns:x="urn:sheet"></x:sst>'),
+    "xl/worksheets/inspection.xml": strToU8('<x:worksheet xmlns:x="urn:sheet"><x:sheetData><x:row r="1"><x:c r="A1" t="str"><x:v>Inspection ID</x:v></x:c><x:c r="B1" t="str"><x:v>Facility</x:v></x:c></x:row><x:row r="2"><x:c r="A2" t="inlineStr"><x:is><x:t>INSP-001</x:t></x:is></x:c><x:c r="B2" t="str"><x:v>Northern Precision Components - Plant A</x:v></x:c></x:row><x:row r="3"><x:c r="A3" t="n"><x:v>42</x:v></x:c><x:c r="B3" t="b"><x:v>1</x:v></x:c><x:c r="C3" t="n"><x:f>COUNTA(A2:A100)</x:f><x:v>6</x:v></x:c><x:c r="D3" t="n"><x:f>SUM(A1:A2)</x:f></x:c><x:c r="E3" t="d"><x:v>2026-07-14</x:v></x:c></x:row></x:sheetData></x:worksheet>'),
+    "xl/worksheets/actions.xml": strToU8('<x:worksheet xmlns:x="urn:sheet"><x:sheetData><x:row r="1"><x:c r="A1" t="inlineStr"><x:is><x:r><x:t>Corrective </x:t></x:r><x:r><x:t>Actions</x:t></x:r></x:is></x:c><x:c r="B1" t="str"><x:v>Owner</x:v></x:c></x:row></x:sheetData></x:worksheet>'),
+    "xl/worksheets/summary.xml": strToU8('<x:worksheet xmlns:x="urn:sheet"><x:sheetData><x:row r="1"><x:c r="A1" t="str"><x:v>Summary</x:v></x:c><x:c r="B1" t="n"><x:f>COUNTA(A1:A10)</x:f><x:v>1</x:v></x:c></x:row></x:sheetData></x:worksheet>')
   }));
 }
 

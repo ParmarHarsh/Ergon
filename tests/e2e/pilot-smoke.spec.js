@@ -69,7 +69,8 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
 
   // Upload evidence with a private file
   await page.locator(".sidebar").getByRole("button", { name: "Evidence", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Add evidence" }).first()).toBeVisible();
+  await expect(page.locator("#evidence-form")).toBeVisible();
+  await expect(page.locator(".evidence-page-cta")).toBeHidden();
   await page.setViewportSize({ width: 390, height: 844 });
   const expiryBounds = await page.locator('#evidence-form input[name="expirationDate"]').boundingBox();
   expect(expiryBounds).not.toBeNull();
@@ -88,7 +89,7 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
   await page.getByRole("button", { name: "Upload or log evidence" }).click();
   const evidenceCard = page.locator(".evidence-item").filter({ hasText: "Pilot LOTO procedure" });
   await expect(evidenceCard).toBeVisible();
-  await expect(evidenceCard).toContainText(/AI processed|Needs review/, { timeout: 15_000 });
+  await expect(evidenceCard).toContainText("Ready for review", { timeout: 15_000 });
   await expect(evidenceCard).toContainText("Evidence understanding");
   await expect(evidenceCard).toContainText("Source references");
 
@@ -114,14 +115,17 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
 
   // Human review: override classification and accept the evidence
   await page.locator(".sidebar").getByRole("button", { name: "Evidence", exact: true }).click();
+  await evidenceCard.getByText("Review evidence", { exact: true }).click();
   const reviewForm = evidenceCard.locator("form.review-form");
   await reviewForm.locator('select[name="evidenceType"]').selectOption("loto_procedures");
   await reviewForm.locator('select[name="ruleId"]').selectOption("us-loto-procedures");
   await reviewForm.locator('textarea[name="notes"]').fill("Closed-pilot human review override.");
   await reviewForm.getByRole("button", { name: "Apply override" }).click();
   await expect(evidenceCard).toContainText("Human-reviewed");
+  await evidenceCard.getByText("Review evidence", { exact: true }).click();
+  await evidenceCard.getByText("More review actions", { exact: true }).click();
   await evidenceCard.locator("form.review-form").getByRole("button", { name: "Mark evidence accepted" }).click();
-  await expect(evidenceCard).toContainText("Evidence accepted");
+  await expect(evidenceCard.locator('[data-ui-role="primary-workflow-state"]')).toContainText("Accepted");
 
   // Gap matrix reflects the accepted evidence; action plan gap is closed
   await page.locator(".sidebar").getByRole("button", { name: "Gaps & Actions" }).click();
@@ -147,6 +151,7 @@ test("closed pilot workflow validates evidence processing, review, packet, delet
   // Archive the evidence record
   await page.locator(".sidebar").getByRole("button", { name: "Evidence", exact: true }).click();
   page.once("dialog", (dialog) => dialog.accept());
+  await evidenceCard.getByText("File and lifecycle actions", { exact: true }).click();
   await evidenceCard.locator("[data-action='archive-evidence']").click();
   const evidenceRecords = page.locator("section.card", { has: page.getByRole("heading", { name: "Evidence records" }) });
   const activeEvidenceItems = evidenceRecords.locator("xpath=.//article[contains(concat(' ', normalize-space(@class), ' '), ' evidence-item ') and not(preceding-sibling::h3[normalize-space()='Archived evidence'])]");
