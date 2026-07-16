@@ -2,8 +2,11 @@ import { strToU8, zipSync } from "fflate";
 import { createEvidenceAiProvider, evaluateEvidenceCases, extractEvidenceText } from "../packages/ai/src/index.js";
 import { readConfig } from "../packages/config/src/index.js";
 
+const selectedFormat = String(process.env.ERGON_LIVE_AI_FORMAT || "all").trim().toLowerCase();
+const allowedFormats = new Set(["txt", "csv", "pdf", "docx", "xlsx", "all"]);
+if (!allowedFormats.has(selectedFormat)) fail("ERGON_LIVE_AI_FORMAT must be one of: txt, csv, pdf, docx, xlsx, all.");
 if (process.env.ERGON_LIVE_AI_ACCEPTANCE !== "true") {
-  fail("Refusing live provider calls. Set ERGON_LIVE_AI_ACCEPTANCE=true to acknowledge that five synthetic requests may incur cost.");
+  fail("Refusing live provider calls. Set ERGON_LIVE_AI_ACCEPTANCE=true to acknowledge that synthetic requests may incur cost.");
 }
 if (process.env.AI_ENABLED !== "true" || !["openai", "azure_openai"].includes(process.env.AI_PROVIDER)) {
   fail("Live acceptance requires AI_ENABLED=true and AI_PROVIDER=openai or AI_PROVIDER=azure_openai.");
@@ -13,7 +16,10 @@ if (process.env.AI_PROVIDER === "openai" && (!process.env.OPENAI_API_KEY || !pro
 }
 if (process.env.AI_PROVIDER === "azure_openai") {
   const missing = ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT"].filter((name) => !process.env[name]);
-  if (missing.length > 0) failWithClassification("READY_MISSING_AZURE_CONFIGURATION", `Live Azure OpenAI acceptance is missing: ${missing.join(", ")}.`);
+  if (missing.length > 0) {
+    const classification = selectedFormat === "xlsx" ? "BLOCKED_PRIVATE_AZURE_CONFIGURATION" : "READY_MISSING_AZURE_CONFIGURATION";
+    failWithClassification(classification, `Live Azure OpenAI acceptance is missing: ${missing.join(", ")}.`);
+  }
 }
 
 let config;
@@ -33,7 +39,7 @@ const applicableRules = [
   rule("synthetic-loto", "Lockout/tagout procedure", "loto_procedures"),
   rule("synthetic-waste", "Hazardous waste manifests", "hazardous_waste_manifests")
 ];
-const fixtures = syntheticFixtures();
+const fixtures = syntheticFixtures().filter((fixture) => selectedFormat === "all" || fixture.format.toLowerCase() === selectedFormat);
 const cases = [];
 const safeRuns = [];
 
@@ -67,6 +73,10 @@ for (const fixture of fixtures) {
       detectedEvidenceType: output.detectedEvidenceType,
       needsHumanReview: output.needsHumanReview,
       schemaValid: true,
+      resultCategory: usage?.resultCategory || "success",
+      validationWarningCount: usage?.validationWarningCount ?? 0,
+      schemaVersion: usage?.schemaVersion || null,
+      promptVersion: usage?.promptVersion || null,
       latencyMs: usage?.latencyMs ?? null,
       inputTokens: usage?.inputTokens ?? null,
       outputTokens: usage?.outputTokens ?? null,
@@ -79,6 +89,12 @@ for (const fixture of fixtures) {
       success: false,
       schemaValid: false,
       errorCode: error.code || "AI_PROVIDER_ERROR",
+      resultCategory: usage?.resultCategory || "failure",
+      validationCategory: usage?.validationCategory || error.validationCategory || null,
+      validationField: usage?.validationField || error.validationField || null,
+      validationReasonCode: usage?.validationReasonCode || error.validationReasonCode || null,
+      schemaVersion: usage?.schemaVersion || null,
+      promptVersion: usage?.promptVersion || null,
       latencyMs: usage?.latencyMs ?? null,
       inputTokens: usage?.inputTokens ?? null,
       outputTokens: usage?.outputTokens ?? null,
@@ -95,9 +111,10 @@ process.stdout.write(`${JSON.stringify({
   provider: provider.kind,
   model: provider.model,
   deployment: provider.deployment || null,
-  promptVersion: cases[0]?.output.providerUsage?.promptVersion,
-  schemaVersion: cases[0]?.output.providerUsage?.schemaVersion,
+  promptVersion: cases[0]?.output.providerUsage?.promptVersion || safeRuns[0]?.promptVersion || null,
+  schemaVersion: cases[0]?.output.providerUsage?.schemaVersion || safeRuns[0]?.schemaVersion || null,
   syntheticOnly: true,
+  selectedFormat,
   requests: fixtures.length,
   runs: safeRuns,
   metrics: evaluation.metrics
@@ -211,8 +228,12 @@ function failWithClassification(classification, message) {
 }
 
 function liveClassification(providerKind, passed, runs) {
-  if (passed) return providerKind === "azure_openai" ? "PASSED_REAL_AZURE_OPENAI" : "PASSED_REAL_OPENAI";
+  if (passed) {
+    if (providerKind === "azure_openai" && selectedFormat === "xlsx") return "PASSED_REAL_AZURE_XLSX";
+    return providerKind === "azure_openai" ? "PASSED_REAL_AZURE_OPENAI" : "PASSED_REAL_OPENAI";
+  }
   if (providerKind !== "azure_openai") return "FAILED_PROVIDER_REQUEST";
+  if (selectedFormat === "xlsx") return "FAILED_REAL_AZURE_XLSX";
   const errorCodes = new Set(runs.map((run) => run.errorCode).filter(Boolean));
   if (errorCodes.has("AI_PROVIDER_AUTH_ERROR")) return "FAILED_AZURE_AUTHENTICATION";
   if (errorCodes.has("AI_PROVIDER_BAD_REQUEST")) return "BLOCKED_AZURE_DEPLOYMENT_OR_REGION";

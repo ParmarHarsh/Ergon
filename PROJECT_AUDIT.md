@@ -1817,3 +1817,67 @@ Safe next action:
   - Updated, still unmerged.
 - Manual acceptance:
   - Must resume at the repaired real Azure XLSX step, then continue obligation review, UI density review, SMTP recovery, and feedback.
+
+## Phase 25D Azure schema and SMTP acceptance repair note
+
+- Existing branch reused:
+  - `phase-25-real-ai-email-acceptance`.
+- Existing PR reused:
+  - `#22`.
+- New branch:
+  - No.
+- New PR:
+  - No.
+- Live deterministic XLSX:
+  - Extraction/provenance succeeded with 19 source references in the user's acceptance run.
+- Live Azure result:
+  - Structured output failed ERGON validation in the user's acceptance run.
+- Exact safe validation cause:
+  - Historical field/reason: `$ / DIAGNOSTIC_NOT_RETAINED_FOR_HISTORICAL_CALL`. Phase 25B collapsed `AI_INVALID_OUTPUT` into a generic provider error and retained no field/reason, while raw output was intentionally not persisted. The historical field cannot be recovered without speculation; Phase 25D retains safe field/reason diagnostics for every future call.
+- Schema/validator mismatch:
+  - The strict request included Azure-unsupported validation keywords (`minLength`, `maxLength`, `minimum`, `maximum`, and `maxItems`) while the server enforced additional bounds and exact ISO-date semantics. It also treated an unknown/non-applicable `suggestedRuleId` as fatal structural output even though the provider schema accepted any nullable string. The v2 request now uses Azure's supported strict subset, server validation keeps semantic bounds, optional invalid dates become null plus a review warning, and obligation qualification is contextual.
+- Structural validation:
+  - Missing/extra fields, malformed JSON, wrong types, invalid evidence taxonomy values, invalid arrays, invalid required strings, and out-of-range confidence remain fatal to the AI candidate with safe field/reason diagnostics.
+- Contextual obligation qualification:
+  - Unknown, non-applicable, type-incompatible, source-unsupported, low-confidence, and title-mismatched candidates are withheld as weak candidates; only repository rule titles can be promoted.
+- Invalid contextual candidate:
+  - Withheld without destroying valid analysis.
+- Deterministic extraction on AI failure:
+  - Preserved with provenance, processing details, manual override, needs-review status, and bounded reprocess behavior.
+- Invalid AI confirmation action:
+  - Removed when no valid AI classification exists; the API independently rejects `accept_ai` in that state.
+- Targeted live format command:
+  - `ERGON_LIVE_AI_FORMAT=xlsx ERGON_LIVE_AI_ACCEPTANCE=true npm run qa:ai-live` is implemented; allowed selectors are TXT, CSV, PDF, DOCX, XLSX, and all.
+- SMTP live verification:
+  - Explicit private `npm run qa:smtp-live` command verifies the existing transport and sends one harmless token-free message only after verification.
+- SMTP safe error classification:
+  - Configuration, connection, TLS, authentication, timeout, sender, recipient, message, and provider categories are derived only from safe code/command/response-code metadata.
+- Generic recovery response:
+  - Preserved.
+- Failed-delivery token invalidation:
+  - Preserved.
+- Real Azure XLSX:
+  - `BLOCKED_PRIVATE_AZURE_CONFIGURATION`; private configuration was not present in the Codex process and no live call was made.
+- SMTP connection/auth:
+  - `READY_MISSING_SMTP_CONFIGURATION`; no live connection was made.
+- SMTP message accepted:
+  - `READY_MISSING_SMTP_CONFIGURATION`; no live message was sent.
+- Real inbox:
+  - Requires user confirmation.
+- Migration:
+  - None.
+- Migrations 0001–0009 changed:
+  - No.
+- Dependencies:
+  - None; the existing native `fetch` and Nodemailer dependency are reused. `package.json` adds only the `qa:smtp-live` script.
+- Full verification:
+  - Node `v24.4.0`; npm `11.4.2`.
+  - Focused AI/schema/config/evidence/SMTP/frontend suite passed: 45 tests, 0 failed.
+  - Recovery/API/MFA/repository/migration regressions passed: 24 passed, one expected PostgreSQL integration skip.
+  - `npm test` passed: 92 total, 90 passed, 2 expected external-infrastructure skips, 0 failed.
+  - Lint passed for 84 files; typecheck passed for 94 JavaScript files; build passed.
+  - Deterministic AI evaluation passed: 2/2. Claims/randomness scans and Chromium pilot smoke passed.
+  - Both npm audits passed with 0 vulnerabilities.
+  - In-app browser partial-success review passed at the default viewport and 390 px: needs-review state, 19 references, reprocess and manual override were present; invalid AI confirmation was absent; no mobile page overflow was observed.
+- PR #22:
+  - To be updated on the same branch; remains draft and unmerged.

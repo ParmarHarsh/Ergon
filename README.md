@@ -154,7 +154,9 @@ printf '\n'
 
 Azure OpenAI is a separate first-class provider. Its key is never reused as `OPENAI_API_KEY`. Supply the resource endpoint without credentials, plus the deployment name that exists in that Azure resource and region. ERGON normalizes `https://YOUR-RESOURCE-NAME.openai.azure.com` or the same endpoint ending in `/openai/v1` to `/openai/v1/responses`, requires HTTPS, sends the private key only in the `api-key` header, and passes `AZURE_OPENAI_DEPLOYMENT` as the Responses API `model` value.
 
-Structured-output support depends on the actual Azure deployment. Live acceptance must prove that the deployment accepts the shared `text.format` strict JSON Schema request; ERGON fails safely and never downgrades to free-form prose parsing.
+Structured-output support depends on the actual Azure deployment. Live acceptance must prove that the deployment accepts the shared `text.format` strict JSON Schema request; ERGON fails safely and never downgrades to free-form prose parsing. The shared `evidence-intelligence-schema-v2` request contract uses Azure's supported strict-schema subset for required fields, closed objects, types, arrays, nullability, and evidence-type enums. ERGON then applies provider-independent server bounds, exact type checks, confidence limits, and date normalization. An optional non-ISO date becomes `null` with a human-review warning; malformed required structure still rejects the AI candidate.
+
+Obligation qualification happens after structural validation. Unknown, non-applicable, type-incompatible, source-unsupported, low-confidence, or title-mismatched candidates are withheld as weak/unsupported candidates. Provider-supplied titles never replace repository rule titles. This preserves valid summaries, extracted entities, deterministic provenance, and review flags without promoting an invalid obligation match.
 
 Set Azure OpenAI values privately:
 
@@ -178,11 +180,14 @@ printf '\n'
 
 API-key authentication is supported for this controlled private acceptance. For a future Azure-hosted production deployment, Microsoft Entra ID with Managed Identity is the preferred direction where appropriate because it avoids a stored provider key. Phase 25B does not implement Entra ID, add `@azure/identity`, or provision Azure infrastructure.
 
-The optional live AI command uses `AI_PROVIDER` and makes five paid requests using repository-generated synthetic TXT, CSV, PDF, DOCX, and XLSX evidence. It refuses to run without explicit opt-in and provider-appropriate private configuration, and prints only safe classifications, metrics, latency, and token counts:
+The optional live AI command uses `AI_PROVIDER` and, by default, makes five paid requests using repository-generated synthetic TXT, CSV, PDF, DOCX, and XLSX evidence. It refuses to run without explicit opt-in and provider-appropriate private configuration, and prints only safe classifications, schema/prompt versions, field/reason diagnostics, metrics, latency, and token counts. Select exactly one format with `ERGON_LIVE_AI_FORMAT=txt`, `csv`, `pdf`, `docx`, or `xlsx`; use `all` (the default) for all five.
 
 ```bash
 npm run qa:ai-eval
 ERGON_LIVE_AI_ACCEPTANCE=true npm run qa:ai-live
+
+# Target the repaired XLSX path with one synthetic paid request:
+ERGON_LIVE_AI_FORMAT=xlsx ERGON_LIVE_AI_ACCEPTANCE=true npm run qa:ai-live
 ```
 
 Provision a local acceptance administrator with a real email and a password chosen privately. This reuses the one-time audited provisioning command; it does not create public self-signup:
@@ -204,17 +209,25 @@ Configure SMTP in the same private shell. With `SMTP_USE_TLS=true`, port 465 use
 export RECOVERY_DELIVERY_PROVIDER=smtp
 export RECOVERY_EXPOSE_TEST_TOKEN=false
 export APP_URL=http://localhost:5173
-read -r 'SMTP_HOST?SMTP host: '
-read -r 'SMTP_PORT?SMTP port: '
-read -r 'SMTP_USERNAME?SMTP username: '
-read -r -s 'SMTP_PASSWORD?SMTP password: '
-printf '\n'
-read -r 'SMTP_FROM_EMAIL?SMTP from email: '
-export SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_FROM_EMAIL
+export SMTP_HOST='smtp.gmail.com'
+export SMTP_PORT='465'
+export SMTP_USERNAME='<full Gmail address>'
+export SMTP_FROM_EMAIL='<full Gmail address>'
 export SMTP_USE_TLS=true
+
+read -r -s 'SMTP_PASSWORD?Gmail App Password: '
+export SMTP_PASSWORD
+printf '\n'
+
+read -r 'SMTP_ACCEPTANCE_EMAIL?SMTP acceptance inbox: '
+export SMTP_ACCEPTANCE_EMAIL
+
+ERGON_LIVE_SMTP_ACCEPTANCE=true npm run qa:smtp-live
 ```
 
-Start the API and web app from that shell with the same untracked file repository used for provisioning. Then request recovery from the sign-in screen. A successful SMTP handoff is not proof of inbox arrival: only the recipient can classify a real inbox test as passed. Reset links may use localhost only for this controlled same-machine acceptance.
+`qa:smtp-live` is private and refuses to connect without the explicit opt-in, required SMTP settings, and an acceptance inbox. It reuses the recovery transport, calls `verify()` where available, then sends exactly one harmless message with no reset token or action link. Safe results distinguish configuration, connection, TLS, authentication, timeout, sender, recipient, message, and provider failures without printing credentials or provider response text. `PASSED_SMTP_MESSAGE_ACCEPTED` proves only that the configured SMTP service accepted the message; it does not prove inbox arrival.
+
+Start the API and web app from that shell with the same untracked file repository used for provisioning. Then request recovery from the sign-in screen. The public response remains generic for existing and nonexistent accounts, and a token whose delivery fails is invalidated. Only the recipient can classify a real inbox test as passed. Reset links may use localhost only for this controlled same-machine acceptance.
 
 Normal `npm test` and CI never call standard OpenAI, Azure OpenAI, or real email. Deterministic extraction, provenance, and human review remain available with `AI_ENABLED=false` or if the provider fails. Real provider results remain candidates, never legal truth or automatic evidence acceptance.
 

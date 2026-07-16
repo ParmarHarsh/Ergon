@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildPasswordResetMessage, createRecoveryDelivery, createSmtpTransportConfig } from "../apps/api/src/recovery-delivery.js";
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import { buildPasswordResetMessage, buildSmtpAcceptanceMessage, classifySmtpError, createRecoveryDelivery, createSmtpTransportConfig, runSmtpAcceptance } from "../apps/api/src/recovery-delivery.js";
 
 const smtpConfig = {
   recoveryDeliveryProvider: "smtp",
@@ -39,7 +41,8 @@ test("SMTP recovery delivery sends safe password reset message through injected 
 
   assert.equal(result.ok, true);
   assert.equal(result.provider, "smtp");
-  assert.equal(result.status, "sent");
+  assert.equal(result.status, "message_accepted");
+  assert.equal(result.messageAccepted, true);
   assert.equal(result.messageId, "provider-message-id");
   assert.equal(sent.length, 1);
   assert.deepEqual(transports[0], {
@@ -82,7 +85,9 @@ test("SMTP recovery delivery returns safe structured failure", async () => {
     ok: false,
     provider: "smtp",
     status: "delivery_failed",
-    errorCode: "delivery_failed"
+    errorCode: "SMTP_PROVIDER_ERROR",
+    smtpCommand: null,
+    smtpResponseCode: null
   });
 });
 
@@ -126,4 +131,93 @@ test("SMTP transport config omits auth when credentials are absent", () => {
     greetingTimeout: 10_000,
     socketTimeout: 10_000
   });
+});
+
+test("private SMTP acceptance verifies before sending one harmless synthetic message", async () => {
+  const events = [];
+  const messages = [];
+  const result = await runSmtpAcceptance({
+    config: smtpConfig,
+    acceptanceEmail: "acceptance@example.com",
+    dependencies: {
+      transportFactory: () => ({
+        async verify() { events.push("verify"); },
+        async sendMail(message) { events.push("send"); messages.push(message); return { accepted: [message.to] }; }
+      })
+    }
+  });
+  assert.deepEqual(events, ["verify", "send"]);
+  assert.equal(result.connectionAuth, "PASSED_SMTP_CONNECTION_AND_AUTH");
+  assert.equal(result.messageAccepted, "PASSED_SMTP_MESSAGE_ACCEPTED");
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].subject, "ERGON SMTP acceptance test");
+  assert.match(messages[0].text, /contains no reset token/);
+  assert.doesNotMatch(JSON.stringify(messages[0]), /password reset|reset-password|token=/i);
+});
+
+test("private SMTP acceptance safely classifies verify and send failures", async () => {
+  for (const [error, expectedCode, expectedLive] of [
+    [Object.assign(new Error("secret authentication detail"), { code: "EAUTH", command: "AUTH PLAIN", responseCode: 535 }), "SMTP_AUTH_FAILED", "FAILED_SMTP_AUTH"],
+    [Object.assign(new Error("certificate detail"), { code: "CERT_HAS_EXPIRED", command: "STARTTLS" }), "SMTP_TLS_FAILED", "FAILED_SMTP_TLS"],
+    [Object.assign(new Error("timeout detail"), { code: "ETIMEDOUT", command: "CONN" }), "SMTP_TIMEOUT", "FAILED_SMTP_TIMEOUT"],
+    [Object.assign(new Error("host detail"), { code: "ECONNREFUSED", command: "CONN" }), "SMTP_CONNECTION_FAILED", "FAILED_SMTP_CONNECTION"]
+  ]) {
+    const result = await runSmtpAcceptance({
+      config: smtpConfig,
+      acceptanceEmail: "acceptance@example.com",
+      dependencies: { transportFactory: () => ({ async verify() { throw error; }, async sendMail() { assert.fail("sendMail must not run after failed verify"); } }) }
+    });
+    assert.equal(result.connectionAuth, expectedLive);
+    assert.equal(result.messageAccepted, expectedLive);
+    assert.equal(result.diagnostic.errorCode, expectedCode);
+    assert.equal(JSON.stringify(result).includes("secret authentication detail"), false);
+    assert.equal(JSON.stringify(result).includes("smtp-secret"), false);
+  }
+
+  for (const [command, expectedCode, expectedLive] of [
+    ["MAIL FROM", "SMTP_SENDER_REJECTED", "FAILED_SMTP_SENDER"],
+    ["RCPT TO", "SMTP_RECIPIENT_REJECTED", "FAILED_SMTP_RECIPIENT"],
+    ["DATA", "SMTP_MESSAGE_REJECTED", "FAILED_SMTP_PROVIDER"],
+    ["UNKNOWN", "SMTP_PROVIDER_ERROR", "FAILED_SMTP_PROVIDER"]
+  ]) {
+    const result = await runSmtpAcceptance({
+      config: smtpConfig,
+      acceptanceEmail: "acceptance@example.com",
+      dependencies: { transportFactory: () => ({ async verify() {}, async sendMail() { throw Object.assign(new Error("private response"), { code: "EENVELOPE", command, responseCode: 550 }); } }) }
+    });
+    assert.equal(result.connectionAuth, "PASSED_SMTP_CONNECTION_AND_AUTH");
+    assert.equal(result.messageAccepted, expectedLive);
+    assert.equal(result.diagnostic.errorCode, expectedCode);
+    assert.equal(JSON.stringify(result).includes("private response"), false);
+  }
+});
+
+test("SMTP diagnostics retain only safe code, command bucket, and numeric response", () => {
+  const diagnosticResult = classifySmtpError(Object.assign(new Error("SMTP_PASSWORD=smtp-secret recipient@example.com"), {
+    code: "EAUTH",
+    command: "AUTH PLAIN",
+    responseCode: 535,
+    response: "private provider response"
+  }));
+  assert.deepEqual(diagnosticResult, { errorCode: "SMTP_AUTH_FAILED", smtpCommand: "AUTH", smtpResponseCode: 535 });
+  assert.equal(JSON.stringify(diagnosticResult).includes("smtp-secret"), false);
+  assert.equal(JSON.stringify(diagnosticResult).includes("recipient@example.com"), false);
+  assert.deepEqual(buildSmtpAcceptanceMessage({ from: "security@example.com", to: "acceptance@example.com" }).subject, "ERGON SMTP acceptance test");
+});
+
+test("private SMTP command refuses missing configuration without connecting", () => {
+  const run = spawnSync(process.execPath, ["scripts/qa-smtp-live.mjs"], {
+    cwd: path.resolve("."),
+    encoding: "utf8",
+    env: {
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      ERGON_LIVE_SMTP_ACCEPTANCE: "true",
+      RECOVERY_DELIVERY_PROVIDER: "smtp"
+    }
+  });
+  assert.equal(run.status, 1);
+  const result = JSON.parse(run.stderr.trim());
+  assert.equal(result.connectionAuth, "READY_MISSING_SMTP_CONFIGURATION");
+  assert.equal(result.messageAccepted, "READY_MISSING_SMTP_CONFIGURATION");
 });

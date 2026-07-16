@@ -14,7 +14,7 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
       const { rules: applicableRules } = getApplicableRules(facility);
       const metadata = providerMetadata(provider);
       const jobAnalysis = processingJobId ? await repo.getAiAnalysisByJobId(organizationId, processingJobId) : null;
-      if (jobAnalysis && ["processed", "needs_review"].includes(jobAnalysis.processingStatus)) return jobAnalysis;
+      if (jobAnalysis && ["processed", "needs_review"].includes(jobAnalysis.processingStatus) && jobAnalysis.aiProfile?.status !== "failed") return jobAnalysis;
       const previousAnalysis = jobAnalysis || await repo.getAiAnalysis(organizationId, evidenceId);
       let analysis = await repo.upsertAiAnalysis({
         ...baseAnalysis({ evidence, metadata, processingStatus: "processing", previousAnalysis }),
@@ -127,6 +127,9 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
           || output.confidence < config.aiConfidenceThreshold
           || !deterministicAgreement;
         const issues = [...output.issues];
+        for (const warning of output.validationWarnings || []) {
+          if (warning.reasonCode === "INVALID_DATE") issues.push(`${humanFieldName(warning.field)} was not retained because it was not a valid exact date; human review is required.`);
+        }
         if (extraction.truncated) issues.push(`Document text was bounded to ${config.aiMaxFileTextChars} characters before analysis.`);
 
         analysis = await repo.upsertAiAnalysis({
@@ -180,8 +183,10 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
         await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action: "evidence_processing_completed", metadata: { status: analysis.processingStatus, extractionStatus: analysis.textExtractionStatus } });
         return analysis;
       } catch (error) {
+        const extractionSucceeded = Boolean(lastExtraction?.text) && ["extracted", "partial"].includes(lastExtraction?.extractionStatus);
+        const diagnostic = safeProviderDiagnostic(error);
         analysis = await repo.upsertAiAnalysis({
-          ...baseAnalysis({ evidence, metadata, processingStatus: "failed", previousAnalysis }),
+          ...baseAnalysis({ evidence, metadata, processingStatus: extractionSucceeded ? "needs_review" : "failed", previousAnalysis }),
           ...(lastExtraction ? extractionAnalysisFields(lastExtraction) : {}),
           id: analysis.id,
           processingJobId,
@@ -189,11 +194,21 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
           contentHash: evidence.fileSha256 || analysis.contentHash || null,
           textExtractionStatus: lastExtraction?.textExtractionStatus || analysis.textExtractionStatus || "failed",
           needsHumanReview: true,
-          aiProfile: { status: "failed", errorCode: error.code || "AI_PROCESSING_ERROR", generationMetadata: error.providerUsage || null },
-          error: safeError(error)
+          issues: extractionSucceeded ? ["AI analysis failed validation or provider processing. Deterministic extraction and source references remain available for human review."] : [],
+          aiProfile: {
+            status: "failed",
+            errorCode: error.code || "AI_PROCESSING_ERROR",
+            ...diagnostic,
+            generationMetadata: error.providerUsage || null
+          },
+          error: safeAiFailureMessage(error, extractionSucceeded)
         });
         const action = ["AI_INVALID_OUTPUT", "AI_PROVIDER_INVALID_RESPONSE"].includes(error.code) ? "ai_output_rejected_invalid_schema" : "evidence_processing_failed";
-        await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action, metadata: error.providerUsage || { errorCode: error.code || "AI_PROCESSING_ERROR" } });
+        await markNeedsReviewWhenPending(repo, evidence);
+        await logAiEvent(repo, {
+          organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action,
+          metadata: error.providerUsage || { errorCode: error.code || "AI_PROCESSING_ERROR", ...diagnostic }
+        });
         if (error.code === "AI_INVALID_OUTPUT") error.status = 502;
         throw error;
       }
@@ -222,6 +237,9 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
       let auditAction;
 
       if (reviewInput.action === "accept_ai") {
+        if (!["processed", "needs_review"].includes(analysis.processingStatus) || analysis.aiProfile?.status === "failed") {
+          throw validationError("A valid AI classification is not available to accept");
+        }
         if (!analysis.detectedEvidenceType || analysis.detectedEvidenceType === "other") throw validationError("AI classification is not specific enough to accept");
         evidenceUpdates.evidenceType = analysis.detectedEvidenceType;
         evidenceUpdates.documentDate = analysis.extractedDocumentDate || evidence.documentDate;
@@ -311,10 +329,13 @@ export function qualifyObligationSuggestion({ output, applicableRules = [], sour
   const rule = applicableRules.find((item) => item.id === output.suggestedRuleId) || null;
   const candidate = {
     candidateRuleId: output.suggestedRuleId,
-    candidateTitle: rule?.title || output.suggestedObligationTitle || null,
+    candidateTitle: rule?.title || null,
     candidateReason: output.matchReason || null
   };
   if (!rule) return weakMatch(candidate, "RULE_NOT_APPLICABLE", "The provider candidate is not an applicable facility obligation.");
+  if (output.suggestedObligationTitle && normalizeMatchText(output.suggestedObligationTitle) !== normalizeMatchText(rule.title)) {
+    return weakMatch(candidate, "TITLE_MISMATCH", "The provider title does not match ERGON's applicable-obligation title.");
+  }
   if (!rule.requiredEvidenceTypes.includes(output.detectedEvidenceType)) {
     return weakMatch(candidate, "EVIDENCE_TYPE_MISMATCH", "The candidate obligation does not require the detected evidence type.");
   }
@@ -476,8 +497,25 @@ async function logAiEvent(repo, { organizationId, facilityId, userId, evidenceId
   });
 }
 
-function safeError(error) {
-  return String(error?.message || "Evidence processing failed").slice(0, 500);
+function safeProviderDiagnostic(error) {
+  return {
+    validationCategory: error?.validationCategory || error?.providerUsage?.validationCategory || null,
+    validationField: error?.validationField || error?.providerUsage?.validationField || null,
+    validationReasonCode: error?.validationReasonCode || error?.providerUsage?.validationReasonCode || null
+  };
+}
+
+function safeAiFailureMessage(error, extractionSucceeded) {
+  const prefix = extractionSucceeded ? "Deterministic extraction succeeded, but " : "Evidence processing failed because ";
+  if (["AI_INVALID_OUTPUT", "AI_PROVIDER_INVALID_RESPONSE"].includes(error?.code)) return `${prefix}the provider returned an invalid structured analysis.`;
+  if (error?.code === "AI_PROVIDER_TIMEOUT") return `${prefix}the AI provider timed out.`;
+  if (error?.code === "AI_PROVIDER_AUTH_ERROR") return `${prefix}the AI provider could not authenticate.`;
+  if (error?.code === "AI_PROVIDER_QUOTA_OR_LIMIT") return `${prefix}the AI provider reached a rate, quota, or service limit.`;
+  return `${prefix}the AI provider was unavailable.`;
+}
+
+function humanFieldName(field) {
+  return field === "expirationDate" ? "Expiration date" : "Document date";
 }
 
 function sourceSupportedMentions(values, sourceText) {

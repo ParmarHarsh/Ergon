@@ -3,7 +3,8 @@ import { ICONS, confidencePill, html, kv, label, pill, titleCase } from "../ui.j
 
 export function processingBadges(item, job) {
   const lifecycle = processingLabel(item, job);
-  const showLifecycle = ["blocked", "failed", "ocr_required", "processing", "queued"].includes(lifecycle.code);
+  const showLifecycle = ["blocked", "failed", "ocr_required", "processing", "queued"].includes(lifecycle.code)
+    || lifecycle.text === "Extraction complete · AI analysis failed";
   return `
     <div class="badge-row evidence-trust-row" data-ui-role="supporting-trust-state">
       ${pill(item.scanStatus || "scan_unavailable", { text: scanText(item.scanStatus) })}
@@ -21,6 +22,9 @@ export function processingLabel(item, job) {
   if (analysis?.textExtractionStatus === "ocr_required") return { code: "ocr_required", text: "OCR / manual review required" };
   if (analysis?.extractionStatus === "failed" || analysis?.textExtractionStatus === "extraction_failed") return { code: "failed", text: "Extraction failed — review or retry" };
   if (analysis?.extractionStatus === "unsupported") return { code: "failed", text: "Unsupported — manual review" };
+  if (analysis?.aiProfile?.status === "failed" && ["extracted", "partial"].includes(analysis.extractionStatus)) {
+    return { code: "needs_review", text: "Extraction complete · AI analysis failed" };
+  }
   if (analysis?.extractionStatus === "partial") return { code: "needs_review", text: "Partial extraction — review" };
   if (job?.status === "queued") return { code: "queued", text: "Processing queued" };
   if (job?.status === "processing") return { code: "processing", text: "AI analyzing" };
@@ -45,6 +49,7 @@ export function aiAnalysisPanel(analysis) {
   const profile = analysis.deterministicProfile || {};
   const anchors = analysis.provenanceAnchors || [];
   const aiDisabled = analysis.aiProfile?.status === "disabled";
+  const aiFailed = analysis.aiProfile?.status === "failed";
   const processingWarnings = [...new Set(analysis.processingWarnings || [])];
   const findings = [...new Set(analysis.issues || [])];
   const warnings = [...new Set([...processingWarnings, ...findings])];
@@ -80,6 +85,7 @@ export function aiAnalysisPanel(analysis) {
           ${analysis.confidence === null || analysis.confidence === undefined ? "" : confidencePill(analysis.confidence)}
         </span>
       </div>
+      ${aiFailed ? `<div class="alert"><strong>AI analysis failed validation or provider processing.</strong> Deterministic extraction and source references remain available. Reprocess when the provider configuration is ready, or apply a human override.</div>` : ""}
       <p>${html(processingProblem || analysis.summary || (aiDisabled ? "AI analysis is not enabled. Deterministic extraction is available below." : analysis.error || "Deterministic extraction is ready for review."))}</p>
       ${analysis.humanReviewed ? `<div class="alert-info small"><strong>Human-confirmed decision preserved.</strong> New processing output remains a separate candidate until a reviewer explicitly replaces it.</div>` : ""}
       ${visibleFindings.length ? `<div class="evidence-findings"><strong class="small">What needs attention</strong><ul class="issue-list">${visibleFindings.map((issue) => `<li>${html(issue)}</li>`).join("")}</ul></div>` : ""}
@@ -120,6 +126,10 @@ export function reviewForm(item, analysis) {
   if (!canReview() || !analysis) return "";
   const extractionSupportsMatching = !["empty", "failed", "ocr_required", "unsupported"].includes(analysis.extractionStatus)
     && !["empty", "extraction_failed", "ocr_required", "unsupported_for_text_extraction"].includes(analysis.textExtractionStatus);
+  const canConfirmAi = analysis.aiProfile?.status !== "failed"
+    && ["processed", "needs_review"].includes(analysis.processingStatus)
+    && Boolean(analysis.detectedEvidenceType)
+    && analysis.detectedEvidenceType !== "other";
   const selectedRuleId = analysis.humanOverrideRuleId || item.relatedObligationId || (extractionSupportsMatching ? analysis.suggestedRuleId : null);
   return `
     <details class="detail-disclosure review-disclosure">
@@ -146,7 +156,7 @@ export function reviewForm(item, analysis) {
         <textarea name="notes" placeholder="Why this decision was made — preserved in the audit lineage">${html(analysis.humanReviewNotes || "")}</textarea>
       </label>
       <div class="review-form-actions">
-        <button type="submit" class="btn btn-primary btn-sm" name="action" value="accept_ai">Confirm AI classification</button>
+        ${canConfirmAi ? `<button type="submit" class="btn btn-primary btn-sm" name="action" value="accept_ai">Confirm AI classification</button>` : ""}
         <button type="submit" class="btn btn-secondary btn-sm" name="action" value="override">Apply override</button>
       </div>
       <details class="detail-disclosure review-secondary-actions" data-ui-role="secondary-review-actions">

@@ -121,7 +121,8 @@ function evidenceItem(item) {
   const canRestore = item.archived && item.storageDeletionStatus !== "deleted";
   const canRetryDeletion = item.storageDeletionStatus === "failed" && item.fileReference;
   const status = evidenceStatus(item, job, analysis);
-  const extractionNeedsRetry = ["failed", "extraction_failed"].includes(analysis?.extractionStatus)
+  const extractionNeedsRetry = analysis?.aiProfile?.status === "failed"
+    || ["failed", "extraction_failed"].includes(analysis?.extractionStatus)
     || ["failed", "dead_letter"].includes(job?.status);
   const processButton = `<button class="btn btn-secondary btn-sm" data-action="process-ai" data-evidence-id="${html(item.id)}" ${!active && !blocked && item.fileReference && !item.archived ? "" : "disabled"}>${ICONS.spark} ${active ? "Processing…" : analysis ? "Reprocess" : "Process"}</button>`;
   return `
@@ -168,6 +169,7 @@ function evidenceItem(item) {
 function evidenceStatus(item, job, analysis) {
   if (item.archived) return { code: "inactive", text: "Archived" };
   if (item.legalHoldActive) return { code: "blocked", text: "On hold" };
+  if (analysis?.aiProfile?.status === "failed" && ["extracted", "partial"].includes(analysis.extractionStatus)) return { code: "needs_review", text: "Needs review" };
   if (item.scanStatus === "scan_suspicious" || ["failed", "dead_letter"].includes(job?.status)) return { code: "failed", text: "Failed" };
   if (["queued", "processing"].includes(job?.status) || item.scanStatus === "scan_pending") return { code: "processing", text: "Processing" };
   if (item.status === "accepted") return { code: "accepted", text: "Accepted" };

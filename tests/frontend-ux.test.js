@@ -174,6 +174,43 @@ test("Evidence review uses progressive disclosure and withholds weak obligation 
   assert.doesNotMatch(failedMarkup, /<option value="us-injury-recordkeeping" selected>/);
 });
 
+test("Evidence UI presents deterministic partial success and hides invalid AI confirmation", () => {
+  Object.assign(state, {
+    user: { role: "admin", email: "pilot-admin@ergon.local", name: "Synthetic Pilot Administrator" },
+    facilities: [{ id: "facility-1", name: "Synthetic Plant", country: "US", region: "OH" }],
+    selectedFacilityId: "facility-1",
+    evidenceTypes: ["other", "hazardous_waste_manifests"],
+    applicableRules: [{ id: "rule-1", title: "Hazardous waste manifests" }],
+    evidence: [{
+      id: "xlsx-1", facilityId: "facility-1", title: "Manifest register", evidenceType: "other",
+      fileName: "manifest.xlsx", fileSizeBytes: 500, fileReference: "private/manifest.xlsx", scanStatus: "scan_clean",
+      status: "needs_review", archived: false, legalHoldActive: false, storageDeletionStatus: "retained"
+    }],
+    processingJobs: [{ id: "job-1", evidenceId: "xlsx-1", status: "dead_letter", processingAttempts: 1, maxAttempts: 3, lastProcessingError: "Provider output invalid" }],
+    aiAnalyses: [{
+      id: "analysis-xlsx", evidenceId: "xlsx-1", processingStatus: "needs_review", textExtractionStatus: "extracted",
+      extractionStatus: "extracted", extractionMethod: "xlsx_parser", detectedFormat: "xlsx", detectedEvidenceType: null,
+      confidence: null, needsHumanReview: true, summary: null,
+      error: "Deterministic extraction succeeded, but the provider returned an invalid structured analysis.",
+      issues: ["AI analysis failed validation or provider processing. Deterministic extraction and source references remain available for human review."],
+      processingWarnings: [], provenanceAnchors: Array.from({ length: 19 }, (_, index) => ({ id: `cell-${index}`, label: `Cell ${index + 1}`, excerpt: "Synthetic cell" })),
+      deterministicProfile: { wordCount: 42 }, aiProfile: { status: "failed", errorCode: "AI_PROVIDER_INVALID_RESPONSE" },
+      humanReviewed: false, humanOverrideRuleId: null, humanReviewNotes: null
+    }],
+    aiStatus: { enabled: true, provider: "azure_openai", model: "deployment" }
+  });
+
+  const markup = evidenceView();
+  assert.match(markup, /Needs review/);
+  assert.match(markup, /Extraction complete · AI analysis failed/);
+  assert.match(markup, /AI analysis failed validation or provider processing/);
+  assert.match(markup, /Source references \(19\)/);
+  assert.match(markup, /Reprocess<\/button>/);
+  assert.match(markup, /Apply override/);
+  assert.doesNotMatch(markup, /Confirm AI classification/);
+  assert.doesNotMatch(markup, /data-ui-role="primary-workflow-state"[\s\S]{0,100}>Failed</);
+});
+
 test("app shell source includes mobile navigation and visible sign out controls", async () => {
   const source = await readFile(path.resolve("apps/web/src/app.js"), "utf8");
   assert.match(source, /mobile-menu-btn/);

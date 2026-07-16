@@ -37,24 +37,30 @@ class ResponsesEvidenceProvider {
       try {
         payload = await response.json();
       } catch {
-        throw invalidProviderResponse(`${this.providerLabel} response body was not valid JSON`);
+        throw invalidProviderResponse(this.providerLabel, { field: "$", reasonCode: "MALFORMED_PROVIDER_RESPONSE" });
       }
-      if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw invalidProviderResponse(`${this.providerLabel} response body was malformed`);
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        throw invalidProviderResponse(this.providerLabel, { field: "$", reasonCode: "MALFORMED_PROVIDER_RESPONSE" });
+      }
       assertCompleteResponse(payload, this.providerLabel);
       const outputText = getOutputText(payload);
-      if (!outputText) throw invalidProviderResponse(`${this.providerLabel} response did not contain structured output text`);
+      if (!outputText) throw invalidProviderResponse(this.providerLabel, { field: "$", reasonCode: "MISSING_STRUCTURED_OUTPUT" });
       let parsed;
       try {
         parsed = JSON.parse(outputText);
       } catch {
-        throw invalidProviderResponse(`${this.providerLabel} response was not valid JSON`);
+        throw invalidProviderResponse(this.providerLabel, { field: "$", reasonCode: "MALFORMED_JSON" });
       }
       let validated;
       try {
-        validated = validateEvidenceAiOutput(parsed, { applicableRules, reviewRequiredThreshold: this.reviewRequiredThreshold });
+        validated = validateEvidenceAiOutput(parsed, { reviewRequiredThreshold: this.reviewRequiredThreshold });
       } catch (error) {
         if (error.code !== "AI_INVALID_OUTPUT") throw error;
-        throw invalidProviderResponse(`${this.providerLabel} structured output failed ERGON schema validation`);
+        throw invalidProviderResponse(this.providerLabel, {
+          category: error.validationCategory,
+          field: error.validationField,
+          reasonCode: error.validationReasonCode
+        });
       }
       return attachProviderUsage(validated, {
         provider: this.kind,
@@ -67,7 +73,8 @@ class ResponsesEvidenceProvider {
         outputTokens: safeTokenCount(payload.usage?.output_tokens),
         totalTokens: safeTokenCount(payload.usage?.total_tokens),
         providerCalls: 1,
-        resultCategory: "success"
+        resultCategory: "success",
+        validationWarningCount: validated.validationWarnings?.length || 0
       });
     } catch (error) {
       if (error.name === "AbortError") {
@@ -135,7 +142,6 @@ export class MockEvidenceAiProvider {
   async analyzeEvidenceDocument(context) {
     const output = this.resolver ? await this.resolver(context) : heuristicMockOutput(context);
     const validated = validateEvidenceAiOutput(output, {
-      applicableRules: context.applicableRules,
       reviewRequiredThreshold: this.reviewRequiredThreshold
     });
     return attachProviderUsage(validated, {
@@ -270,17 +276,16 @@ function getOutputText(payload) {
 
 function assertCompleteResponse(payload, providerLabel) {
   if (payload?.status === "incomplete") {
-    const reason = payload.incomplete_details?.reason || "unknown";
-    const error = invalidProviderResponse(`${providerLabel} response was incomplete (${reason})`);
+    const error = invalidProviderResponse(providerLabel, { field: "$", reasonCode: "INCOMPLETE_RESPONSE" });
     error.code = "AI_PROVIDER_INCOMPLETE";
     error.status = 502;
-    error.retryable = reason !== "content_filter";
+    error.retryable = payload.incomplete_details?.reason !== "content_filter";
     throw error;
   }
   for (const output of payload?.output || []) {
     for (const content of output.content || []) {
       if (content.type === "refusal" || typeof content.refusal === "string") {
-        const error = invalidProviderResponse(`${providerLabel} refused the evidence analysis request`);
+        const error = invalidProviderResponse(providerLabel, { field: "$", reasonCode: "PROVIDER_REFUSAL" });
         error.code = "AI_PROVIDER_REFUSAL";
         error.status = 502;
         error.retryable = false;
@@ -314,7 +319,10 @@ function attachFailureUsage(error, provider, startedAt) {
       totalTokens: null,
       providerCalls: 1,
       resultCategory: "failure",
-      errorCode: error.code || "AI_PROVIDER_ERROR"
+      errorCode: error.code || "AI_PROVIDER_ERROR",
+      validationCategory: error.validationCategory || null,
+      validationField: error.validationField || null,
+      validationReasonCode: error.validationReasonCode || null
     }),
     enumerable: false
   });
@@ -345,9 +353,10 @@ function providerHttpError(providerLabel, status) {
   return error;
 }
 
-function invalidProviderResponse(message) {
-  const error = invalidAiOutput(message);
+function invalidProviderResponse(providerLabel, { category = "STRUCTURAL_PROVIDER_OUTPUT", field = "$", reasonCode = "INVALID_STRUCTURE" } = {}) {
+  const error = invalidAiOutput(`${providerLabel} returned an invalid structured analysis.`, field, reasonCode);
   error.code = "AI_PROVIDER_INVALID_RESPONSE";
+  error.validationCategory = category || "STRUCTURAL_PROVIDER_OUTPUT";
   error.status = 502;
   error.retryable = false;
   return error;

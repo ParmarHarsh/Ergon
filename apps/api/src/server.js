@@ -516,7 +516,10 @@ async function requestPasswordRecovery(req, res) {
       metadata: {
         provider: delivery.provider,
         status: delivery.status,
-        errorCode: delivery.errorCode || undefined
+        messageAccepted: delivery.messageAccepted || undefined,
+        errorCode: delivery.errorCode || undefined,
+        smtpCommand: delivery.smtpCommand || undefined,
+        smtpResponseCode: delivery.smtpResponseCode || undefined
       },
       ipAddress: clientIp(req)
     });
@@ -524,7 +527,15 @@ async function requestPasswordRecovery(req, res) {
     if (delivery.ok) {
       logger.info("password_recovery_delivery_sent", { requestId: req.context.requestId, organizationId: user.organizationId, userId: user.id, provider: delivery.provider, messageId: delivery.messageId });
     } else {
-      logger.warn("password_recovery_delivery_failed", { requestId: req.context.requestId, organizationId: user.organizationId, userId: user.id, provider: delivery.provider, errorCode: delivery.errorCode });
+      logger.warn("password_recovery_delivery_failed", {
+        requestId: req.context.requestId,
+        organizationId: user.organizationId,
+        userId: user.id,
+        provider: delivery.provider,
+        errorCode: delivery.errorCode,
+        smtpCommand: delivery.smtpCommand,
+        smtpResponseCode: delivery.smtpResponseCode
+      });
     }
   }
 

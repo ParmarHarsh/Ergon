@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { AzureOpenAiEvidenceProvider, createEvidenceAiProvider, extractEvidenceText, groundEvidenceAiOutput, MockEvidenceAiProvider, normalizeAzureOpenAiEndpoint, OpenAiEvidenceProvider, validateEvidenceAiOutput } from "../packages/ai/src/index.js";
@@ -28,13 +29,22 @@ test("AI providers validate taxonomy, JSON, confidence, and bounded extraction",
   assert.equal(result.detectedEvidenceType, "forklift_training_records");
   assert.equal(result.needsHumanReview, false);
 
-  assert.throws(() => validateEvidenceAiOutput(output({ detectedEvidenceType: "invented_type" }), { applicableRules }), /detectedEvidenceType/);
-  assert.throws(() => validateEvidenceAiOutput(output({ confidence: 1.2 }), { applicableRules }), /confidence/);
-  assert.throws(() => validateEvidenceAiOutput({ ...output(), unexpected: true }, { applicableRules }), /unexpected fields/);
+  assert.throws(() => validateEvidenceAiOutput(output({ detectedEvidenceType: "invented_type" })), diagnostic("detectedEvidenceType", "INVALID_ENUM"));
+  assert.throws(() => validateEvidenceAiOutput(output({ confidence: 1.2 })), diagnostic("confidence", "OUT_OF_RANGE"));
+  assert.throws(() => validateEvidenceAiOutput({ ...output(), unexpected: true }), diagnostic("$", "UNEXPECTED_FIELD"));
   const missingSummary = output();
   delete missingSummary.summary;
-  assert.throws(() => validateEvidenceAiOutput(missingSummary, { applicableRules }), /missing required fields/);
-  assert.throws(() => validateEvidenceAiOutput(output({ employeeNames: Array.from({ length: 101 }, () => "Employee") }), { applicableRules }), /at most 100/);
+  assert.throws(() => validateEvidenceAiOutput(missingSummary), diagnostic("summary", "MISSING_REQUIRED_FIELD"));
+  assert.throws(() => validateEvidenceAiOutput(output({ signaturePresent: "yes" })), diagnostic("signaturePresent", "INVALID_TYPE"));
+  assert.throws(() => validateEvidenceAiOutput(output({ employeeNames: Array.from({ length: 101 }, () => "Employee") })), diagnostic("employeeNames", "INVALID_ARRAY"));
+  assert.throws(() => validateEvidenceAiOutput(output({ summary: 42 })), diagnostic("summary", "INVALID_TYPE"));
+  const invalidDate = validateEvidenceAiOutput(output({ documentDate: "March 14, 2025" }));
+  assert.equal(invalidDate.documentDate, null);
+  assert.equal(invalidDate.needsHumanReview, true);
+  assert.deepEqual(invalidDate.validationWarnings, [{ field: "documentDate", reasonCode: "INVALID_DATE" }]);
+  const unknownRule = validateEvidenceAiOutput(output({ suggestedRuleId: "unknown-rule", suggestedObligationTitle: "Untrusted title" }));
+  assert.equal(unknownRule.suggestedRuleId, "unknown-rule");
+  assert.equal(unknownRule.suggestedObligationTitle, "Untrusted title");
   const low = validateEvidenceAiOutput(output({ confidence: 0.4, needsHumanReview: false }), { applicableRules, reviewRequiredThreshold: 0.7 });
   assert.equal(low.needsHumanReview, true);
 
@@ -43,14 +53,14 @@ test("AI providers validate taxonomy, JSON, confidence, and bounded extraction",
     openAiModel: "test-model",
     aiReviewRequiredThreshold: 0.7
   }, async () => ({ ok: true, status: 200, json: async () => ({ output_text: "not-json" }) }));
-  await assert.rejects(() => openai.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), /not valid JSON/);
+  await assert.rejects(() => openai.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), diagnostic("$", "MALFORMED_JSON", "AI_PROVIDER_INVALID_RESPONSE"));
 
   const malformedBody = new OpenAiEvidenceProvider({ openAiApiKey: "test-key", openAiModel: "test-model", aiReviewRequiredThreshold: 0.7 }, async () => ({
     ok: true,
     status: 200,
     json: async () => null
   }));
-  await assert.rejects(() => malformedBody.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), /malformed/);
+  await assert.rejects(() => malformedBody.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), diagnostic("$", "MALFORMED_PROVIDER_RESPONSE", "AI_PROVIDER_INVALID_RESPONSE"));
 
   let requestBody;
   let requestUrl;
@@ -78,6 +88,7 @@ test("AI providers validate taxonomy, JSON, confidence, and bounded extraction",
   assert.equal(requestHeaders["api-key"], undefined);
   assert.equal(requestBody.text.format.strict, true);
   assert.equal(requestBody.text.format.schema.additionalProperties, false);
+  assert.deepEqual(findUnsupportedSchemaKeywords(requestBody.text.format.schema), []);
   assert.deepEqual(structuredResult.providerUsage.inputTokens, 120);
   assert.equal(JSON.stringify(structuredResult).includes("providerUsage"), false);
 
@@ -158,14 +169,30 @@ test("Azure OpenAI uses the shared Responses contract with safe configuration, e
   assert.equal(result.providerUsage.provider, "azure_openai");
   assert.equal(result.providerUsage.deployment, "ergon-test-deployment");
   assert.equal(result.providerUsage.promptVersion, "evidence-intelligence-v2");
-  assert.equal(result.providerUsage.schemaVersion, "evidence-intelligence-schema-v1");
+  assert.equal(result.providerUsage.schemaVersion, "evidence-intelligence-schema-v2");
   assert.equal(result.providerUsage.inputTokens, 40);
   const grounded = groundEvidenceAiOutput(result, extraction);
   assert.equal(grounded.equipment.find((item) => item.value === "Forklift").supportStatus, "source_supported");
   assert.equal(grounded.equipment.find((item) => item.value === "Crane").supportStatus, "unsupported_candidate");
 
   const malformed = new AzureOpenAiEvidenceProvider(azureConfig, async () => ({ ok: true, status: 200, json: async () => ({ output_text: "not-json" }) }));
-  await assert.rejects(() => malformed.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), (error) => error.code === "AI_PROVIDER_INVALID_RESPONSE");
+  await assert.rejects(() => malformed.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), diagnostic("$", "MALFORMED_JSON", "AI_PROVIDER_INVALID_RESPONSE"));
+
+  const invalidStructured = new AzureOpenAiEvidenceProvider(azureConfig, async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ status: "completed", output_text: JSON.stringify(output({ confidence: 7 })) })
+  }));
+  await assert.rejects(() => invalidStructured.analyzeEvidenceDocument({ text: "text", evidence: {}, facility: {}, applicableRules }), (error) => {
+    assert.equal(error.message, "Azure OpenAI returned an invalid structured analysis.");
+    assert.equal(error.validationField, "confidence");
+    assert.equal(error.validationReasonCode, "OUT_OF_RANGE");
+    assert.equal(error.providerUsage.schemaVersion, "evidence-intelligence-schema-v2");
+    assert.equal(error.providerUsage.promptVersion, "evidence-intelligence-v2");
+    assert.equal(error.providerUsage.validationField, "confidence");
+    assert.equal(JSON.stringify(error.providerUsage).includes("azure-test-secret"), false);
+    return true;
+  });
 
   const refusal = new AzureOpenAiEvidenceProvider(azureConfig, async () => ({
     ok: true,
@@ -250,6 +277,37 @@ test("obligation suggestions require source-specific support instead of generic 
 
   const none = qualifyObligationSuggestion({ output: candidate({ suggestedRuleId: null }), applicableRules: rules, sourceText: "General document." });
   assert.equal(none.classification, "NO_SUPPORTED_MATCH");
+
+  const unknown = qualifyObligationSuggestion({
+    output: candidate({ suggestedRuleId: "unknown-rule", suggestedObligationTitle: "Provider title" }),
+    applicableRules: rules,
+    sourceText: "OSHA 300 log of work-related injuries and illnesses."
+  });
+  assert.equal(unknown.classification, "WEAK_CANDIDATE");
+  assert.equal(unknown.reasonCode, "RULE_NOT_APPLICABLE");
+  assert.equal(unknown.candidateTitle, null);
+
+  const nonApplicable = qualifyObligationSuggestion({
+    output: candidate({ suggestedRuleId: rule("us-fire-extinguishers").id, suggestedObligationTitle: rule("us-fire-extinguishers").title }),
+    applicableRules: rules.filter((item) => item.id !== "us-fire-extinguishers"),
+    sourceText: "Monthly portable fire extinguisher inspection completed."
+  });
+  assert.equal(nonApplicable.classification, "WEAK_CANDIDATE");
+  assert.equal(nonApplicable.reasonCode, "RULE_NOT_APPLICABLE");
+  assert.equal(nonApplicable.candidateTitle, null);
+
+  const mismatchedTitle = qualifyObligationSuggestion({
+    output: candidate({
+      detectedEvidenceType: "osha_300_log",
+      suggestedRuleId: rule("us-injury-recordkeeping").id,
+      suggestedObligationTitle: "Provider-invented title"
+    }),
+    applicableRules: rules,
+    sourceText: "OSHA 300 log of work-related injuries and illnesses."
+  });
+  assert.equal(mismatchedTitle.classification, "WEAK_CANDIDATE");
+  assert.equal(mismatchedTitle.reasonCode, "TITLE_MISMATCH");
+  assert.equal(mismatchedTitle.candidateTitle, rule("us-injury-recordkeeping").title);
 });
 
 test("AI processing is auditable and human override wins over AI and deterministic suggestions", async () => {
@@ -392,15 +450,45 @@ test("medium confidence requires review and invalid provider output is persisted
   const invalidProvider = new MockEvidenceAiProvider(aiConfig, () => output({ detectedEvidenceType: "invented" }));
   const invalidService = createEvidenceAiService({ config: aiConfig, repo, storage, provider: invalidProvider });
   await assert.rejects(() => invalidService.processEvidence({ organizationId: org.id, evidenceId: evidence.id, userId: user.id }), /detectedEvidenceType/);
-  assert.equal((await repo.getAiAnalysis(org.id, evidence.id)).processingStatus, "failed");
-  assert.equal((await repo.getAiAnalysis(org.id, evidence.id)).extractionStatus, "extracted");
-  assert.match((await repo.getAiAnalysis(org.id, evidence.id)).normalizedText, /Lockout procedure/);
-  assert.equal((await repo.getAiAnalysis(org.id, evidence.id)).aiProfile.status, "failed");
+  const partialFailure = await repo.getAiAnalysis(org.id, evidence.id);
+  assert.equal(partialFailure.processingStatus, "needs_review");
+  assert.equal(partialFailure.extractionStatus, "extracted");
+  assert.match(partialFailure.normalizedText, /Lockout procedure/);
+  assert.ok(partialFailure.provenanceAnchors.length > 0);
+  assert.equal(partialFailure.aiProfile.status, "failed");
+  assert.equal(partialFailure.aiProfile.validationField, "detectedEvidenceType");
+  assert.equal(partialFailure.aiProfile.validationReasonCode, "INVALID_ENUM");
+  assert.match(partialFailure.error, /Deterministic extraction succeeded/);
+  await assert.rejects(() => invalidService.reviewEvidence({
+    organizationId: org.id,
+    evidenceId: evidence.id,
+    reviewer: user,
+    reviewInput: { action: "accept_ai", evidenceType: null, ruleId: null, notes: null }
+  }), /valid AI classification is not available/);
   const history = await repo.getAiAnalysisHistory(org.id, evidence.id);
   assert.deepEqual(history.map((item) => item.analysisVersion), [3, 2, 1]);
   assert.equal(history[0].isCurrent, true);
   assert.equal(history[1].isCurrent, false);
   assert.ok((await repo.listAuditLogs(org.id, facility.id)).some((entry) => entry.action === "ai_output_rejected_invalid_schema"));
+});
+
+test("targeted Azure XLSX live harness refuses missing private configuration before any provider call", () => {
+  const run = spawnSync(process.execPath, ["scripts/qa-ai-live.mjs"], {
+    cwd: path.resolve("."),
+    encoding: "utf8",
+    env: {
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      AI_ENABLED: "true",
+      AI_PROVIDER: "azure_openai",
+      ERGON_LIVE_AI_ACCEPTANCE: "true",
+      ERGON_LIVE_AI_FORMAT: "xlsx"
+    }
+  });
+  assert.equal(run.status, 1);
+  const result = JSON.parse(run.stderr.trim());
+  assert.equal(result.classification, "BLOCKED_PRIVATE_AZURE_CONFIGURATION");
+  assert.match(result.message, /AZURE_OPENAI_ENDPOINT/);
 });
 
 function output(overrides = {}) {
@@ -426,4 +514,24 @@ function output(overrides = {}) {
     missingFieldsOrIssues: [],
     ...overrides
   };
+}
+
+function diagnostic(field, reasonCode, code = "AI_INVALID_OUTPUT") {
+  return (error) => {
+    assert.equal(error.code, code);
+    assert.equal(error.validationCategory, "STRUCTURAL_PROVIDER_OUTPUT");
+    assert.equal(error.validationField, field);
+    assert.equal(error.validationReasonCode, reasonCode);
+    return true;
+  };
+}
+
+function findUnsupportedSchemaKeywords(value, found = []) {
+  if (!value || typeof value !== "object") return found;
+  const unsupported = new Set(["minLength", "maxLength", "pattern", "format", "minimum", "maximum", "minItems", "maxItems"]);
+  for (const [key, child] of Object.entries(value)) {
+    if (unsupported.has(key)) found.push(key);
+    findUnsupportedSchemaKeywords(child, found);
+  }
+  return found;
 }
