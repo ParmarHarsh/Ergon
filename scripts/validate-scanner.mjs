@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { ClamAvMalwareScanner, MockMalwareScanner, assertEvidenceDownloadAllowed, canProcessScannedEvidence } from "../apps/api/src/malware-scanner.js";
 
-if (process.env.MALWARE_SCAN_ENABLED !== "true" || process.env.MALWARE_SCANNER_PROVIDER !== "clamav" || !process.env.CLAMAV_HOST) {
-  process.stdout.write("SKIPPED: enable the clamav provider and set CLAMAV_HOST to validate a live scanner.\n");
+if (process.env.ERGON_LIVE_CLOUD_VALIDATION !== "true" || process.env.MALWARE_SCAN_ENABLED !== "true" || process.env.MALWARE_SCANNER_PROVIDER !== "clamav" || !process.env.CLAMAV_HOST) {
+  process.stdout.write("CLOUD_COMPONENT_CLASSIFICATION=READY_MISSING_CLOUD_CONFIGURATION\nSKIPPED: explicitly opt in, enable the clamav provider, and set CLAMAV_HOST to validate a live scanner.\n");
   process.exit(0);
 }
 
@@ -42,6 +42,7 @@ const timeoutScanner = new ClamAvMalwareScanner({
 });
 await assert.rejects(() => timeoutScanner.scanBuffer({ buffer: Buffer.from("timeout") }), (error) => error.code === "MALWARE_SCANNER_TIMEOUT");
 process.stdout.write("PASS: scanner clean path, suspicious blocking, timeout handling, and fail-closed behavior validated.\n");
+process.stdout.write("CLOUD_COMPONENT_CLASSIFICATION=PASSED_LIVE_SCANNER\n");
 
 function integer(value, name) {
   const parsed = Number.parseInt(value, 10);

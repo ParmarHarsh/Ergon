@@ -1,3 +1,5 @@
+export const EXPECTED_SCHEMA_MIGRATION = "0009_evidence_intelligence_foundation";
+
 export async function runMigrations(pool, migrations) {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (

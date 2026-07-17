@@ -350,16 +350,23 @@ test("API requires auth and blocks cross-organization access", async () => {
     assert.equal(packetDelete.status, 200);
     const deletedPacket = await packetDelete.json();
     assert.equal(deletedPacket.archived, true);
-    assert.equal(deletedPacket.storageDeletionStatus, "deleted");
-    assert.equal(deletedPacket.fileReference, null);
+    assert.equal(deletedPacket.storageDeletionStatus, "retained");
+    assert.ok(deletedPacket.fileReference);
     assert.equal((await fetch(`${base}/api/audit-packets/${packet.id}/download`, { headers: { cookie } })).status, 410);
 
     const evidenceDelete = await fetch(`${base}/api/evidence/${evidence.id}?reason=Pilot%20cleanup`, { method: "DELETE", headers: { cookie } });
     assert.equal(evidenceDelete.status, 200);
     const deletedEvidence = await evidenceDelete.json();
     assert.equal(deletedEvidence.archived, true);
-    assert.equal(deletedEvidence.storageDeletionStatus, "deleted");
-    assert.equal(deletedEvidence.fileReference, null);
+    assert.equal(deletedEvidence.storageDeletionStatus, "retained");
+    assert.ok(deletedEvidence.fileReference);
+    const restoredEvidenceResponse = await fetch(`${base}/api/evidence/${evidence.id}/restore`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ reason: "Archive restore proof" })
+    });
+    assert.equal(restoredEvidenceResponse.status, 200);
+    assert.equal((await restoredEvidenceResponse.json()).archived, false);
     const deletionLogs = await repo.listAuditLogs(orgA.id, facility.id);
     assert.ok(deletionLogs.some((entry) => entry.action === "packet.archived"));
     assert.ok(deletionLogs.some((entry) => entry.action === "evidence.archived"));

@@ -2,15 +2,17 @@ import { randomUUID } from "node:crypto";
 import { RULES_PACKS, COMPLIANCE_RULES } from "../../rules/src/index.js";
 import { forbidden, validationError } from "../../shared/src/index.js";
 import { createPostgresPool } from "./postgres-pool.js";
+import { EXPECTED_SCHEMA_MIGRATION } from "./migration-runner.js";
 
 export class PostgresRepository {
-  constructor(databaseUrl) {
+  constructor(databaseUrl, poolOptions = {}) {
     this.databaseUrl = databaseUrl;
+    this.poolOptions = poolOptions;
     this.pool = null;
   }
 
   async init() {
-    this.pool = await createPostgresPool(this.databaseUrl);
+    this.pool = await createPostgresPool(this.databaseUrl, this.poolOptions);
     await this.seedRules();
   }
 
@@ -31,8 +33,13 @@ export class PostgresRepository {
   }
 
   async healthCheck() {
-    await this.query("SELECT 1");
-    return { ok: true, backend: "postgres" };
+    const [schema] = await this.query("SELECT id, applied_at FROM schema_migrations ORDER BY id DESC LIMIT 1");
+    if (!schema || schema.id !== EXPECTED_SCHEMA_MIGRATION) {
+      const error = new Error("Database schema migrations are not current");
+      error.code = "DATABASE_SCHEMA_OUTDATED";
+      throw error;
+    }
+    return { ok: true, backend: "postgres", schema: { current: schema.id, expected: EXPECTED_SCHEMA_MIGRATION } };
   }
 
   async seedRules() {

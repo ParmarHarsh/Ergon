@@ -1,0 +1,260 @@
+previews:
+  generation: off
+
+services:
+  - type: web
+    name: ergon-staging-api
+    runtime: node
+    region: ohio
+    plan: starter
+    branch: phase-27-cloud-staging-foundation
+    autoDeployTrigger: off
+    buildCommand: npm ci && npm run typecheck && npm run lint && npm --workspace @ergon/api run build
+    startCommand: npm run start:api
+    healthCheckPath: /health/ready
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DEPLOYMENT_PROFILE
+        value: staging
+      - key: PROCESS_ROLE
+        value: api
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: TRUST_PROXY
+        value: "true"
+      - key: REPOSITORY_BACKEND
+        value: postgres
+      - key: DATABASE_SSL_REQUIRED
+        value: "true"
+      - key: DATABASE_POOL_MAX
+        value: "10"
+      - key: READINESS_TIMEOUT_MS
+        value: "5000"
+      - key: STORAGE_BACKEND
+        value: s3
+      - key: MAX_UPLOAD_MB
+        value: "25"
+      - key: SIGNED_URL_EXPIRY_SECONDS
+        value: "300"
+      - key: S3_FORCE_PATH_STYLE
+        value: "true"
+      - key: QUEUE_BACKEND
+        value: local
+      - key: QUEUE_CONCURRENCY
+        value: "1"
+      - key: QUEUE_MAX_RETRIES
+        value: "3"
+      - key: QUEUE_LEASE_MS
+        value: "300000"
+      - key: QUEUE_HEARTBEAT_MS
+        value: "30000"
+      - key: QUEUE_POLL_MS
+        value: "1000"
+      - key: QUEUE_SHUTDOWN_TIMEOUT_MS
+        value: "30000"
+      - key: MALWARE_SCAN_ENABLED
+        value: "true"
+      - key: MALWARE_SCANNER_PROVIDER
+        value: clamav
+      - key: MALWARE_SCAN_FAIL_POLICY
+        value: closed
+      - key: MALWARE_SCAN_TIMEOUT_MS
+        value: "10000"
+      - key: MALWARE_SCAN_REQUIRED_IN_PRODUCTION
+        value: "false"
+      - key: AI_ENABLED
+        value: "false"
+      - key: AI_PROVIDER
+        value: mock
+      - key: AI_MAX_FILE_TEXT_CHARS
+        value: "12000"
+      - key: AI_MAX_OUTPUT_TOKENS
+        value: "2000"
+      - key: AI_TIMEOUT_MS
+        value: "30000"
+      - key: AI_CONFIDENCE_THRESHOLD
+        value: "0.8"
+      - key: AI_REVIEW_REQUIRED_THRESHOLD
+        value: "0.7"
+      - key: RECOVERY_DELIVERY_PROVIDER
+        value: disabled
+      - key: RECOVERY_EXPOSE_TEST_TOKEN
+        value: "false"
+      - key: SMTP_USE_TLS
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_MIGRATION_URL
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: MFA_ENCRYPTION_KEY
+        sync: false
+      - key: CLAMAV_HOST
+        sync: false
+      - key: CLAMAV_PORT
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: OPENAI_MODEL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AZURE_OPENAI_ENDPOINT
+        sync: false
+      - key: AZURE_OPENAI_DEPLOYMENT
+        sync: false
+      - key: AZURE_OPENAI_API_KEY
+        sync: false
+
+  - type: worker
+    name: ergon-staging-worker
+    runtime: node
+    region: ohio
+    plan: starter
+    branch: phase-27-cloud-staging-foundation
+    autoDeployTrigger: off
+    buildCommand: npm ci && npm run typecheck && npm run lint && npm --workspace @ergon/api run build
+    startCommand: npm run start:worker
+    maxShutdownDelaySeconds: 60
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DEPLOYMENT_PROFILE
+        value: staging
+      - key: PROCESS_ROLE
+        value: worker
+      - key: PORT
+        value: "4000"
+      - key: WORKER_HEALTH_HOST
+        value: 127.0.0.1
+      - key: REPOSITORY_BACKEND
+        value: postgres
+      - key: DATABASE_SSL_REQUIRED
+        value: "true"
+      - key: DATABASE_POOL_MAX
+        value: "5"
+      - key: READINESS_TIMEOUT_MS
+        value: "5000"
+      - key: STORAGE_BACKEND
+        value: s3
+      - key: MAX_UPLOAD_MB
+        value: "25"
+      - key: SIGNED_URL_EXPIRY_SECONDS
+        value: "300"
+      - key: S3_FORCE_PATH_STYLE
+        value: "true"
+      - key: QUEUE_BACKEND
+        value: local
+      - key: QUEUE_CONCURRENCY
+        value: "1"
+      - key: QUEUE_MAX_RETRIES
+        value: "3"
+      - key: QUEUE_LEASE_MS
+        value: "300000"
+      - key: QUEUE_HEARTBEAT_MS
+        value: "30000"
+      - key: QUEUE_POLL_MS
+        value: "1000"
+      - key: QUEUE_SHUTDOWN_TIMEOUT_MS
+        value: "30000"
+      - key: MALWARE_SCAN_ENABLED
+        value: "true"
+      - key: MALWARE_SCANNER_PROVIDER
+        value: clamav
+      - key: MALWARE_SCAN_FAIL_POLICY
+        value: closed
+      - key: MALWARE_SCAN_TIMEOUT_MS
+        value: "10000"
+      - key: MALWARE_SCAN_REQUIRED_IN_PRODUCTION
+        value: "false"
+      - key: AI_ENABLED
+        value: "false"
+      - key: AI_PROVIDER
+        value: mock
+      - key: AI_MAX_FILE_TEXT_CHARS
+        value: "12000"
+      - key: AI_MAX_OUTPUT_TOKENS
+        value: "2000"
+      - key: AI_TIMEOUT_MS
+        value: "30000"
+      - key: AI_CONFIDENCE_THRESHOLD
+        value: "0.8"
+      - key: AI_REVIEW_REQUIRED_THRESHOLD
+        value: "0.7"
+      - key: RECOVERY_DELIVERY_PROVIDER
+        value: disabled
+      - key: RECOVERY_EXPOSE_TEST_TOKEN
+        value: "false"
+      - key: SMTP_USE_TLS
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_MIGRATION_URL
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: MFA_ENCRYPTION_KEY
+        sync: false
+      - key: CLAMAV_HOST
+        sync: false
+      - key: CLAMAV_PORT
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: OPENAI_MODEL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AZURE_OPENAI_ENDPOINT
+        sync: false
+      - key: AZURE_OPENAI_DEPLOYMENT
+        sync: false
+      - key: AZURE_OPENAI_API_KEY
+        sync: false

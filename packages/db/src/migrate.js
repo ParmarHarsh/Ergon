@@ -9,7 +9,10 @@ if (config.repositoryBackend !== "postgres") {
   throw new Error("db:migrate requires REPOSITORY_BACKEND=postgres and DATABASE_URL");
 }
 
-const pool = await createPostgresPool(config.databaseUrl);
+const pool = await createPostgresPool(config.databaseMigrationUrl, {
+  sslRequired: config.databaseSslRequired,
+  poolMax: Math.min(config.databasePoolMax, 2)
+});
 
 try {
   const applied = await runMigrations(pool, await loadMigrations());
