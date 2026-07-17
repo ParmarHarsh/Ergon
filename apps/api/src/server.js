@@ -762,6 +762,7 @@ async function createEvidence(req, res, user, allowsFile) {
   if (["accepted", "rejected"].includes(body.status)) requireRole(user, ["admin", "reviewer"]);
   const facility = await requireFacility(user.organizationId, body.facilityId);
   let fileReference = null;
+  const evidenceId = repo.createId();
   let uploadBuffer = null;
   let fileMetadata = { fileName: null, contentType: null, fileSizeBytes: null, fileSha256: null };
   if (allowsFile) {
@@ -790,7 +791,13 @@ async function createEvidence(req, res, user, allowsFile) {
       });
       throw error;
     }
-    const saved = await storage.saveBuffer(uploadBuffer, fileName);
+    const saved = await storage.saveBuffer(uploadBuffer, fileName, {
+      organizationId: user.organizationId,
+      facilityId: facility.id,
+      resourceType: "evidence",
+      resourceId: evidenceId,
+      contentType: validation.detectedContentType
+    });
     fileReference = saved.fileReference;
     fileMetadata = {
       fileName,
@@ -805,14 +812,14 @@ async function createEvidence(req, res, user, allowsFile) {
   }
   let evidence;
   try {
-    evidence = await repo.createEvidence(parseEvidenceInput({
+    evidence = await repo.createEvidence({ id: evidenceId, ...parseEvidenceInput({
       ...body,
       fileReference,
       ...fileMetadata,
       scanStatus: allowsFile ? "scan_pending" : "scan_unavailable",
       country: facility.country,
       region: facility.region
-    }, user.organizationId, user.id));
+    }, user.organizationId, user.id) });
   } catch (error) {
     if (fileReference) await storage.deleteBuffer(fileReference);
     throw error;
@@ -874,23 +881,10 @@ async function archiveEvidence(req, res, user, id) {
   const existing = await requireEvidence(user.organizationId, id);
   if (existing.legalHoldActive) throw lifecycleConflict("Evidence is under legal hold and cannot be archived or deleted", "LEGAL_HOLD_ACTIVE");
   const deletionReason = deletionReasonFrom(req);
-  let storageDeletionStatus = existing.fileReference ? "deleted" : "not_applicable";
-  if (existing.fileReference) {
-    try {
-      await storage.deleteBuffer(existing.fileReference);
-    } catch (error) {
-      await repo.updateEvidence(user.organizationId, id, { storageDeletionStatus: "failed", storageDeletionError: safeOperationalError(error) });
-      await audit(user, existing.facilityId, "evidence_storage_deletion_failed", "evidence", id, { requestId: req.context.requestId, errorCode: error.code || "STORAGE_DELETE_FAILED" });
-      const failure = new Error("Evidence could not be archived because its private storage object could not be deleted");
-      failure.status = 502;
-      failure.code = "STORAGE_DELETE_FAILED";
-      throw failure;
-    }
-  }
+  const storageDeletionStatus = existing.fileReference ? "retained" : "not_applicable";
   const evidence = await repo.archiveEvidence(user.organizationId, id, {
-    fileReference: null,
-    deletedAt: new Date().toISOString(),
-    deletedByUserId: user.id,
+    deletedAt: null,
+    deletedByUserId: null,
     deletionReason,
     storageDeletionStatus,
     storageDeletionError: null
@@ -1106,10 +1100,18 @@ async function exportPacket(req, res, user) {
   const rulesPack = await repo.getRulesPack(review.rulesPackId) || RULES_PACKS.find((pack) => pack.rulesPackId === review.rulesPackId);
   const pdf = generateAuditPacketPdf({ facility, review, gapRows, actionItems, evidence, rulesPack, findings, aiAnalyses });
   const title = "Industrial Audit Readiness Packet";
-  const saved = await storage.saveBuffer(pdf, `audit-packet-${facility.name}.pdf`);
+  const packetId = repo.createId();
+  const saved = await storage.saveBuffer(pdf, `audit-packet-${facility.name}.pdf`, {
+    organizationId: user.organizationId,
+    facilityId: facility.id,
+    resourceType: "audit-packet",
+    resourceId: packetId,
+    contentType: "application/pdf"
+  });
   let packet;
   try {
     packet = await repo.createAuditPacket({
+      id: packetId,
       organizationId: user.organizationId,
       facilityId: facility.id,
       reviewId: review.id,
@@ -1162,29 +1164,10 @@ async function archivePacket(req, res, user, id) {
   }
   if (packet.legalHoldActive) throw lifecycleConflict("Audit packet is under legal hold and cannot be archived or deleted", "LEGAL_HOLD_ACTIVE");
   const deletionReason = deletionReasonFrom(req);
-  let storageDeletionStatus = packet.fileReference ? "deleted" : "not_applicable";
-  if (packet.fileReference) {
-    try {
-      await storage.deleteBuffer(packet.fileReference);
-    } catch (error) {
-      const failed = await repo.archiveAuditPacket(user.organizationId, id, {
-        archived: false,
-        deletedAt: null,
-        deletedByUserId: user.id,
-        deletionReason,
-        storageDeletionStatus: "failed",
-        storageDeletionError: safeOperationalError(error)
-      });
-      await audit(user, packet.facilityId, "packet_storage_deletion_failed", "audit_packet", id, { requestId: req.context.requestId, errorCode: error.code || "STORAGE_DELETE_FAILED" });
-      const failure = new Error(`Audit packet storage deletion failed; archive status is ${failed.storageDeletionStatus}`);
-      failure.status = 502;
-      failure.code = "STORAGE_DELETE_FAILED";
-      throw failure;
-    }
-  }
+  const storageDeletionStatus = packet.fileReference ? "retained" : "not_applicable";
   const archived = await repo.archiveAuditPacket(user.organizationId, id, {
-    deletedAt: new Date().toISOString(),
-    deletedByUserId: user.id,
+    deletedAt: null,
+    deletedByUserId: null,
     deletionReason,
     storageDeletionStatus,
     storageDeletionError: null
@@ -1337,13 +1320,31 @@ async function readiness(res, { service, requireWorker }) {
     ["queue", () => processingQueue.healthCheck({ requireWorker })]
   ]) {
     try {
-      checks[name] = await check();
+      checks[name] = await withReadinessTimeout(check, name);
     } catch (error) {
       checks[name] = { ok: false, errorCode: error.code || `${name.toUpperCase()}_UNAVAILABLE` };
     }
   }
   const ok = Object.values(checks).every((check) => check.ok);
   sendJson(res, { status: ok ? 200 : 503, body: { ok, service, processRole: config.processRole, deploymentProfile: config.deploymentProfile, config: { loaded: true }, ...checks } });
+}
+
+async function withReadinessTimeout(check, name) {
+  let timer;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(check),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          const error = new Error(`${name} readiness check timed out`);
+          error.code = `${name.toUpperCase()}_TIMEOUT`;
+          reject(error);
+        }, config.readinessTimeoutMs);
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function requestExpertReview(req, res, user) {

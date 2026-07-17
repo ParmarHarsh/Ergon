@@ -1441,6 +1441,79 @@ Safe next action:
   - Required.
 - Pilot status:
   - `NO_GO`.
+
+## Phase 27 cloud staging foundation note
+
+- Phase 26 prerequisite:
+  - Phase 26 merge was present on `main` before Phase 27 began.
+- Branch:
+  - `phase-27-cloud-staging-foundation`.
+- New production infrastructure provisioned:
+  - No.
+- Public deployment created:
+  - No.
+- Supabase Auth added:
+  - No.
+- Existing ERGON auth preserved:
+  - Yes.
+- Signup implemented:
+  - No; deferred to Phase 28.
+- Supabase PostgreSQL support:
+  - Prepared through Postgres runtime/migration URL separation, SSL enforcement, pool sizing, and schema readiness checks.
+- Runtime database connection:
+  - `DATABASE_URL`.
+- Migration/backup database connection:
+  - `DATABASE_MIGRATION_URL`.
+- Database SSL:
+  - `DATABASE_SSL_REQUIRED=true` required for secure deployments.
+- Database pool:
+  - `DATABASE_POOL_MAX`, bounded from 1 to 50.
+- Supabase Storage support:
+  - Prepared through the existing S3-compatible private-storage adapter.
+- Storage endpoint:
+  - Configurable `S3_ENDPOINT`; HTTPS-only in secure S3 deployments.
+- Storage path style:
+  - `S3_FORCE_PATH_STYLE=true` documented for Supabase Storage.
+- Unsupported Supabase S3 server-side-encryption header:
+  - Removed from application PutObject requests.
+- Private object key scoping:
+  - Organization, facility, resource type, and resource ID are included where available.
+- Normal archive behavior:
+  - Metadata-only archive retains private object references for ERGON restore.
+- Explicit destructive retention deletion:
+  - Preserved as the object-removal path.
+- Render API:
+  - `render.yaml` defines a separate API web service with `/health/ready`.
+- Render worker:
+  - `render.yaml` defines a separate background worker.
+- Vercel:
+  - `vercel.json` defines static SPA routing.
+- Browser database/storage/provider secrets:
+  - Not added.
+- Real cloud validation:
+  - `READY_MISSING_CLOUD_CONFIGURATION`.
+- Backup and restore readiness:
+  - `READY_FOR_MANUAL_BACKUP_RESTORE_DRILL`.
+- Deployment readiness:
+  - `READY_FOR_MANUAL_STAGING_PROVISIONING`.
+- Live cloud calls in normal CI:
+  - No.
+- Live validators:
+  - Require `ERGON_LIVE_CLOUD_VALIDATION=true`.
+- Database backup helper:
+  - `npm run backup:postgres`.
+- Storage inventory helper:
+  - `npm run inventory:storage`.
+- Migration:
+  - None.
+- Migrations `0001` through `0009` changed:
+  - No.
+- Dependencies:
+  - None expected.
+- Pilot status:
+  - `NO_GO`.
+- Manual acceptance:
+  - Required after private Supabase, Render, Vercel, scanner, SMTP, AI, backup, and restore configuration.
 - Recommended next phase:
   - Analyze the user's Phase 22 manual UX ratings and select one targeted acceptance-driven refinement phase.
 

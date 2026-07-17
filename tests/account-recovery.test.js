@@ -16,11 +16,15 @@ test("recovery test token exposure is rejected for secure deployments", () => {
     APP_URL: "https://app.ergon.example",
     ALLOWED_ORIGINS: "https://app.ergon.example",
     DATABASE_URL: "postgresql://user:password@db.example.com:5432/ergon",
+    DATABASE_SSL_REQUIRED: "true",
     REPOSITORY_BACKEND: "postgres",
     SESSION_SECRET: "replace-with-at-least-thirty-two-characters",
     STORAGE_BACKEND: "s3",
     S3_BUCKET: "ergon-private",
     S3_REGION: "ca-central-1",
+    S3_ENDPOINT: "https://project.supabase.co/storage/v1/s3",
+    S3_ACCESS_KEY_ID: "test-access-key",
+    S3_SECRET_ACCESS_KEY: "test-secret-key",
     MAX_UPLOAD_MB: "25",
     RECOVERY_EXPOSE_TEST_TOKEN: "true"
   }), /RECOVERY_EXPOSE_TEST_TOKEN/);

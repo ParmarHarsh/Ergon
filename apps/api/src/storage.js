@@ -1,7 +1,7 @@
-import { access, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export class LocalPrivateStorage {
@@ -31,6 +31,11 @@ export class LocalPrivateStorage {
 
   async readBuffer(fileReference) {
     return readFile(this.safePath(fileReference));
+  }
+
+  async statObject(fileReference) {
+    const metadata = await stat(this.safePath(fileReference));
+    return { sizeBytes: metadata.size, contentType: null, etag: null };
   }
 
   async deleteBuffer(fileReference) {
@@ -64,29 +69,22 @@ export class S3PrivateStorage {
     this.maxBytes = config.maxUploadMb * 1024 * 1024;
     this.signedUrlExpirySeconds = config.signedUrlExpirySeconds || 300;
     this.presigner = presigner;
-    this.client = client || new S3Client({
-      region: config.s3Region,
-      endpoint: config.s3Endpoint || undefined,
-      forcePathStyle: config.s3ForcePathStyle,
-      credentials: config.s3AccessKeyId
-        ? { accessKeyId: config.s3AccessKeyId, secretAccessKey: config.s3SecretAccessKey }
-        : undefined
-    });
+    this.client = client || createS3Client(config);
   }
 
-  async saveBuffer(buffer, originalName = "artifact.bin") {
+  async saveBuffer(buffer, originalName = "artifact.bin", scope = {}) {
     if (buffer.byteLength > this.maxBytes) {
       const error = new Error(`File exceeds maximum upload size of ${Math.round(this.maxBytes / 1024 / 1024)} MB`);
       error.status = 400;
       throw error;
     }
     const ext = path.extname(originalName).toLowerCase().replace(/[^a-z0-9.]/g, "") || ".bin";
-    const fileReference = `private/${randomUUID()}${ext}`;
+    const fileReference = privateObjectKey(ext, scope);
     await this.client.send(new PutObjectCommand({
       Bucket: this.bucket,
       Key: fileReference,
       Body: buffer,
-      ServerSideEncryption: "AES256"
+      ContentType: scope.contentType || undefined
     }));
     return {
       fileReference,
@@ -108,6 +106,15 @@ export class S3PrivateStorage {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: this.safeKey(fileReference) }));
   }
 
+  async statObject(fileReference) {
+    const response = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: this.safeKey(fileReference) }));
+    return {
+      sizeBytes: Number.isFinite(response.ContentLength) ? response.ContentLength : null,
+      contentType: response.ContentType || null,
+      etag: response.ETag ? String(response.ETag).replace(/^"|"$/g, "") : null
+    };
+  }
+
   async healthCheck() {
     await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
     return { ok: true, backend: this.backend };
@@ -126,6 +133,31 @@ export class S3PrivateStorage {
     }
     return fileReference;
   }
+}
+
+export function createS3Client(config) {
+  return new S3Client({
+    region: config.s3Region,
+    endpoint: config.s3Endpoint || undefined,
+    forcePathStyle: config.s3ForcePathStyle,
+    credentials: config.s3AccessKeyId
+      ? { accessKeyId: config.s3AccessKeyId, secretAccessKey: config.s3SecretAccessKey }
+      : undefined
+  });
+}
+
+function privateObjectKey(extension, scope) {
+  const segments = [scope.organizationId, scope.facilityId, scope.resourceType, scope.resourceId];
+  const pathSegments = segments.every(Boolean)
+    ? segments.map(safeObjectKeySegment)
+    : ["unscoped"];
+  return `private/${pathSegments.join("/")}/${randomUUID()}${extension}`;
+}
+
+function safeObjectKeySegment(value) {
+  const segment = String(value || "");
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(segment)) throw new Error("Invalid private object scope");
+  return segment;
 }
 
 export function createPrivateStorage(config, options = {}) {

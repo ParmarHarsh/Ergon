@@ -140,6 +140,47 @@ Production or closed-pilot deployments require deliberate external infrastructur
 
 Optional integrations include provider-backed evidence analysis and SMTP password recovery. Keep both disabled unless deliberately configured.
 
+### Phase 27 cloud staging foundation
+
+Phase 27 prepares, but does not provision, the first cloud-staging shape for Ergon:
+
+- Supabase managed PostgreSQL for the existing ERGON repository schema and migrations;
+- Supabase Storage through the existing S3-compatible private-storage adapter;
+- Render API and Render worker services as separate Node processes;
+- Vercel static SPA hosting with server-mediated API calls only.
+
+Supabase Auth is intentionally not used. Existing ERGON password sessions, RBAC, MFA, account recovery, tenancy, audit, and human-review authority remain the authentication and authorization system. The browser never receives database credentials, S3 credentials, provider API keys, SMTP passwords, or Supabase service credentials.
+
+For staging, use a Supabase runtime connection for `DATABASE_URL`, preferably the session pooler, and a direct PostgreSQL URL for `DATABASE_MIGRATION_URL` and one-time `npm run db:migrate`. `DATABASE_SSL_REQUIRED=true` is required in secure deployments. Migrations `0001` through `0009` remain the complete schema baseline; Phase 27 adds no migration.
+
+Supabase Storage should be configured as a private bucket via the S3-compatible endpoint:
+
+```text
+https://PROJECT_REF.supabase.co/storage/v1/s3
+```
+
+Set `S3_FORCE_PATH_STYLE=true`. Ergon writes tenant-scoped private object keys and serves downloads only through authenticated API routes and bounded signed URLs. Normal archive is metadata-only so private objects remain recoverable by ERGON restore controls; explicit retention deletion remains the destructive object-removal path. Supabase Storage S3 compatibility does not provide object versioning recovery, and database backups do not contain object bytes, so staging acceptance requires both a database backup/restore drill and a storage inventory/export/reconciliation drill.
+
+Render is represented by `render.yaml` with one web service (`npm run start:api`, `/health/ready`) and one background worker (`npm run start:worker`). Secret values use `sync: false`. Vercel is represented by `vercel.json` for the static web build and SPA fallback routing. Configure only safe public web values such as `WEB_API_ORIGIN` in Vercel; keep all secrets on Render or local private shells.
+
+Cloud validators are explicit opt-in only and make no network calls in normal CI:
+
+```bash
+ERGON_LIVE_CLOUD_VALIDATION=true npm run validate:postgres
+ERGON_LIVE_CLOUD_VALIDATION=true npm run validate:storage
+ERGON_LIVE_CLOUD_VALIDATION=true npm run validate:scanner
+ERGON_LIVE_CLOUD_VALIDATION=true npm run validate:staging
+```
+
+Backup and inventory helpers are also manual operations:
+
+```bash
+npm run backup:postgres
+npm run inventory:storage
+```
+
+See `STAGING_INFRASTRUCTURE_RUNBOOK.md` for the complete Supabase, Render, Vercel, migration, validation, backup, restore, and manual staging walkthrough.
+
 ### Controlled real-provider acceptance
 
 Real-provider acceptance is local and deliberate; it is not a public production deployment. Keep all values below in the current shell or another untracked secret store. Never commit a populated `.env`, paste secrets into chat, or put provider values in browser code.

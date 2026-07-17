@@ -7,7 +7,10 @@ export { nowIso } from "./time.js";
 
 export async function createRepository(config) {
   if (config.repositoryBackend === "postgres") {
-    const repo = new PostgresRepository(config.databaseUrl);
+    const repo = new PostgresRepository(config.databaseUrl, {
+      sslRequired: config.databaseSslRequired,
+      poolMax: config.databasePoolMax
+    });
     await repo.init();
     return repo;
   }

@@ -6,6 +6,29 @@ Phase 15 validates the current Ergon pilot-infrastructure readiness after Phase 
 
 No cloud infrastructure was provisioned. No databases, buckets, scanner services, deployments, billing settings, real `.env` files, secrets, or production customer data were created or used.
 
+## Phase 27 cloud staging foundation update
+
+Phase 27 supersedes the older generic staging plan with a concrete but unprovisioned staging topology:
+
+| Area | Phase 27 status | Pilot implication |
+| ---- | --------------- | ----------------- |
+| Supabase PostgreSQL | Prepared through `DATABASE_URL`, `DATABASE_MIGRATION_URL`, SSL enforcement, pool sizing, migration validation, and schema readiness | Requires manual Supabase provisioning and live validation |
+| Supabase Storage | Prepared through the existing S3-compatible adapter using private bucket credentials and path-style endpoint support | Requires manual private bucket creation, object backup/export plan, and live validation |
+| Render API | Prepared in `render.yaml` as a separate web service with `/health/ready` | Requires manual Render provisioning and readiness proof |
+| Render worker | Prepared in `render.yaml` as a separate background worker | Requires manual worker provisioning and job-processing proof |
+| Vercel web | Prepared through `vercel.json` SPA routing and public `WEB_API_ORIGIN` only | Requires manual Vercel provisioning and CORS/browser smoke proof |
+| Supabase Auth | Not added | Existing ERGON auth remains authoritative |
+| Signup | Not added | Deferred to Phase 28 after staging foundation is proven |
+| Backups | Helper scripts and runbook prepared | Manual database restore and storage reconciliation drill still required |
+
+Current Phase 27 real-cloud classification: `READY_MISSING_CLOUD_CONFIGURATION`.
+
+Backup and restore readiness: `READY_FOR_MANUAL_BACKUP_RESTORE_DRILL`.
+
+Deployment readiness: `READY_FOR_MANUAL_STAGING_PROVISIONING`.
+
+Pilot status remains `NO_GO` because no real Supabase, Render, Vercel, SMTP, scanner, backup, restore, or end-to-end staging acceptance evidence has been produced.
+
 ## Current source baseline
 
 | Item | Evidence |

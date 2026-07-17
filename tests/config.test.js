@@ -10,11 +10,17 @@ const productionEnv = {
   APP_URL: "https://app.ergon.example",
   ALLOWED_ORIGINS: "https://app.ergon.example",
   DATABASE_URL: "postgresql://user:password@db.example.com:5432/ergon",
+  DATABASE_MIGRATION_URL: "postgresql://admin:password@db.example.com:5432/ergon",
+  DATABASE_SSL_REQUIRED: "true",
+  DATABASE_POOL_MAX: "10",
   REPOSITORY_BACKEND: "postgres",
   SESSION_SECRET: "replace-with-at-least-thirty-two-characters",
   STORAGE_BACKEND: "s3",
   S3_BUCKET: "ergon-private",
   S3_REGION: "ca-central-1",
+  S3_ENDPOINT: "https://project.supabase.co/storage/v1/s3",
+  S3_ACCESS_KEY_ID: "test-access-key",
+  S3_SECRET_ACCESS_KEY: "test-secret-key",
   MAX_UPLOAD_MB: "25"
 };
 
@@ -39,6 +45,9 @@ test("production config accepts optional integrations as absent", () => {
   const config = readConfig(productionEnv);
   assert.equal(config.repositoryBackend, "postgres");
   assert.equal(config.databaseUrl, productionEnv.DATABASE_URL);
+  assert.equal(config.databaseMigrationUrl, productionEnv.DATABASE_MIGRATION_URL);
+  assert.equal(config.databaseSslRequired, true);
+  assert.equal(config.databasePoolMax, 10);
   assert.equal(config.enableDemoData, false);
   assert.equal(config.storageBackend, "s3");
   assert.equal(config.deploymentProfile, "staging");
@@ -153,13 +162,20 @@ test("production storage and malware scanning config fail safely", () => {
   const hardened = readConfig({ ...productionEnv, MALWARE_SCAN_ENABLED: "true", MALWARE_SCAN_REQUIRED_IN_PRODUCTION: "true", MALWARE_SCANNER_PROVIDER: "clamav", MALWARE_SCAN_FAIL_POLICY: "closed", CLAMAV_HOST: "clamav.internal" });
   assert.equal(hardened.malwareScannerProvider, "clamav");
   assert.equal(hardened.malwareScanFailPolicy, "closed");
+  assert.throws(() => readConfig({ ...productionEnv, S3_ENDPOINT: "http://project.supabase.co/storage/v1/s3" }), /HTTPS/);
+  assert.throws(() => readConfig({ ...productionEnv, S3_ENDPOINT: "https://user:secret@project.supabase.co/storage/v1/s3" }), /without credentials/);
+  assert.throws(() => readConfig({ ...productionEnv, S3_ACCESS_KEY_ID: "" }), /S3_ACCESS_KEY_ID/);
 });
 
 test("repository config requires Postgres in production without requiring unrelated runtime settings", () => {
   assert.throws(() => readRepositoryConfig({ NODE_ENV: "production", REPOSITORY_BACKEND: "file" }), /must be postgres/);
-  const config = readRepositoryConfig({ NODE_ENV: "production", REPOSITORY_BACKEND: "postgres", DATABASE_URL: productionEnv.DATABASE_URL });
+  const config = readRepositoryConfig({ NODE_ENV: "production", REPOSITORY_BACKEND: "postgres", DATABASE_URL: productionEnv.DATABASE_URL, DATABASE_SSL_REQUIRED: "true" });
   assert.equal(config.repositoryBackend, "postgres");
   assert.equal(config.databaseUrl, productionEnv.DATABASE_URL);
+  assert.equal(config.databaseMigrationUrl, productionEnv.DATABASE_URL);
+  assert.throws(() => readRepositoryConfig({ NODE_ENV: "production", REPOSITORY_BACKEND: "postgres", DATABASE_URL: `${productionEnv.DATABASE_URL}?sslmode=disable`, DATABASE_SSL_REQUIRED: "true" }), /must not disable/);
+  assert.throws(() => readRepositoryConfig({ NODE_ENV: "production", REPOSITORY_BACKEND: "postgres", DATABASE_URL: productionEnv.DATABASE_URL, DATABASE_SSL_REQUIRED: "false" }), /must be true/);
+  assert.throws(() => readRepositoryConfig({ NODE_ENV: "production", REPOSITORY_BACKEND: "postgres", DATABASE_URL: productionEnv.DATABASE_URL, DATABASE_SSL_REQUIRED: "true", DATABASE_POOL_MAX: "100" }), /DATABASE_POOL_MAX/);
 });
 
 test("AI is optional and each provider requires only its own configuration", () => {

@@ -17,11 +17,28 @@ export function readRepositoryConfig(env = process.env) {
     throw new Error("REPOSITORY_BACKEND must be postgres in production");
   }
 
+  const databaseSslRequired = env.DATABASE_SSL_REQUIRED === undefined || env.DATABASE_SSL_REQUIRED === ""
+    ? isProduction
+    : parseBoolean(env.DATABASE_SSL_REQUIRED, "DATABASE_SSL_REQUIRED");
+  const databasePoolMax = boundedInteger(env.DATABASE_POOL_MAX || "10", "DATABASE_POOL_MAX", 1, 50);
+  const databaseUrl = env.DATABASE_URL || "";
+  const databaseMigrationUrl = env.DATABASE_MIGRATION_URL || databaseUrl;
+  if (repositoryBackend === "postgres") {
+    validatePostgresUrl(databaseUrl, "DATABASE_URL", databaseSslRequired);
+    validatePostgresUrl(databaseMigrationUrl, "DATABASE_MIGRATION_URL", databaseSslRequired);
+  }
+  if (isProduction && !databaseSslRequired) {
+    throw new Error("DATABASE_SSL_REQUIRED must be true in production");
+  }
+
   return {
     nodeEnv,
     isProduction,
     repositoryBackend,
-    databaseUrl: env.DATABASE_URL || ""
+    databaseUrl,
+    databaseMigrationUrl,
+    databaseSslRequired,
+    databasePoolMax
   };
 }
 
@@ -48,7 +65,7 @@ export function readConfig(env = process.env) {
     .filter(Boolean);
 
   if (isSecureDeployment) {
-    const required = ["DEPLOYMENT_PROFILE", "PROCESS_ROLE", "PORT", "APP_URL", "ALLOWED_ORIGINS", "DATABASE_URL", "SESSION_SECRET", "STORAGE_BACKEND", "MAX_UPLOAD_MB"];
+    const required = ["DEPLOYMENT_PROFILE", "PROCESS_ROLE", "PORT", "APP_URL", "ALLOWED_ORIGINS", "REPOSITORY_BACKEND", "DATABASE_URL", "DATABASE_SSL_REQUIRED", "SESSION_SECRET", "STORAGE_BACKEND", "MAX_UPLOAD_MB"];
     const missing = required.filter((name) => !env[name]);
     if (missing.length > 0) {
       throw new Error(`Missing required ${deploymentProfile} environment variables: ${missing.join(", ")}`);
@@ -97,6 +114,14 @@ export function readConfig(env = process.env) {
   if (Boolean(env.S3_ACCESS_KEY_ID) !== Boolean(env.S3_SECRET_ACCESS_KEY)) {
     throw new Error("S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be configured together");
   }
+  if (isSecureDeployment && storageBackend === "s3") {
+    const requiredStorageVariables = ["S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"];
+    const missingStorageVariables = requiredStorageVariables.filter((name) => !env[name]);
+    if (missingStorageVariables.length > 0) {
+      throw new Error(`Missing required private S3 environment variables: ${missingStorageVariables.join(", ")}`);
+    }
+  }
+  const s3Endpoint = validateS3Endpoint(env.S3_ENDPOINT || "", isSecureDeployment && storageBackend === "s3");
 
   const queueBackend = env.QUEUE_BACKEND || "local";
   if (queueBackend !== "local") throw new Error("QUEUE_BACKEND currently supports local only");
@@ -207,6 +232,9 @@ export function readConfig(env = process.env) {
     appUrl: env.APP_URL || "http://localhost:5173",
     allowedOrigins,
     databaseUrl: repositoryConfig.databaseUrl,
+    databaseMigrationUrl: repositoryConfig.databaseMigrationUrl,
+    databaseSslRequired: repositoryConfig.databaseSslRequired,
+    databasePoolMax: repositoryConfig.databasePoolMax,
     repositoryBackend,
     sessionSecret: env.SESSION_SECRET || "development-only-session-secret-change-me",
     storageBackend,
@@ -215,11 +243,12 @@ export function readConfig(env = process.env) {
     maxUploadMb,
     s3Bucket: env.S3_BUCKET || "",
     s3Region: env.S3_REGION || "",
-    s3Endpoint: env.S3_ENDPOINT || "",
+    s3Endpoint,
     s3AccessKeyId: env.S3_ACCESS_KEY_ID || "",
     s3SecretAccessKey: env.S3_SECRET_ACCESS_KEY || "",
     s3ForcePathStyle: env.S3_FORCE_PATH_STYLE === "true",
     signedUrlExpirySeconds: boundedInteger(env.SIGNED_URL_EXPIRY_SECONDS || "300", "SIGNED_URL_EXPIRY_SECONDS", 60, 3_600),
+    readinessTimeoutMs: boundedInteger(env.READINESS_TIMEOUT_MS || "5000", "READINESS_TIMEOUT_MS", 250, 30_000),
     queueBackend,
     queueConcurrency,
     queueMaxRetries,
@@ -265,6 +294,39 @@ export function readConfig(env = process.env) {
     azureOpenAiApiKey: env.AZURE_OPENAI_API_KEY || "",
     azureOpenAiDeployment: env.AZURE_OPENAI_DEPLOYMENT || ""
   };
+}
+
+function validatePostgresUrl(value, name, sslRequired) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`${name} must be a valid PostgreSQL connection URL`);
+  }
+  if (!["postgres:", "postgresql:"].includes(parsed.protocol)) {
+    throw new Error(`${name} must use the postgresql scheme`);
+  }
+  const sslMode = String(parsed.searchParams.get("sslmode") || "").toLowerCase();
+  if (sslRequired && ["disable", "allow", "prefer", "no-verify"].includes(sslMode)) {
+    throw new Error(`${name} must not disable PostgreSQL TLS or certificate verification`);
+  }
+}
+
+function validateS3Endpoint(value, required) {
+  if (!value) {
+    if (required) throw new Error("S3_ENDPOINT is required for secure S3 deployments");
+    return "";
+  }
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("S3_ENDPOINT must be a valid absolute HTTPS URL");
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error("S3_ENDPOINT must be an HTTPS URL without credentials, query parameters, or fragments");
+  }
+  return parsed.toString().replace(/\/$/, "");
 }
 
 function positiveInteger(value, name) {

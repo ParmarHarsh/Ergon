@@ -66,7 +66,7 @@ The long-term workflow is:
 INGEST -> UNDERSTAND -> MAP -> DETECT -> PRIORITIZE -> RECOMMEND -> DRAFT -> REVIEW -> ACT -> PROVE -> MONITOR -> RE-EVALUATE
 ```
 
-Current implementation supports a narrower version: facilities, evidence, verified multi-format uploads and provenance-backed extraction, mock or optional provider-portable AI analysis foundations, review queue, deterministic gap analysis, action plan, audit packets, lifecycle controls, and system health. Planned and long-term phases expand OCR, regulatory intelligence, integrations, and monitoring.
+Current implementation supports a narrower version: facilities, evidence, verified multi-format uploads and provenance-backed extraction, mock or optional provider-portable AI analysis foundations, review queue, deterministic gap analysis, action plan, audit packets, lifecycle controls, system health, and a prepared cloud-staging foundation for managed PostgreSQL/private object storage/API-worker-web separation. Planned and long-term phases expand OCR, regulatory intelligence, integrations, verified signup, and monitoring.
 
 Phase 24 established `INGEST → UNDERSTAND`; Phase 25 makes real-provider analysis ready for controlled acceptance with strict structured output, server validation, grounding, evaluation, and cost bounds. Standard OpenAI and Azure OpenAI are interchangeable infrastructure providers under one ERGON-owned evidence-intelligence contract; neither changes deterministic evidence or human authority, and Azure is not production-proven until live acceptance succeeds. `INGEST` is an implemented foundation. `UNDERSTAND` is implemented when a real provider is configured, while deterministic fallback remains available. `MAP → DETECT → PRIORITIZE → RECOMMEND` remain partial starter-rule/audit-readiness foundations, `DRAFT` remains developing, and `MONITOR → RE-EVALUATE` remains future source-backed regulatory work.
 
@@ -204,7 +204,7 @@ Ergon should answer quickly:
 
 ## Near-term product focus
 
-Near-term focus should be manufacturer validation of multi-format evidence understanding, review ergonomics, gap/action clarity, audit packet quality, manual UX confidence, and truthful AI-disabled states. Current work intentionally does not implement new SSO, regulatory scraping, simulated OCR, ERP connectors, cloud infrastructure, monitoring vendors, or backup infrastructure.
+Near-term focus should be manufacturer validation of multi-format evidence understanding, review ergonomics, gap/action clarity, audit packet quality, manual UX confidence, truthful AI-disabled states, and proving the prepared staging topology with real private cloud configuration. Phase 27 prepares Supabase PostgreSQL, Supabase Storage via S3-compatible private storage, Render API/worker separation, and Vercel static web hosting without provisioning resources or replacing ERGON auth. Current work intentionally does not implement new SSO, Supabase Auth, public signup, regulatory scraping, simulated OCR, ERP connectors, monitoring vendors, or automated backup infrastructure.
 
 ## Two-year vision
 

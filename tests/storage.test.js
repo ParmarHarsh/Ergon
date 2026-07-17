@@ -20,11 +20,16 @@ test("local private storage survives adapter reinitialization and blocks travers
 
 test("S3 private storage uses opaque keys and never exposes a public URL", async () => {
   const objects = new Map();
+  let putInput;
   const client = {
     async send(command) {
       if (command.constructor.name === "PutObjectCommand") {
+        putInput = command.input;
         objects.set(command.input.Key, Buffer.from(command.input.Body));
         return {};
+      }
+      if (command.constructor.name === "HeadObjectCommand") {
+        return { ContentLength: objects.get(command.input.Key)?.byteLength, ContentType: "application/pdf", ETag: '"safe-etag"' };
       }
       if (command.constructor.name === "GetObjectCommand") {
         const value = objects.get(command.input.Key);
@@ -47,10 +52,15 @@ test("S3 private storage uses opaque keys and never exposes a public URL", async
     s3AccessKeyId: "",
     s3SecretAccessKey: ""
   }, { s3Client: client, presigner: async (_client, command, options) => `https://private.example/${command.input.Key}?X-Amz-Expires=${options.expiresIn}` });
-  const saved = await storage.saveBuffer(Buffer.from("private object"), "record.pdf");
-  assert.match(saved.fileReference, /^private\/[a-f0-9-]+\.pdf$/);
+  const saved = await storage.saveBuffer(Buffer.from("private object"), "record.pdf", {
+    organizationId: "org_123", facilityId: "facility_456", resourceType: "evidence", resourceId: "evidence_789", contentType: "application/pdf"
+  });
+  assert.match(saved.fileReference, /^private\/org_123\/facility_456\/evidence\/evidence_789\/[a-f0-9-]+\.pdf$/);
+  assert.equal(putInput.ContentType, "application/pdf");
+  assert.equal("ServerSideEncryption" in putInput, false);
   assert.equal(saved.fileReference.includes("http"), false);
   assert.equal((await storage.readBuffer(saved.fileReference)).toString(), "private object");
+  assert.deepEqual(await storage.statObject(saved.fileReference), { sizeBytes: 14, contentType: "application/pdf", etag: "safe-etag" });
   const signed = await storage.createSignedReadUrl(saved.fileReference, 120);
   assert.equal(new URL(signed).searchParams.get("X-Amz-Expires"), "120");
   await assert.rejects(() => storage.createSignedReadUrl(saved.fileReference, 10), /between 60 and 3600/);
@@ -74,7 +84,7 @@ test("S3-compatible integration uploads, retrieves, and deletes a private object
   const marker = `private-s3-integration-${Date.now()}`;
   const saved = await storage.saveBuffer(Buffer.from(marker), "integration.txt");
   try {
-    assert.match(saved.fileReference, /^private\/[a-f0-9-]+\.txt$/);
+    assert.match(saved.fileReference, /^private\/unscoped\/[a-f0-9-]+\.txt$/);
     assert.equal(saved.fileReference.includes("http"), false);
     assert.equal((await storage.readBuffer(saved.fileReference)).toString(), marker);
     const signed = await storage.createSignedReadUrl(saved.fileReference, 120);
