@@ -62,12 +62,19 @@ export function aiAnalysisPanel(analysis) {
   const extractionSupportsMatching = !["empty", "failed", "ocr_required", "unsupported"].includes(analysis.extractionStatus)
     && !["empty", "extraction_failed", "ocr_required", "unsupported_for_text_extraction"].includes(analysis.textExtractionStatus);
   const supportedSuggestion = extractionSupportsMatching && analysis.suggestedObligationTitle;
+  const sourceSupportedFacts = analysis.aiProfile?.sourceSupportedFacts || (analysis.aiProfile?.keyFacts || []).filter((fact) => fact.supportStatus === "source_supported");
+  const unsupportedCandidates = analysis.aiProfile?.unsupportedCandidates || (analysis.aiProfile?.keyFacts || []).filter((fact) => fact.supportStatus !== "source_supported");
+  const sourceSupportedAnchorIds = new Set(sourceSupportedFacts.flatMap((fact) => fact.provenanceAnchorIds || []));
+  const orderedAnchors = [...anchors].sort((left, right) => Number(sourceSupportedAnchorIds.has(right.id)) - Number(sourceSupportedAnchorIds.has(left.id)));
+  const previewAnchors = orderedAnchors.slice(0, 3);
   const extracted = [
     ["Detected format", titleCase(analysis.detectedFormat || "unknown")],
     ["Extraction", titleCase(analysis.extractionStatus || analysis.textExtractionStatus || "not started")],
     ["Method", titleCase(analysis.extractionMethod || "not available")],
     ["Source references", String(anchors.length)],
     ["Words", profile.wordCount === undefined ? "Unknown" : String(profile.wordCount)],
+    ...(analysis.detectedFormat === "xlsx" ? [["Spreadsheet dates", `${analysis.documentMetadata?.normalizedDateCellCount || 0} normalized · ${analysis.documentMetadata?.excelDateSystem || 1900} date system`]] : []),
+    ["Key-fact provenance", formatMetric(analysis.aiProfile?.qualityMetrics?.keyFactProvenanceCoverage)],
     ["Likely evidence type", titleCase(analysis.detectedEvidenceType || "other")],
     ["Document date", analysis.extractedDocumentDate ? html(analysis.extractedDocumentDate) : "Unknown"],
     ["Expiration date", analysis.extractedExpirationDate ? html(analysis.extractedExpirationDate) : "Unknown"],
@@ -88,6 +95,7 @@ export function aiAnalysisPanel(analysis) {
       ${aiFailed ? `<div class="alert"><strong>AI analysis failed validation or provider processing.</strong> Deterministic extraction and source references remain available. Reprocess when the provider configuration is ready, or apply a human override.</div>` : ""}
       <p>${html(processingProblem || analysis.summary || (aiDisabled ? "AI analysis is not enabled. Deterministic extraction is available below." : analysis.error || "Deterministic extraction is ready for review."))}</p>
       ${analysis.humanReviewed ? `<div class="alert-info small"><strong>Human-confirmed decision preserved.</strong> New processing output remains a separate candidate until a reviewer explicitly replaces it.</div>` : ""}
+      ${sourceSupportedFacts.length ? `<div class="evidence-findings source-supported-facts"><strong class="small">Source-supported facts</strong><ul class="issue-list">${sourceSupportedFacts.slice(0, 3).map((fact) => `<li>${html(titleCase(fact.category))}: ${html(fact.value)}</li>`).join("")}</ul></div>` : ""}
       ${visibleFindings.length ? `<div class="evidence-findings"><strong class="small">What needs attention</strong><ul class="issue-list">${visibleFindings.map((issue) => `<li>${html(issue)}</li>`).join("")}</ul></div>` : ""}
       ${hiddenFindings.length ? `<details class="detail-disclosure" data-ui-role="additional-findings"><summary>Show all findings (${findings.length})</summary><ul class="issue-list disclosure-body">${hiddenFindings.map((issue) => `<li>${html(issue)}</li>`).join("")}</ul></details>` : ""}
       ${humanRule ? `<div class="obligation-match supported"><strong>Human-confirmed obligation</strong><span>${html(humanRule.title)}</span></div>` : supportedSuggestion ? `
@@ -105,15 +113,30 @@ export function aiAnalysisPanel(analysis) {
           </div>
         </details>
       ` : ""}
+      ${unsupportedCandidates.length || analysis.aiProfile?.summaryCandidate?.value ? `
+        <details class="detail-disclosure unsupported-ai-candidates" data-support-status="unsupported_candidate">
+          <summary>Review unsupported AI candidates (${unsupportedCandidates.length})</summary>
+          <div class="disclosure-body">
+            ${unsupportedCandidates.length ? `<ul class="issue-list">${unsupportedCandidates.map((fact) => `<li><strong>${html(titleCase(fact.category))}:</strong> ${html(fact.value)} <span class="small muted">— not established by source provenance</span></li>`).join("")}</ul>` : ""}
+            ${analysis.aiProfile?.summaryCandidate?.value ? `<p class="small"><strong>Unverified provider summary:</strong> ${html(analysis.aiProfile.summaryCandidate.value)}</p>` : ""}
+          </div>
+        </details>
+      ` : ""}
       <details class="detail-disclosure">
         <summary>View processing details</summary>
         <div class="kv-grid disclosure-body">${extracted.map(([term, value]) => kv(term, value)).join("")}</div>
         ${processingWarnings.length ? `<ul class="issue-list">${processingWarnings.map((issue) => `<li>${html(issue)}</li>`).join("")}</ul>` : ""}
       </details>
       ${anchors.length ? `
-        <details class="detail-disclosure">
-          <summary>Source references (${anchors.length})</summary>
-          <ul class="issue-list source-reference-list">${anchors.map((anchor) => `<li><strong>${html(anchor.label || anchor.id)}</strong>${anchor.excerpt ? `<span class="small muted">${html(anchor.excerpt)}</span>` : ""}</li>`).join("")}</ul>
+        <div class="source-reference-summary" data-ui-role="source-reference-summary">
+          <strong>${html(referenceScopeSummary(anchors))}</strong>
+          <ul class="issue-list source-reference-list source-reference-preview">${previewAnchors.map(referenceItem).join("")}</ul>
+        </div>
+        <details class="detail-disclosure all-source-references">
+          <summary>View all references</summary>
+          <div class="source-reference-scroll" tabindex="0" role="region" aria-label="All source references">
+            <ul class="issue-list source-reference-list">${orderedAnchors.map(referenceItem).join("")}</ul>
+          </div>
         </details>
       ` : ""}
       ${analysis.humanReviewNotes ? `<p class="small"><strong>Reviewer notes:</strong> ${html(analysis.humanReviewNotes)}</p>` : ""}
@@ -182,4 +205,22 @@ function scanText(status) {
     scan_unavailable: "No file scan"
   };
   return map[status] || "No file scan";
+}
+
+function referenceItem(anchor) {
+  return `<li><strong>${html(anchor.label || anchor.id)}</strong>${anchor.excerpt ? `<span class="small muted">${html(anchor.excerpt)}</span>` : ""}</li>`;
+}
+
+function referenceScopeSummary(anchors) {
+  const sheets = new Set(anchors.map((anchor) => anchor.sheet).filter(Boolean));
+  if (sheets.size) return `${anchors.length} references across ${sheets.size} sheet${sheets.size === 1 ? "" : "s"}`;
+  if (anchors.every((anchor) => anchor.page)) return `${anchors.length} page reference${anchors.length === 1 ? "" : "s"}`;
+  if (anchors.every((anchor) => anchor.paragraphIndex)) return `${anchors.length} paragraph reference${anchors.length === 1 ? "" : "s"}`;
+  if (anchors.every((anchor) => anchor.rowStart)) return `${anchors.length} row reference${anchors.length === 1 ? "" : "s"}`;
+  if (anchors.every((anchor) => anchor.lineStart)) return `${anchors.length} line-range reference${anchors.length === 1 ? "" : "s"}`;
+  return `${anchors.length} source reference${anchors.length === 1 ? "" : "s"}`;
+}
+
+function formatMetric(value) {
+  return Number.isFinite(value) ? `${Math.round(value * 100)}%` : "Not measured";
 }

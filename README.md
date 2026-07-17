@@ -41,7 +41,7 @@ Starter rules are demo/unverified unless expert-reviewed. Ergon is audit-prepara
 | Text-layer PDF | IMPLEMENTED_NOW | Bounded page text with page anchors |
 | Image-only PDF | OCR_REQUIRED | No fake extraction; waits for real OCR or manual review |
 | DOCX | IMPLEMENTED_NOW | Bounded OOXML paragraph/table structure with paragraph anchors |
-| XLSX | IMPLEMENTED_NOW | Bounded namespace-aware sheets and direct/shared/inline/cached cell values with sheet/row/cell-range anchors; formulas are never evaluated |
+| XLSX | IMPLEMENTED_NOW | Bounded namespace-aware sheets and direct/shared/inline/cached cell values with sheet/row/cell-range anchors; styled 1900/1904-system date serials are normalized deterministically while ordinary numbers remain numeric; formulas are never evaluated |
 | PNG/JPEG and other accepted images | OCR_REQUIRED | Signature-verified intake only until real OCR is configured |
 
 This is the first concrete implementation of `INGEST → UNDERSTAND`. Candidate obligation mapping, regulatory source intelligence, autonomous applicability decisions, production OCR, and external document connectors remain planned or future work.
@@ -66,6 +66,16 @@ Evidence processing reuses the scan-gated private-storage queue and versioned hu
 The current deterministic limits are 10,000 text lines, 10,000 CSV rows / 100,000 cells, 200 PDF pages, 10,000 DOCX blocks, and 100 XLSX sheets / 10,000 rows per sheet / 100,000 cells. OOXML expansion is capped at 50 MB with a 20 MB single-part cap. Downstream analysis text remains capped by `AI_MAX_FILE_TEXT_CHARS`. Limit hits are marked partial with a review warning; corrupt, encrypted, unsupported, and empty inputs fail safely into review.
 
 Images and PDFs without a text layer are explicitly `OCR_REQUIRED` unless a real configured OCR provider returns text. Ergon does not simulate OCR. AI is optional: when disabled, normalized extraction, deterministic profiles, provenance, and human review still run. AI outputs are source-supported candidates where possible, never autonomous legal applicability or accepted compliance conclusions. Obligation suggestions are promoted only when an applicable rule, required evidence type, configured confidence threshold, and source-specific terminology agree; weak candidates remain reviewable context instead of confident-looking matches.
+
+For XLSX, Ergon reads the workbook's 1900/1904 date system and the cell's built-in or custom number format before converting a numeric serial. The Excel 1900 leap-year anomaly is handled explicitly; its non-existent `1900-02-29` serial is preserved with a review warning. Cells without date/time style evidence remain numeric, including identifiers and measurements. Cached formula results follow the same style gate, but formula expressions are never executed, macros remain prohibited, and external workbook resources are never fetched. A bounded audit sample retains raw serial plus normalized value while AI and reviewer-facing provenance receive the normalized value.
+
+Primary AI summaries are rebuilt from source-supported structured facts. Unsupported fields and the provider's unverified prose remain visibly separated review candidates; confidence never substitutes for provenance. Full provenance remains auditable, while the default Evidence card shows a compact reference count, source scope, and a few priority anchors before a bounded `View all references` surface.
+
+### Controlled reviewer feedback
+
+Ergon does not train itself on customer documents. A reviewer can confirm, override, reject, or request more evidence; that decision remains authoritative across reprocessing. The existing analysis version and tenant-scoped audit structures record the provider/model, prompt/schema versions, original candidate, before/after decision, actor, timestamp, evidence identifier, and whether a reviewer reason is stored. Raw evidence is excluded from generic audit metadata.
+
+Overrides and rejections are only marked as possible evaluation-curation candidates. They are never automatically added to a dataset. A future shared fixture requires explicit review, de-identification, synthetic reconstruction, and source-controlled approval. Ergon does not automatically fine-tune a provider, upload evidence for training, mutate prompts, or alter compliance rules.
 
 ## Repository structure
 
@@ -180,11 +190,11 @@ printf '\n'
 
 API-key authentication is supported for this controlled private acceptance. For a future Azure-hosted production deployment, Microsoft Entra ID with Managed Identity is the preferred direction where appropriate because it avoids a stored provider key. Phase 25B does not implement Entra ID, add `@azure/identity`, or provision Azure infrastructure.
 
-The optional live AI command uses `AI_PROVIDER` and, by default, makes five paid requests using repository-generated synthetic TXT, CSV, PDF, DOCX, and XLSX evidence. It refuses to run without explicit opt-in and provider-appropriate private configuration, and prints only safe classifications, schema/prompt versions, field/reason diagnostics, metrics, latency, and token counts. Select exactly one format with `ERGON_LIVE_AI_FORMAT=txt`, `csv`, `pdf`, `docx`, or `xlsx`; use `all` (the default) for all five.
+The optional live AI command uses `AI_PROVIDER` and, by default, makes five paid requests using repository-generated synthetic TXT, CSV, PDF, DOCX, and XLSX evidence. It refuses to run without explicit opt-in and provider-appropriate private configuration, and prints only safe classifications, schema/prompt versions, field/reason diagnostics, quality metrics, latency, and token counts. The XLSX fixture includes a styled Excel serial date so the live provider receives its normalized ISO value. Select exactly one format with `ERGON_LIVE_AI_FORMAT=txt`, `csv`, `pdf`, `docx`, or `xlsx`; use `all` (the default) for all five. Azure all-format acceptance requires schema validity and valid provenance of `1.00`, key-fact provenance coverage of at least `0.90`, unsupported-claim rate of at most `0.10`, and zero incorrect facts.
 
 ```bash
 npm run qa:ai-eval
-ERGON_LIVE_AI_ACCEPTANCE=true npm run qa:ai-live
+ERGON_LIVE_AI_FORMAT=all ERGON_LIVE_AI_ACCEPTANCE=true npm run qa:ai-live
 
 # Target the repaired XLSX path with one synthetic paid request:
 ERGON_LIVE_AI_FORMAT=xlsx ERGON_LIVE_AI_ACCEPTANCE=true npm run qa:ai-live

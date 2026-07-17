@@ -154,7 +154,8 @@ test("Evidence review uses progressive disclosure and withholds weak obligation 
   assert.match(markup, /A safety training matrix with completion dates/);
   assert.match(markup, /Finding one[\s\S]*Finding two[\s\S]*Finding three/);
   assert.match(markup, /data-ui-role="additional-findings"[\s\S]*Show all findings \(4\)/);
-  assert.match(markup, /Source references \(1\)/);
+  assert.match(markup, /data-ui-role="source-reference-summary"[\s\S]*1 source reference/);
+  assert.match(markup, /View all references/);
   assert.match(markup, /View processing details/);
   assert.match(markup, /No sufficiently supported obligation match/);
   assert.match(markup, /data-match-classification="WEAK_CANDIDATE"[\s\S]*Review weak obligation candidate/);
@@ -193,7 +194,10 @@ test("Evidence UI presents deterministic partial success and hides invalid AI co
       confidence: null, needsHumanReview: true, summary: null,
       error: "Deterministic extraction succeeded, but the provider returned an invalid structured analysis.",
       issues: ["AI analysis failed validation or provider processing. Deterministic extraction and source references remain available for human review."],
-      processingWarnings: [], provenanceAnchors: Array.from({ length: 19 }, (_, index) => ({ id: `cell-${index}`, label: `Cell ${index + 1}`, excerpt: "Synthetic cell" })),
+      processingWarnings: [], provenanceAnchors: Array.from({ length: 19 }, (_, index) => ({
+        id: `cell-${index}`, label: `Cell ${index + 1}`, excerpt: "Synthetic cell",
+        sheet: ["Inspection", "Actions", "Summary"][index % 3], rowStart: index + 1, rowEnd: index + 1, cellRange: `A${index + 1}:D${index + 1}`
+      })),
       deterministicProfile: { wordCount: 42 }, aiProfile: { status: "failed", errorCode: "AI_PROVIDER_INVALID_RESPONSE" },
       humanReviewed: false, humanOverrideRuleId: null, humanReviewNotes: null
     }],
@@ -204,7 +208,8 @@ test("Evidence UI presents deterministic partial success and hides invalid AI co
   assert.match(markup, /Needs review/);
   assert.match(markup, /Extraction complete · AI analysis failed/);
   assert.match(markup, /AI analysis failed validation or provider processing/);
-  assert.match(markup, /Source references \(19\)/);
+  assert.match(markup, /19 references across 3 sheets/);
+  assert.match(markup, /source-reference-scroll[^>]*tabindex="0"[^>]*role="region"/);
   assert.match(markup, /Reprocess<\/button>/);
   assert.match(markup, /Apply override/);
   assert.doesNotMatch(markup, /Confirm AI classification/);
@@ -227,7 +232,8 @@ test("browser title and design CSS use the Phase 21 ERGON convention", async () 
   assert.match(index, /<title>ERGON<\/title>/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /mobile-nav-scrim/);
-  assert.match(css, /\.workspace\.route-enter\s*\{\s*animation:\s*route-enter 140ms/);
+  assert.match(css, /\.workspace\.route-enter\s*\{\s*animation:\s*route-enter 200ms/);
+  assert.match(css, /\.source-reference-scroll\s*\{[^}]*max-height:[^}]*overflow:\s*auto/);
   assert.match(css, /@keyframes route-enter\s*\{[\s\S]*from\s*\{\s*opacity:\s*0\.72;\s*\}[\s\S]*to\s*\{\s*opacity:\s*1;\s*\}/);
   assert.doesNotMatch(css, /@keyframes route-enter\s*\{[^}]*translateY/);
 });

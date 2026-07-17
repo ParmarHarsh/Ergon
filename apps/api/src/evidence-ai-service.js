@@ -27,7 +27,17 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
       await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action: "evidence_processing_started", metadata: { provider: metadata.provider } });
       if (!jobAnalysis) await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action: "ai_analysis_version_created", metadata: { analysisVersion: analysis.analysisVersion, processingJobId } });
       if (!jobAnalysis && analysis.analysisVersion > 1) {
-        await logAiEvent(repo, { organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id, action: "evidence_reprocessing_started", metadata: { analysisVersion: analysis.analysisVersion, previousAnalysisId: analysis.previousAnalysisId } });
+        await logAiEvent(repo, {
+          organizationId, facilityId: facility.id, userId, evidenceId, analysisId: analysis.id,
+          action: "evidence_reprocessing_started",
+          metadata: {
+            analysisVersion: analysis.analysisVersion,
+            previousAnalysisId: analysis.previousAnalysisId,
+            preservedHumanDecision: Boolean(previousAnalysis?.humanReviewed),
+            preservedEvidenceType: previousAnalysis?.humanOverrideEvidenceType || null,
+            preservedRuleId: previousAnalysis?.humanOverrideRuleId || null
+          }
+        });
       }
 
       let lastExtraction = null;
@@ -115,6 +125,7 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
 
         const output = await provider.analyzeEvidenceDocument({ text: extraction.text, evidence, facility, applicableRules, extraction });
         const providerUsage = output.providerUsage || null;
+        const groundedProfile = groundEvidenceAiOutput(output, extraction, Boolean(previousAnalysis?.humanReviewed));
         const obligationMatch = qualifyObligationSuggestion({
           output,
           applicableRules,
@@ -151,7 +162,7 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
           extractedSignaturePresent: output.signaturePresent,
           extractedAuthorityMentions: sourceSupportedMentions(output.authorityMentions, extraction.text),
           extractedCitationMentions: sourceSupportedMentions(output.citationMentions, extraction.text),
-          summary: output.summary,
+          summary: groundedProfile.summary,
           issues,
           suggestedRuleId: deterministicAgreement ? output.suggestedRuleId : null,
           suggestedObligationTitle: deterministicAgreement ? obligationMatch.candidateTitle : null,
@@ -160,7 +171,7 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
           confidence: output.confidence,
           needsHumanReview,
           aiProfile: {
-            ...groundEvidenceAiOutput(output, extraction, Boolean(previousAnalysis?.humanReviewed)),
+            ...groundedProfile,
             obligationMatch,
             generationMetadata: providerUsage
           },
@@ -226,6 +237,7 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
       }
 
       const now = new Date().toISOString();
+      const beforeDecision = reviewDecisionSnapshot(evidence, analysis);
       const evidenceUpdates = {};
       const analysisUpdates = {
         humanReviewed: true,
@@ -250,6 +262,7 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
         analysisUpdates.humanOverrideRuleId = analysis.suggestedRuleId;
         auditAction = "human_accepted_ai_result";
       } else if (reviewInput.action === "override") {
+        analysisUpdates.humanAcceptedAiResult = false;
         if (reviewInput.evidenceType) {
           evidenceUpdates.evidenceType = reviewInput.evidenceType;
           analysisUpdates.humanOverrideEvidenceType = reviewInput.evidenceType;
@@ -264,6 +277,7 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
         auditAction = "human_marked_evidence_accepted";
       } else if (reviewInput.action === "mark_rejected") {
         evidenceUpdates.status = "rejected";
+        analysisUpdates.humanAcceptedAiResult = false;
         auditAction = "human_marked_evidence_rejected";
       } else if (reviewInput.action === "request_more_evidence") {
         evidenceUpdates.status = "needs_review";
@@ -275,6 +289,13 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
         auditAction = "human_review_started";
       }
       if (reviewInput.notes !== null) evidenceUpdates.reviewerNotes = reviewInput.notes;
+      const afterDecision = reviewDecisionSnapshot({ ...evidence, ...evidenceUpdates }, { ...analysis, ...analysisUpdates });
+      const originalCandidate = {
+        evidenceType: analysis.detectedEvidenceType || null,
+        suggestedRuleId: analysis.suggestedRuleId || analysis.aiProfile?.obligationMatch?.candidateRuleId || null,
+        obligationClassification: analysis.aiProfile?.obligationMatch?.classification || "NO_SUPPORTED_MATCH",
+        confidence: analysis.confidence ?? null
+      };
 
       const result = await repo.applyAiHumanReview({
         organizationId,
@@ -286,7 +307,20 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
         auditMetadata: {
           action: reviewInput.action,
           evidenceTypeOverridden: Boolean(reviewInput.evidenceType),
-          ruleMatchOverridden: Boolean(reviewInput.ruleId)
+          ruleMatchOverridden: Boolean(reviewInput.ruleId),
+          provider: analysis.provider || null,
+          model: analysis.model || null,
+          promptVersion: analysis.promptVersion || null,
+          schemaVersion: analysis.aiProfile?.generationMetadata?.schemaVersion || null,
+          originalCandidate,
+          beforeDecision,
+          afterDecision,
+          reviewerReasonProvided: Boolean(reviewInput.notes),
+          reviewerReasonReference: reviewInput.notes ? "evidence_ai_analysis.humanReviewNotes" : null,
+          reviewedAt: now,
+          actorUserId: reviewer.id,
+          evidenceId,
+          evaluationCuration: evaluationCurationState(reviewInput.action)
         }
       });
       if (reviewInput.action === "override" && reviewInput.evidenceType && reviewInput.ruleId) {
@@ -307,7 +341,13 @@ export function createEvidenceAiService({ config, repo, storage, provider, ocrPr
         evidenceId,
         analysisId: analysis.id,
         action: reviewInput.action === "override" ? "evidence_intelligence_corrected" : "evidence_intelligence_reviewed",
-        metadata: { reviewAction: reviewInput.action, analysisVersion: analysis.analysisVersion }
+        metadata: {
+          reviewAction: reviewInput.action,
+          analysisVersion: analysis.analysisVersion,
+          beforeDecision,
+          afterDecision,
+          evaluationCuration: evaluationCurationState(reviewInput.action)
+        }
       });
       return result;
     }
@@ -369,8 +409,8 @@ function sourceSupportsEvidenceType(sourceText, evidenceType) {
     fire_extinguisher_inspections: [["fire", "extinguisher"]],
     loto_procedures: [["loto"], ["lockout", "tagout"], ["energy", "control", "procedure"]],
     loto_training_records: [["loto", "training"], ["lockout", "training"], ["tagout", "training"]],
-    osha_300_log: [["osha", "300"], ["injury", "illness", "recordkeeping"]],
-    osha_300a_summary: [["osha", "300a"], ["injury", "illness", "summary"]],
+    osha_300_log: [["osha", "300", "log"]],
+    osha_300a_summary: [["osha", "300a", "summary"]],
     hazardous_waste_determination: [["hazardous", "waste", "determination"]],
     hazardous_waste_manifests: [["hazardous", "waste", "manifest"]],
     waste_area_inspections: [["waste", "area", "inspection"], ["hazardous", "waste", "inspection"]],
@@ -521,4 +561,25 @@ function humanFieldName(field) {
 function sourceSupportedMentions(values, sourceText) {
   const source = sourceText.toLowerCase();
   return values.filter((value) => source.includes(value.toLowerCase()));
+}
+
+function reviewDecisionSnapshot(evidence, analysis) {
+  return {
+    evidenceType: evidence.evidenceType || null,
+    relatedObligationId: evidence.relatedObligationId || null,
+    evidenceStatus: evidence.status || null,
+    humanReviewed: Boolean(analysis.humanReviewed),
+    humanAcceptedAiResult: Boolean(analysis.humanAcceptedAiResult),
+    humanOverrideEvidenceType: analysis.humanOverrideEvidenceType || null,
+    humanOverrideRuleId: analysis.humanOverrideRuleId || null
+  };
+}
+
+function evaluationCurationState(action) {
+  return {
+    eligibleForReview: ["override", "mark_rejected"].includes(action),
+    status: "requires_explicit_deidentification_and_curation",
+    automaticallyAdded: false,
+    rawEvidenceIncluded: false
+  };
 }

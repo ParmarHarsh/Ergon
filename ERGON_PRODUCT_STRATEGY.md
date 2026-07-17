@@ -226,6 +226,8 @@ Defensibility should come from accumulated provenance, source snapshots, histori
 
 Ergon should treat customer data as sensitive compliance evidence. Data strategy should prioritize tenant isolation, private storage, audit logging, source provenance, evidence versioning, retention/legal-hold controls, and minimal exposure of secrets or raw model internals.
 
+Reviewer feedback should improve Ergon through a controlled evaluation loop, not uncontrolled self-training. AI candidates, human confirmations/corrections, and before/after lineage should remain versioned and auditable. Only explicitly curated, de-identified, preferably synthetic reconstructions may enter shared evaluation fixtures. Customer evidence must not be sent to training endpoints, prompts and rules must change only through source-controlled review, and human decisions remain authoritative during reprocessing.
+
 ## Integration strategy
 
 Integrations should be progressive. Start with uploads and simple exports. Add email/drive ingestion, office-document parsing, and ERP/MES/QMS exports. Later add approved APIs, event-based updates, supplier evidence exchange, and bidirectional workflow integrations where manufacturers already work.

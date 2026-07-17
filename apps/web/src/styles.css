@@ -348,7 +348,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   margin: 0 auto;
 }
 
-.workspace.route-enter { animation: route-enter 140ms var(--ease) both; }
+.workspace.route-enter { animation: route-enter 200ms var(--ease) both; }
 
 @keyframes route-enter {
   from { opacity: 0.72; }
@@ -711,6 +711,12 @@ input[type="file"] { padding: 7px; font-size: 0.8rem; color: var(--muted); }
 
 .source-reference-list li { display: grid; gap: 3px; }
 .source-reference-list span { overflow-wrap: anywhere; }
+.source-reference-summary { display: grid; gap: 7px; padding: 10px 11px; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--surface); }
+.source-reference-summary > strong { font-size: 0.8rem; color: var(--ink-2); }
+.source-reference-preview { margin: 0; }
+.source-reference-scroll { max-height: min(360px, 52vh); overflow: auto; overscroll-behavior: contain; margin-top: 9px; padding: 2px 10px 2px 2px; border-radius: var(--radius-sm); }
+.source-reference-scroll:focus { outline: 2px solid var(--brand); outline-offset: 2px; }
+.unsupported-ai-candidates { border-left: 3px solid var(--warn); padding-left: 10px; }
 
 .check-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; }
 .check-item { display: flex; align-items: center; gap: 8px; font-size: 0.84rem; color: var(--ink-2); cursor: pointer; }

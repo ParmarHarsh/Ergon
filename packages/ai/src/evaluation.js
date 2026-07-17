@@ -11,14 +11,19 @@ export function groundEvidenceAiOutput(output, extraction, preservedHumanReview 
     ...candidateValues("citation", output.citationMentions, extraction, output.confidence)
   ];
   const identifierCandidates = candidateValues("identifier", extraction.deterministicProfile?.identifiers || [], extraction, null);
+  const sourceSupportedFacts = candidates.filter((candidate) => candidate.supportStatus === "source_supported");
+  const unsupportedCandidates = candidates.filter((candidate) => candidate.supportStatus !== "source_supported");
   return {
     status: "candidate",
-    summary: output.summary,
+    summary: groundedPrimarySummary(output, sourceSupportedFacts),
+    summaryCandidate: { value: output.summary, supportStatus: "review_candidate" },
     documentTypeCandidate: output.detectedEvidenceType,
     titleCandidate: output.detectedTitle,
     purposeCandidate: null,
     evidenceCategories: output.detectedEvidenceType ? [output.detectedEvidenceType] : [],
     keyFacts: candidates,
+    sourceSupportedFacts,
+    unsupportedCandidates,
     keyDates: candidates.filter((item) => item.category === "date"),
     organizations: [],
     facilities: candidates.filter((item) => item.category === "facility"),
@@ -33,6 +38,7 @@ export function groundEvidenceAiOutput(output, extraction, preservedHumanReview 
     missingInformation: output.missingFieldsOrIssues || [],
     followUpSuggestions: output.missingFieldsOrIssues || [],
     overallConfidence: output.confidence,
+    qualityMetrics: qualityMetrics(candidates),
     preservedHumanReview,
     disclaimer: "AI output is a reviewable candidate, not legal applicability or a compliance conclusion."
   };
@@ -65,7 +71,13 @@ export function evaluateEvidenceCases(cases) {
     abstentionCases: 0,
     correctAbstentions: 0,
     reviewFlagCases: 0,
-    correctReviewFlags: 0
+    correctReviewFlags: 0,
+    dateCases: 0,
+    correctDateCases: 0,
+    negativeObligationCases: 0,
+    obligationFalsePositives: 0,
+    reviewerCorrectionCases: 0,
+    preservedReviewerCorrections: 0
   };
   const results = [];
 
@@ -83,7 +95,10 @@ export function evaluateEvidenceCases(cases) {
       const expectedFacts = evaluationCase.expectedFacts || [];
       const forbiddenFacts = evaluationCase.forbiddenFacts || [];
       const foundFacts = expectedFacts.filter((fact) => values.includes(String(fact).toLowerCase())).length;
-      const incorrectFacts = forbiddenFacts.filter((fact) => values.includes(String(fact).toLowerCase())).length;
+      const incorrectFacts = forbiddenFacts.filter((fact) => {
+        const candidateIndex = values.indexOf(String(fact).toLowerCase());
+        return candidateIndex >= 0 && support[candidateIndex] === "source_supported";
+      }).length;
       const typeCorrect = output.detectedEvidenceType === evaluationCase.expectedEvidenceType;
       totals.documentTypeCorrect += typeCorrect ? 1 : 0;
       totals.expectedFacts += expectedFacts.length;
@@ -101,6 +116,23 @@ export function evaluateEvidenceCases(cases) {
         totals.reviewFlagCases += 1;
         if (output.needsHumanReview === evaluationCase.expectHumanReview) totals.correctReviewFlags += 1;
       }
+      if (Array.isArray(evaluationCase.expectedNormalizedDates)) {
+        totals.dateCases += 1;
+        const normalizedText = String(evaluationCase.extraction?.normalizedText || "");
+        const datesPresent = evaluationCase.expectedNormalizedDates.every((date) => normalizedText.includes(date));
+        const rawAbsent = (evaluationCase.forbiddenRawDateValues || []).every((value) => !normalizedText.includes(String(value)));
+        if (datesPresent && rawAbsent) totals.correctDateCases += 1;
+      }
+      if (evaluationCase.expectSupportedObligation === false) {
+        totals.negativeObligationCases += 1;
+        if (evaluationCase.actualObligationClassification === "SUPPORTED_MATCH") totals.obligationFalsePositives += 1;
+      }
+      if (Object.hasOwn(evaluationCase, "expectedReviewerCorrection")) {
+        totals.reviewerCorrectionCases += 1;
+        if (JSON.stringify(evaluationCase.actualReviewerCorrection) === JSON.stringify(evaluationCase.expectedReviewerCorrection)) {
+          totals.preservedReviewerCorrections += 1;
+        }
+      }
       results.push({ id: evaluationCase.id, schemaValid: true, typeCorrect, expectedFactsFound: foundFacts, expectedFacts: expectedFacts.length });
     } catch (error) {
       results.push({ id: evaluationCase.id, schemaValid: false, errorCode: error.code || "AI_EVALUATION_ERROR" });
@@ -115,13 +147,31 @@ export function evaluateEvidenceCases(cases) {
       factRecall: ratio(totals.expectedFactsFound, totals.expectedFacts),
       incorrectFactCount: totals.incorrectFacts,
       unsupportedClaimRate: ratio(totals.unsupportedCandidates, totals.candidates),
-      provenanceCoverage: ratio(totals.sourcedCandidates, totals.candidates),
+      provenanceCoverage: ratio(totals.validProvenance, totals.sourcedCandidates),
+      keyFactProvenanceCoverage: ratio(totals.validProvenance, totals.sourcedCandidates),
       validProvenanceRate: ratio(totals.validProvenance, totals.sourcedCandidates),
+      dateNormalizationAccuracy: ratio(totals.correctDateCases, totals.dateCases),
+      obligationFalsePositiveRate: ratio(totals.obligationFalsePositives, totals.negativeObligationCases),
+      reviewerCorrectionPreservation: ratio(totals.preservedReviewerCorrections, totals.reviewerCorrectionCases),
       abstentionQuality: ratio(totals.correctAbstentions, totals.abstentionCases),
       humanReviewFlagQuality: ratio(totals.correctReviewFlags, totals.reviewFlagCases)
     },
     results
   };
+}
+
+export function summarizeAiQualityCounters(records) {
+  return (records || []).reduce((counters, record) => {
+    const analysis = record.analysis || record;
+    const evidenceStatus = record.evidenceStatus || null;
+    if (analysis.humanAcceptedAiResult) counters.aiAccepted += 1;
+    if (analysis.humanReviewed && (analysis.humanOverrideEvidenceType || analysis.humanOverrideRuleId) && !analysis.humanAcceptedAiResult) counters.aiOverridden += 1;
+    if (evidenceStatus === "rejected") counters.aiRejected += 1;
+    if (analysis.aiProfile?.obligationMatch?.classification === "NO_SUPPORTED_MATCH") counters.noSupportedMatch += 1;
+    if (analysis.aiProfile?.status === "failed") counters.providerFailed += 1;
+    if (analysis.needsHumanReview) counters.humanReviewRequired += 1;
+    return counters;
+  }, { aiAccepted: 0, aiOverridden: 0, aiRejected: 0, noSupportedMatch: 0, providerFailed: 0, humanReviewRequired: 0 });
 }
 
 function candidateValues(category, values, extraction, confidence) {
@@ -138,6 +188,27 @@ function candidateValues(category, values, extraction, confidence) {
       supportStatus: anchors.length ? "source_supported" : "unsupported_candidate"
     };
   });
+}
+
+function groundedPrimarySummary(output, sourceSupportedFacts) {
+  const type = String(output.detectedEvidenceType || "other").replaceAll("_", " ");
+  if (!sourceSupportedFacts.length) {
+    return `AI suggests ${type}, but no key facts were source-supported. Human review is required.`;
+  }
+  const facts = sourceSupportedFacts.slice(0, 5).map((fact) => `${fact.category.replaceAll("_", " ")}: ${fact.value}`);
+  return `AI suggests ${type}. Source-supported facts: ${facts.join("; ")}.`;
+}
+
+function qualityMetrics(candidates) {
+  const valid = candidates.filter((candidate) => candidate.supportStatus === "source_supported").length;
+  const unsupported = candidates.filter((candidate) => candidate.supportStatus === "unsupported_candidate").length;
+  const invalid = candidates.filter((candidate) => candidate.supportStatus === "invalid_provenance").length;
+  return {
+    keyFactProvenanceCoverage: ratio(valid, valid + invalid),
+    validProvenanceRate: ratio(valid, valid + invalid),
+    unsupportedClaimRate: ratio(unsupported, candidates.length),
+    incorrectFactCount: 0
+  };
 }
 
 function ratio(numerator, denominator) {

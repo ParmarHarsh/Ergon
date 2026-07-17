@@ -21,6 +21,12 @@ const MAX_DOCX_BLOCKS = 10_000;
 const MAX_XLSX_SHEETS = 100;
 const MAX_XLSX_ROWS_PER_SHEET = 10_000;
 const MAX_XLSX_CELLS = 100_000;
+const MAX_XLSX_DATE_AUDIT_SAMPLES = 100;
+const BUILT_IN_EXCEL_DATE_FORMATS = new Map([
+  ...[14, 15, 16, 17, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 50, 51, 52, 53, 54, 55, 56, 57, 58].map((id) => [id, "date"]),
+  ...[18, 19, 20, 21, 45, 46, 47].map((id) => [id, "time"]),
+  [22, "datetime"]
+]);
 
 export async function extractEvidenceText({ buffer = null, fileName = null, evidence, maxChars, maxBytes = Number.POSITIVE_INFINITY }) {
   const metadataText = [evidence.title, evidence.description].filter(Boolean).join("\n").trim();
@@ -152,6 +158,7 @@ function extractDocx({ buffer, metadataText, maxChars }) {
 function extractXlsx({ buffer, metadataText, maxChars }) {
   const { files, inspection } = openOoxml(buffer, "xlsx");
   const workbook = parseOoxmlXml(files["xl/workbook.xml"], "xl/workbook.xml");
+  const dateContext = readWorkbookDateContext(files, workbook);
   const relationships = files["xl/_rels/workbook.xml.rels"] ? parseOoxmlXml(files["xl/_rels/workbook.xml.rels"], "xl/_rels/workbook.xml.rels") : [];
   const relationshipTargets = new Map(orderedElementsByName(relationships, "Relationship").map((node) => [orderedAttribute(node, "Id"), orderedAttribute(node, "Target")]));
   const sharedStrings = files["xl/sharedStrings.xml"] ? orderedNodesByName(parseOoxmlXml(files["xl/sharedStrings.xml"], "xl/sharedStrings.xml"), "si").map((node) => orderedText(node)) : [];
@@ -161,6 +168,8 @@ function extractXlsx({ buffer, metadataText, maxChars }) {
   const textRows = [];
   let totalCells = 0;
   let formulaCount = 0;
+  let normalizedDateCellCount = 0;
+  const normalizedDateSamples = [];
   let bounded = orderedElementsByName(workbook, "sheet").length > MAX_XLSX_SHEETS;
 
   for (let sheetIndex = 0; sheetIndex < sheetElements.length && totalCells < MAX_XLSX_CELLS; sheetIndex += 1) {
@@ -180,6 +189,7 @@ function extractXlsx({ buffer, metadataText, maxChars }) {
       for (const cell of cells) {
         if (totalCells >= MAX_XLSX_CELLS) { bounded = true; break; }
         const type = orderedAttribute(cell, "t");
+        const styleIndex = parseNonNegativeInteger(orderedAttribute(cell, "s"));
         const cellContent = orderedElementContent(cell, "c");
         if (orderedNodesByName(cellContent, "f").length) formulaCount += 1;
         const reference = orderedAttribute(cell, "r") || null;
@@ -187,6 +197,21 @@ function extractXlsx({ buffer, metadataText, maxChars }) {
         let value = cleanText(raw ? orderedText(raw) : "");
         if (type === "s" && /^\d+$/.test(value)) value = sharedStrings[Number(value)] ?? "";
         if (type === "b") value = value === "1" ? "true" : value === "0" ? "false" : "";
+        if ((!type || type === "n") && value && styleIndex !== null) {
+          const dateFormat = dateContext.styles[styleIndex] || null;
+          if (dateFormat) {
+            const normalized = normalizeExcelDateValue(value, dateContext.dateSystem, dateFormat);
+            if (normalized.value) {
+              if (normalizedDateSamples.length < MAX_XLSX_DATE_AUDIT_SAMPLES) {
+                normalizedDateSamples.push({ sheet: sheetName, cell: reference, rawValue: value, normalizedValue: normalized.value, format: dateFormat });
+              }
+              value = normalized.value;
+              normalizedDateCellCount += 1;
+            } else if (normalized.warning) {
+              dateContext.warnings.push(`${sheetName} ${reference || "cell"}: ${normalized.warning}`);
+            }
+          }
+        }
         if (value.length > MAX_CELL_CHARS) bounded = true;
         value = value.slice(0, MAX_CELL_CHARS);
         if (value) values.push({ reference, value });
@@ -204,9 +229,28 @@ function extractXlsx({ buffer, metadataText, maxChars }) {
     sheetSummaries.push({ name: sheetName, rowCount: rows.length });
   }
   const normalizedText = textRows.join("\n");
-  const warnings = bounded ? ["XLSX extraction stopped at the configured sheet, row, cell, or cell-length limit."] : [];
+  const warnings = [...dateContext.warnings];
+  if (bounded) warnings.push("XLSX extraction stopped at the configured sheet, row, cell, or cell-length limit.");
   if (formulaCount) warnings.push(`${formulaCount} formula cell(s) were not evaluated; only stored cached values were considered.`);
-  return finalize({ metadataText, normalizedText, detectedFormat: "xlsx", extractionMethod: "ooxml_spreadsheet", textExtractionStatus: normalizedText ? "extracted" : "empty", provenanceAnchors: anchors, structuredContent: { kind: "workbook", sheets: sheetSummaries }, documentMetadata: { sheetCount: sheetSummaries.length, cellCount: totalCells, formulaCount, expandedBytes: inspection.expandedBytes }, warnings }, maxChars);
+  return finalize({
+    metadataText,
+    normalizedText,
+    detectedFormat: "xlsx",
+    extractionMethod: "ooxml_spreadsheet",
+    textExtractionStatus: normalizedText ? "extracted" : "empty",
+    provenanceAnchors: anchors,
+    structuredContent: { kind: "workbook", sheets: sheetSummaries },
+    documentMetadata: {
+      sheetCount: sheetSummaries.length,
+      cellCount: totalCells,
+      formulaCount,
+      expandedBytes: inspection.expandedBytes,
+      excelDateSystem: dateContext.dateSystem,
+      normalizedDateCellCount,
+      normalizedDateSamples
+    },
+    warnings
+  }, maxChars);
 }
 
 function finalize({ metadataText, normalizedText, detectedFormat, extractionMethod, textExtractionStatus, provenanceAnchors = [], structuredContent = {}, documentMetadata = {}, warnings = [] }, maxChars) {
@@ -296,6 +340,98 @@ function normalizeWorkbookTarget(target) {
   const normalized = String(target || "").replaceAll("\\", "/").replace(/^\//, "");
   if (normalized.startsWith("../") || normalized.split("/").includes("..")) throw new Error("The workbook contains an unsafe relationship path.");
   return normalized.startsWith("xl/") ? normalized : `xl/${normalized}`;
+}
+
+function readWorkbookDateContext(files, workbook) {
+  const workbookProperties = orderedElementsByName(workbook, "workbookPr")[0] || null;
+  const date1904 = String(orderedAttribute(workbookProperties, "date1904") || "").toLowerCase();
+  const dateSystem = ["1", "true"].includes(date1904) ? 1904 : 1900;
+  const context = { dateSystem, styles: [], warnings: [] };
+  if (!files["xl/styles.xml"]) return context;
+
+  try {
+    const styles = parseOoxmlXml(files["xl/styles.xml"], "xl/styles.xml");
+    const customFormats = new Map();
+    for (const format of orderedElementsByName(styles, "numFmt")) {
+      const id = parseNonNegativeInteger(orderedAttribute(format, "numFmtId"));
+      const code = orderedAttribute(format, "formatCode");
+      if (id === null || typeof code !== "string") {
+        context.warnings.push("A malformed custom XLSX number format was ignored; affected numeric values were preserved.");
+        continue;
+      }
+      customFormats.set(id, code);
+    }
+    const cellFormats = orderedElementsByName(styles, "cellXfs")[0];
+    if (!cellFormats) return context;
+    const formatElements = orderedElementsByName(orderedElementContent(cellFormats, "cellXfs"), "xf");
+    context.styles = formatElements.map((format) => {
+      const id = parseNonNegativeInteger(orderedAttribute(format, "numFmtId"));
+      if (id === null) {
+        context.warnings.push("A malformed XLSX cell style was ignored; affected numeric values were preserved.");
+        return null;
+      }
+      return excelDateFormatKind(id, customFormats.get(id));
+    });
+  } catch {
+    context.warnings.push("XLSX style metadata could not be read safely; numeric values were preserved without date conversion.");
+  }
+  return context;
+}
+
+function excelDateFormatKind(numberFormatId, customFormatCode) {
+  if (BUILT_IN_EXCEL_DATE_FORMATS.has(numberFormatId)) return BUILT_IN_EXCEL_DATE_FORMATS.get(numberFormatId);
+  if (!customFormatCode) return null;
+  const code = String(customFormatCode)
+    .toLowerCase()
+    .replace(/"[^"]*"/g, "")
+    .replace(/\\./g, "")
+    .replace(/\[(?!h+\]|m+\]|s+\])[^\]]*\]/g, "")
+    .replace(/_.|\*./g, "");
+  const hasYearOrDay = /[yd]/.test(code);
+  const hasTime = /h|s|\[h+\]|\[m+\]|\[s+\]/.test(code) || /m+\s*:|:\s*m+/.test(code);
+  if (hasYearOrDay && hasTime) return "datetime";
+  if (hasYearOrDay) return "date";
+  if (hasTime) return "time";
+  return null;
+}
+
+function normalizeExcelDateValue(rawValue, dateSystem, format) {
+  if (!/^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(rawValue)) return { value: null, warning: null };
+  const serial = Number(rawValue);
+  if (!Number.isFinite(serial) || serial < 0) return { value: null, warning: "A styled date value was outside the supported Excel serial range and was preserved." };
+  const wholeDays = Math.floor(serial);
+  const fraction = serial - wholeDays;
+  if (format !== "time" && dateSystem === 1900 && wholeDays === 60) {
+    return { value: null, warning: "Excel's non-existent 1900-02-29 serial was preserved for human review." };
+  }
+
+  if (format === "time") return { value: formatExcelTime(fraction), warning: null };
+  const epoch = dateSystem === 1904
+    ? Date.UTC(1904, 0, 1)
+    : wholeDays < 60 ? Date.UTC(1899, 11, 31) : Date.UTC(1899, 11, 30);
+  const milliseconds = Math.round((wholeDays + fraction) * 86_400_000);
+  const date = new Date(epoch + milliseconds);
+  if (Number.isNaN(date.getTime()) || date.getUTCFullYear() < 100 || date.getUTCFullYear() > 9999) {
+    return { value: null, warning: "A styled date value was outside the supported calendar range and was preserved." };
+  }
+  const isoDate = date.toISOString().slice(0, 10);
+  return { value: format === "datetime" ? `${isoDate}T${formatExcelTime(fraction)}` : isoDate, warning: null };
+}
+
+function formatExcelTime(fraction) {
+  const milliseconds = Math.round(fraction * 86_400_000) % 86_400_000;
+  const hours = Math.floor(milliseconds / 3_600_000);
+  const minutes = Math.floor((milliseconds % 3_600_000) / 60_000);
+  const seconds = Math.floor((milliseconds % 60_000) / 1_000);
+  const remainder = milliseconds % 1_000;
+  const base = [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
+  return remainder ? `${base}.${String(remainder).padStart(3, "0")}` : base;
+}
+
+function parseNonNegativeInteger(value) {
+  if (!/^\d+$/.test(String(value ?? ""))) return null;
+  const number = Number(value);
+  return Number.isSafeInteger(number) ? number : null;
 }
 
 function cleanText(value) {
