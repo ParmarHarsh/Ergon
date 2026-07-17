@@ -22,6 +22,8 @@ Default pages should show summary first and expert detail second. Use drawers, n
 
 Evidence cards should expose one primary workflow state, the summary, the highest-priority findings, and the primary review decision first. Processing metadata, full provenance, weak AI candidates, lifecycle controls, and destructive or infrequent review actions remain available through labeled disclosure.
 
+Provenance should be compact by default but complete on demand. Show the reference count and source scope, then a few source-supported priority anchors. Put the complete set in a labeled, keyboard-focusable, bounded scrolling surface that preserves line, row, page, paragraph, sheet, and cell-range locations. Never hide provenance or expand dozens of references into an unbounded default page.
+
 ## Plain language
 
 Use manufacturing and compliance language that a plant manager, EHS lead, quality manager, or operations owner can understand. Avoid unnecessary internal terms.
@@ -92,7 +94,7 @@ Preserve natural responsive wrapping. Use available content width and browser-na
 
 Responsive quality is judged in the browser. A page can pass overflow checks and still fail if text, buttons, or status pills are visually clipped or squeezed into unreadable fragments.
 
-Motion should clarify state changes, stay fast, and respect `prefers-reduced-motion`.
+Motion should clarify state changes, stay fast, and respect `prefers-reduced-motion`. Route content may use a restrained opacity transition around 180–220 ms without delaying data loading or animating the persistent sidebar.
 
 Loading, empty, and error states should be finite and actionable: loading resolves to success, empty, unavailable, or error; empty states name the next step; errors explain recovery without exposing secrets.
 

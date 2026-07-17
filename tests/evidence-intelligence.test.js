@@ -79,6 +79,44 @@ test("XLSX extraction accepts namespace-prefixed direct strings and empty shared
   assert.match(result.processingWarnings.join(" "), /not evaluated/i);
 });
 
+test("XLSX extraction normalizes styled 1900-system dates without converting ordinary numbers", async () => {
+  const result = await extract("styled-dates.xlsx", makeStyledDateXlsx({ date1904: false }));
+
+  assert.match(result.normalizedText, /A1: 1900-01-01/);
+  assert.match(result.normalizedText, /B1: 1900-02-28/);
+  assert.match(result.normalizedText, /C1: 1900-03-01/);
+  assert.match(result.normalizedText, /D1: 2024-01-01/);
+  assert.match(result.normalizedText, /E1: 42/);
+  assert.match(result.normalizedText, /F1: 7319/);
+  assert.match(result.normalizedText, /G1: 12\.5/);
+  assert.match(result.normalizedText, /H1: 2024-01-02/);
+  assert.match(result.normalizedText, /I1: 6/);
+  assert.match(result.normalizedText, /J1: 2024-01-01T12:00:00/);
+  assert.match(result.normalizedText, /K1: 60/);
+  assert.match(result.normalizedText, /L1: 45292/);
+  assert.doesNotMatch(result.normalizedText, /F1: \d{4}-\d{2}-\d{2}/);
+  assert.equal(result.documentMetadata.excelDateSystem, 1900);
+  assert.equal(result.documentMetadata.normalizedDateCellCount, 6);
+  assert.deepEqual(result.documentMetadata.normalizedDateSamples[0], {
+    sheet: "Dates", cell: "A1", rawValue: "1", normalizedValue: "1900-01-01", format: "date"
+  });
+  assert.match(result.processingWarnings.join(" "), /non-existent 1900-02-29/);
+  assert.match(result.processingWarnings.join(" "), /malformed XLSX cell style/);
+  assert.equal(result.documentMetadata.formulaCount, 2);
+  assert.doesNotMatch(result.normalizedText, /TODAY|SUM/);
+});
+
+test("XLSX extraction supports the 1904 date system and custom date formats", async () => {
+  const result = await extract("styled-dates-1904.xlsx", makeStyledDateXlsx({ date1904: true, compact: true }));
+
+  assert.match(result.normalizedText, /A1: 1904-01-01/);
+  assert.match(result.normalizedText, /B1: 1904-01-02/);
+  assert.match(result.normalizedText, /C1: 1904-01-03T06:00:00/);
+  assert.match(result.normalizedText, /D1: 99/);
+  assert.equal(result.documentMetadata.excelDateSystem, 1904);
+  assert.equal(result.documentMetadata.normalizedDateCellCount, 3);
+});
+
 test("Office signature mismatches, generic ZIPs, macros, corrupt containers, and expansion limits fail closed", () => {
   const docx = makeDocx("Safe text");
   assert.throws(() => validateUploadedFile({ buffer: docx, fileName: "renamed.xlsx", declaredContentType: OOXML_MIME.xlsx, maxBytes }), (error) => error.code === "FILE_TYPE_MISMATCH");
@@ -151,6 +189,20 @@ function makeAcceptanceStyleXlsx() {
     "xl/worksheets/inspection.xml": strToU8('<x:worksheet xmlns:x="urn:sheet"><x:sheetData><x:row r="1"><x:c r="A1" t="str"><x:v>Inspection ID</x:v></x:c><x:c r="B1" t="str"><x:v>Facility</x:v></x:c></x:row><x:row r="2"><x:c r="A2" t="inlineStr"><x:is><x:t>INSP-001</x:t></x:is></x:c><x:c r="B2" t="str"><x:v>Northern Precision Components - Plant A</x:v></x:c></x:row><x:row r="3"><x:c r="A3" t="n"><x:v>42</x:v></x:c><x:c r="B3" t="b"><x:v>1</x:v></x:c><x:c r="C3" t="n"><x:f>COUNTA(A2:A100)</x:f><x:v>6</x:v></x:c><x:c r="D3" t="n"><x:f>SUM(A1:A2)</x:f></x:c><x:c r="E3" t="d"><x:v>2026-07-14</x:v></x:c></x:row></x:sheetData></x:worksheet>'),
     "xl/worksheets/actions.xml": strToU8('<x:worksheet xmlns:x="urn:sheet"><x:sheetData><x:row r="1"><x:c r="A1" t="inlineStr"><x:is><x:r><x:t>Corrective </x:t></x:r><x:r><x:t>Actions</x:t></x:r></x:is></x:c><x:c r="B1" t="str"><x:v>Owner</x:v></x:c></x:row></x:sheetData></x:worksheet>'),
     "xl/worksheets/summary.xml": strToU8('<x:worksheet xmlns:x="urn:sheet"><x:sheetData><x:row r="1"><x:c r="A1" t="str"><x:v>Summary</x:v></x:c><x:c r="B1" t="n"><x:f>COUNTA(A1:A10)</x:f><x:v>1</x:v></x:c></x:row></x:sheetData></x:worksheet>')
+  }));
+}
+
+function makeStyledDateXlsx({ date1904, compact = false }) {
+  const workbookProperties = date1904 ? '<workbookPr date1904="1"/>' : '<workbookPr date1904="0"/>';
+  const row = compact
+    ? '<row r="1"><c r="A1" s="1"><v>0</v></c><c r="B1" s="2"><v>1</v></c><c r="C1" s="3"><v>2.25</v></c><c r="D1"><v>99</v></c></row>'
+    : '<row r="1"><c r="A1" s="1"><v>1</v></c><c r="B1" s="1"><v>59</v></c><c r="C1" s="1"><v>61</v></c><c r="D1" s="2"><v>45292</v></c><c r="E1"><v>42</v></c><c r="F1"><v>7319</v></c><c r="G1"><v>12.5</v></c><c r="H1" s="1"><f>TODAY()</f><v>45293</v></c><c r="I1"><f>SUM(E1:G1)</f><v>6</v></c><c r="J1" s="3"><v>45292.5</v></c><c r="K1" s="1"><v>60</v></c><c r="L1" s="4"><v>45292</v></c></row>';
+  return Buffer.from(zipSync({
+    "[Content_Types].xml": strToU8("<Types/>"),
+    "xl/workbook.xml": strToU8(`<workbook xmlns:r="rels">${workbookProperties}<sheets><sheet name="Dates" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+    "xl/_rels/workbook.xml.rels": strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
+    "xl/styles.xml": strToU8('<styleSheet><numFmts count="2"><numFmt numFmtId="165" formatCode="dd-mmm-yyyy"/><numFmt numFmtId="166" formatCode="yyyy-mm-dd hh:mm:ss"/></numFmts><cellXfs count="5"><xf numFmtId="0"/><xf numFmtId="14"/><xf numFmtId="165"/><xf numFmtId="166"/><xf numFmtId="bad"/></cellXfs></styleSheet>'),
+    "xl/worksheets/sheet1.xml": strToU8(`<worksheet><sheetData>${row}</sheetData></worksheet>`)
   }));
 }
 

@@ -17,7 +17,7 @@ if (process.env.AI_PROVIDER === "openai" && (!process.env.OPENAI_API_KEY || !pro
 if (process.env.AI_PROVIDER === "azure_openai") {
   const missing = ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT"].filter((name) => !process.env[name]);
   if (missing.length > 0) {
-    const classification = selectedFormat === "xlsx" ? "BLOCKED_PRIVATE_AZURE_CONFIGURATION" : "READY_MISSING_AZURE_CONFIGURATION";
+    const classification = ["xlsx", "all"].includes(selectedFormat) ? "BLOCKED_PRIVATE_AZURE_CONFIGURATION" : "READY_MISSING_AZURE_CONFIGURATION";
     failWithClassification(classification, `Live Azure OpenAI acceptance is missing: ${missing.join(", ")}.`);
   }
 }
@@ -104,7 +104,12 @@ for (const fixture of fixtures) {
 }
 
 const evaluation = evaluateEvidenceCases(cases);
-const passed = cases.length === fixtures.length && evaluation.metrics.schemaValidity === 1 && evaluation.metrics.documentTypeAccuracy >= 0.6;
+const basePassed = cases.length === fixtures.length && evaluation.metrics.schemaValidity === 1 && evaluation.metrics.documentTypeAccuracy >= 0.6;
+const azureQualityPassed = evaluation.metrics.validProvenanceRate === 1
+  && evaluation.metrics.keyFactProvenanceCoverage >= 0.9
+  && evaluation.metrics.unsupportedClaimRate <= 0.1
+  && evaluation.metrics.incorrectFactCount === 0;
+const passed = basePassed && (provider.kind !== "azure_openai" || azureQualityPassed);
 const classification = liveClassification(provider.kind, passed, safeRuns);
 process.stdout.write(`${JSON.stringify({
   classification,
@@ -161,7 +166,7 @@ function syntheticFixtures() {
       title: "Hazardous waste manifest register",
       buffer: xlsx(),
       expectedEvidenceType: "hazardous_waste_manifests",
-      expectedFacts: []
+      expectedFacts: ["2024-01-01"]
     }
   ];
 }
@@ -180,10 +185,11 @@ function docx(text) {
 function xlsx() {
   return Buffer.from(zipSync({
     "[Content_Types].xml": strToU8("<Types/>"),
-    "xl/workbook.xml": strToU8('<workbook xmlns:r="rels"><sheets><sheet name="Manifest" sheetId="1" r:id="rId1"/></sheets></workbook>'),
+    "xl/workbook.xml": strToU8('<workbook xmlns:r="rels"><workbookPr date1904="0"/><sheets><sheet name="Manifest" sheetId="1" r:id="rId1"/></sheets></workbook>'),
     "xl/_rels/workbook.xml.rels": strToU8('<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>'),
-    "xl/sharedStrings.xml": strToU8("<sst><si><t>Hazardous waste manifest</t></si><si><t>Manifest HW-104</t></si><si><t>2026-06-15</t></si></sst>"),
-    "xl/worksheets/sheet1.xml": strToU8('<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c></row></sheetData></worksheet>')
+    "xl/sharedStrings.xml": strToU8("<sst><si><t>Hazardous waste manifest</t></si><si><t>Manifest HW-104</t></si></sst>"),
+    "xl/styles.xml": strToU8('<styleSheet><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>'),
+    "xl/worksheets/sheet1.xml": strToU8('<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" s="1"><v>45292</v></c></row></sheetData></worksheet>')
   }));
 }
 
@@ -230,10 +236,12 @@ function failWithClassification(classification, message) {
 function liveClassification(providerKind, passed, runs) {
   if (passed) {
     if (providerKind === "azure_openai" && selectedFormat === "xlsx") return "PASSED_REAL_AZURE_XLSX";
+    if (providerKind === "azure_openai" && selectedFormat === "all") return "PASSED_REAL_AZURE_ALL_FORMATS";
     return providerKind === "azure_openai" ? "PASSED_REAL_AZURE_OPENAI" : "PASSED_REAL_OPENAI";
   }
   if (providerKind !== "azure_openai") return "FAILED_PROVIDER_REQUEST";
   if (selectedFormat === "xlsx") return "FAILED_REAL_AZURE_XLSX";
+  if (selectedFormat === "all") return "FAILED_REAL_AZURE_ACCEPTANCE";
   const errorCodes = new Set(runs.map((run) => run.errorCode).filter(Boolean));
   if (errorCodes.has("AI_PROVIDER_AUTH_ERROR")) return "FAILED_AZURE_AUTHENTICATION";
   if (errorCodes.has("AI_PROVIDER_BAD_REQUEST")) return "BLOCKED_AZURE_DEPLOYMENT_OR_REGION";

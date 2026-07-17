@@ -268,6 +268,14 @@ test("obligation suggestions require source-specific support instead of generic 
   });
   assert.equal(genericCorrectiveAction.classification, "WEAK_CANDIDATE");
 
+  const genericRecordkeeping = qualifyObligationSuggestion({
+    output: candidate({ detectedEvidenceType: "osha_300_log", suggestedRuleId: rule("us-injury-recordkeeping").id }),
+    applicableRules: rules,
+    sourceText: "Inspection workbook with incident notes, generic recordkeeping, findings, owners, and corrective actions."
+  });
+  assert.equal(genericRecordkeeping.classification, "WEAK_CANDIDATE");
+  assert.equal(genericRecordkeeping.reasonCode, "MISSING_SOURCE_SPECIFIC_SUPPORT");
+
   const injuryLog = qualifyObligationSuggestion({
     output: candidate({ detectedEvidenceType: "osha_300_log", suggestedRuleId: rule("us-injury-recordkeeping").id }),
     applicableRules: rules,
@@ -400,6 +408,18 @@ test("AI processing is auditable and human override wins over AI and determinist
   assert.ok(logs.some((entry) => entry.action === "human_requested_more_evidence"));
   assert.ok(logs.some((entry) => entry.action === "evidence_extraction_completed"));
   assert.ok(logs.some((entry) => entry.action === "ai_provider_usage_recorded" && entry.metadata.providerCalls === 1));
+  const overrideAudit = logs.find((entry) => entry.action === "human_overrode_evidence_type");
+  assert.equal(overrideAudit.metadata.originalCandidate.evidenceType, "loto_procedures");
+  assert.equal(overrideAudit.metadata.beforeDecision.evidenceType, "loto_procedures");
+  assert.equal(overrideAudit.metadata.afterDecision.evidenceType, "ppe_training_records");
+  assert.equal(overrideAudit.metadata.provider, "mock");
+  assert.equal(overrideAudit.metadata.promptVersion, "evidence-intelligence-v2");
+  assert.equal(overrideAudit.metadata.schemaVersion, "evidence-intelligence-schema-v2");
+  assert.equal(overrideAudit.metadata.reviewerReasonProvided, true);
+  assert.equal(overrideAudit.metadata.evaluationCuration.eligibleForReview, true);
+  assert.equal(overrideAudit.metadata.evaluationCuration.automaticallyAdded, false);
+  assert.equal(overrideAudit.metadata.evaluationCuration.rawEvidenceIncluded, false);
+  assert.equal(JSON.stringify(overrideAudit.metadata).includes("Document is PPE training"), false);
   assert.equal(logs.some((entry) => JSON.stringify(entry.metadata).includes("Lockout Tagout procedure")), false);
 
   const otherOrg = await repo.createOrganization({ name: "Other Tenant" });
@@ -489,6 +509,21 @@ test("targeted Azure XLSX live harness refuses missing private configuration bef
   const result = JSON.parse(run.stderr.trim());
   assert.equal(result.classification, "BLOCKED_PRIVATE_AZURE_CONFIGURATION");
   assert.match(result.message, /AZURE_OPENAI_ENDPOINT/);
+
+  const allFormats = spawnSync(process.execPath, ["scripts/qa-ai-live.mjs"], {
+    cwd: path.resolve("."),
+    encoding: "utf8",
+    env: {
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      AI_ENABLED: "true",
+      AI_PROVIDER: "azure_openai",
+      ERGON_LIVE_AI_ACCEPTANCE: "true",
+      ERGON_LIVE_AI_FORMAT: "all"
+    }
+  });
+  assert.equal(allFormats.status, 1);
+  assert.equal(JSON.parse(allFormats.stderr.trim()).classification, "BLOCKED_PRIVATE_AZURE_CONFIGURATION");
 });
 
 function output(overrides = {}) {

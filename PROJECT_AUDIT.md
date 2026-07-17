@@ -1881,3 +1881,49 @@ Safe next action:
   - In-app browser partial-success review passed at the default viewport and 390 px: needs-review state, 19 references, reprocess and manual override were present; invalid AI confirmation was absent; no mobile page overflow was observed.
 - PR #22:
   - To be updated on the same branch; remains draft and unmerged.
+
+## Phase 26 evidence intelligence quality calibration note
+
+- Phase 25 prerequisite:
+  - Phase 25 branch commit `a4ba8f360e95b7a6785e9078d0a0a494067c7411` and merge commit `8fce84a7139a2bc97386ad71960a16bfc5bb6d77` were present in `main` before work began.
+- Branch:
+  - `phase-26-evidence-intelligence-quality`, created from a clean, updated `main`.
+- Spreadsheet date semantics:
+  - XLSX extraction now reads the workbook date system and cell number formats, normalizes only date-styled numeric cells, supports the 1900 and 1904 systems, preserves ordinary numeric cells, and never evaluates formulas.
+  - Excel serial 60 is preserved with a warning because the corresponding 1900 leap-day value does not exist in the Gregorian calendar.
+- Grounded facts:
+  - Primary summaries are constructed only from source-supported structured facts. Unsupported facts and the raw provider summary remain review candidates and are not presented as established evidence.
+- Provenance:
+  - Complete source references remain available while the default UI shows a compact source-scope summary and at most three priority references in a bounded, expandable review region.
+- Obligation matching:
+  - Precision-first source gates withhold weak candidates. OSHA 300/300A suggestions require explicit source terminology; generic inspection, corrective-action, or recordkeeping language is insufficient.
+- Reviewer feedback:
+  - Human decisions remain authoritative after reprocessing. Audit-safe before/after lineage, actor, timestamp, provider/model, prompt/schema, and explicit curation status are retained without copying raw evidence or reviewer notes into generic logs.
+  - No automatic training, prompt mutation, rule mutation, or evaluation-fixture inclusion was implemented.
+- Deterministic evaluation:
+  - Expanded to at least 15 representative cases across TXT, CSV, PDF, DOCX, XLSX, missing/ambiguous/unsupported facts, misleading regulation language, weak/strong/no-match obligations, Excel dates, and reviewer preservation.
+  - Schema validity `1.00`; valid provenance rate `1.00`; key-fact provenance coverage `1.00`; date normalization accuracy `1.00`; obligation false-positive rate `0`; incorrect fact count `0`; reviewer correction preservation `1.00`.
+  - The deliberate challenge-case unsupported-candidate rate is `0.50`; those candidates remain separated from the primary supported summary. Private live-Azure target remains at most `0.10` and requires manual retest.
+- Evidence UX:
+  - Five-format synthetic browser review passed at 390, 480, 768, 1024, 1440, and 1920 px with compact provenance, complete on-demand references, no horizontal overflow, and no browser warnings or errors.
+  - Workspace route opacity transition is 200 ms and the existing reduced-motion behavior is preserved.
+- Live Azure all-format acceptance:
+  - `BLOCKED_PRIVATE_AZURE_CONFIGURATION`; no private Azure configuration was present and no paid provider call was made.
+- Full verification:
+  - Node `v24.4.0`; npm `11.4.2`.
+  - Focused Phase 26 tests passed: 28 tests, 0 failed.
+  - Focused API, account recovery, SMTP delivery, MFA, repository, and migration regressions passed: 15 passed, one expected PostgreSQL integration skip, 0 failed.
+  - `npm test` passed: 95 total, 93 passed, 2 expected infrastructure skips, 0 failed.
+  - Lint passed for 84 files; typecheck passed for 94 JavaScript files; build passed.
+  - Deterministic AI evaluation passed 3/3. Claims/randomness scans and Chromium pilot smoke passed.
+  - Both npm audits passed with 0 vulnerabilities.
+- Migration:
+  - None; migrations `0001` through `0009` are unchanged.
+- Dependencies:
+  - None added or upgraded; package manifests are unchanged.
+- Secret/provider safety:
+  - No provider or SMTP secret is committed or exposed to browser code. Normal tests and CI make no live OpenAI/Azure calls and send no real email.
+- Manufacturer-demo readiness:
+  - `READY_FOR_MANUAL_DEMO_ACCEPTANCE`; private all-format Azure retest and the full manual walkthrough remain required.
+- Pilot status:
+  - `NO_GO`.
